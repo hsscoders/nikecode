@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Phone, Lock, Eye, EyeOff } from "lucide-react";
 import banner from "../../public/zapto-banner.png";
 import logo from "../../public/zapto-logo.png";
@@ -58,8 +59,42 @@ function PasswordField({ id, name, Icon, placeholder, autoComplete }) {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (loading) return;
+    setError("");
+    const fd = new FormData(e.currentTarget);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: fd.get("phone"),
+          password: fd.get("password"),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.message || "Something went wrong, please try again");
+        return;
+      }
+      localStorage.setItem("zapto_token", data.token);
+      localStorage.setItem("zapto_phone", (data.user && data.user.phone) || "");
+      router.push("/home");
+    } catch (err) {
+      setError("Network error — please check your connection and try again");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:mb-10 min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
+    <div className="mx-auto flex min-h-dvh w-full min-[520px]:max-w-[430px] flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:mb-10 min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
       {/* TOP BANNER */}
       <div className="relative overflow-hidden">
         <Image
@@ -93,7 +128,7 @@ export default function LoginPage() {
         </div>
 
         {/* FORM */}
-        <form onSubmit={(e) => e.preventDefault()} noValidate>
+        <form onSubmit={handleSubmit} noValidate>
           {/* PHONE */}
           <div className={inputGroup}>
             <div className="mr-2.5 flex min-w-16 items-center gap-1.5 border-r border-line-rose pr-2.5">
@@ -122,9 +157,20 @@ export default function LoginPage() {
             autoComplete="current-password"
           />
 
+          {/* ERROR */}
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] leading-relaxed text-red-700">
+              {error}
+            </div>
+          )}
+
           {/* BUTTON */}
-          <button className={submitBtn} type="submit">
-            Login
+          <button
+            className={`${submitBtn} disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100`}
+            type="submit"
+            disabled={loading}
+          >
+            {loading ? "Please wait..." : "Login"}
           </button>
 
           {/* FOOTER */}
