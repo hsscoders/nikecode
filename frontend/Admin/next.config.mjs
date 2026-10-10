@@ -1,12 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  images: {
-    remotePatterns: [
-      { protocol: "http", hostname: "localhost" },
-      { protocol: "http", hostname: "127.0.0.1" },
-      { protocol: "https", hostname: "**" },
-    ],
-  },
+  /* Assets /admin/_next/* prefix me serve honge taaki Client (:3000) ke
+     /admin/* proxy rewrite se bhi sahi load hon (preview single-port hai) */
+  assetPrefix: "/admin",
   async rewrites() {
     return [
       {
@@ -14,8 +10,8 @@ const nextConfig = {
         destination: "http://127.0.0.1:3030/api/:path*",
       },
       {
-        source: "/admin/:path*",
-        destination: "http://127.0.0.1:3001/admin/:path*",
+        source: "/admin/_next/:path*",
+        destination: "/_next/:path*",
       },
       {
         source: "/banners/:path*",

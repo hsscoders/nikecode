@@ -1,19 +1,233 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Phone, LogOut, Sparkles } from "lucide-react";
-import banner from "../../public/zapto-banner.png";
+import {
+  Home,
+  CreditCard,
+  IndianRupee,
+  ReceiptText,
+  MessageCircle,
+  Users,
+  User,
+  Wallet,
+  TrendingUp,
+  X,
+  LogOut,
+  Crown,
+} from "lucide-react";
+import banner1 from "../../public/zapto-banner.png";
+import banner2 from "../../public/zapto-banner-2.png";
+import planDaily from "../../public/plan-daily.png";
+import planVip from "../../public/plan-vip.png";
 import logo from "../../public/zapto-logo.png";
 
-const submitBtn =
-  "mt-2.5 h-[50px] w-full cursor-pointer rounded-full bg-[linear-gradient(135deg,#7c1d33_0%,#93293f_55%,#7c1d33_100%)] font-display text-[19px] font-bold tracking-[0.4px] text-white shadow-[0_12px_26px_rgba(124,29,51,0.32),inset_0_1px_0_rgba(255,255,255,0.16)] transition-all duration-200 hover:brightness-[1.07] active:scale-[0.98] max-[360px]:h-[46px] max-[360px]:text-lg";
+/* ================= DEMO FALLBACK (admin panel se plans/banners aate hain) ================= */
+
+const FALLBACK_BANNERS = [banner1.src, banner2.src];
+
+const DAILY_PLANS = [
+  { id: 1, name: "Starter Plan", img: planDaily, price: 530, daily: 63.6, cycle: 10, total: 636, used: 0, limit: 1, presale: false },
+  { id: 2, name: "Silver Plan", img: planDaily, price: 1100, daily: 137.5, cycle: 12, total: 1650, used: 0, limit: 2, presale: false },
+  { id: 3, name: "Gold Plan", img: planDaily, price: 2500, daily: 266.67, cycle: 15, total: 4000, used: 0, limit: 3, presale: false },
+];
+
+const VIP_PLANS = [
+  { id: 11, name: "VIP Platinum", img: planVip, price: 5500, daily: 700, cycle: 12, total: 8400, used: 0, limit: 1, presale: false, vip: true },
+  { id: 12, name: "VIP Diamond", img: planVip, price: 11000, daily: 1550, cycle: 15, total: 23250, used: 0, limit: 1, presale: true, vip: true },
+];
+
+const QUICK_ITEMS = [
+  { label: "Recharge", Icon: CreditCard, tile: "bg-[#f7e3e7] text-maroon-600" },
+  { label: "Withdraw", Icon: IndianRupee, tile: "bg-[#fdf6e4] text-[#a9791c]" },
+  { label: "Records", Icon: ReceiptText, tile: "bg-[#eafaf0] text-[#16a34a]" },
+  { label: "Channel", Icon: MessageCircle, tile: "bg-[#eef4ff] text-[#2563eb]" },
+];
+
+const NAV_ITEMS = [
+  { label: "Home", Icon: Home },
+  { label: "Recharge", Icon: CreditCard },
+  { label: "Invite", Icon: Users },
+  { label: "Records", Icon: ReceiptText },
+  { label: "Account", Icon: User },
+];
+
+/* ================= HELPERS ================= */
+
+const fmt = (n) => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+
+const gradientBtn =
+  "bg-[linear-gradient(135deg,#7c1d33_0%,#93293f_55%,#7c1d33_100%)] shadow-[0_10px_24px_rgba(124,29,51,0.35)]";
+
+/* ================= SMALL PARTS ================= */
+
+function Toast({ message }) {
+  if (!message) return null;
+  return (
+    <div className="fixed left-1/2 top-5 z-[70] -translate-x-1/2 whitespace-nowrap rounded-xl bg-maroon-900 px-5 py-2.5 text-[14px] font-semibold text-white shadow-[0_10px_30px_rgba(66,9,26,0.4)]">
+      {message}
+    </div>
+  );
+}
+
+function BannerCarousel({ banners }) {
+  const [slide, setSlide] = useState(0);
+  const ivRef = useRef(null);
+  const touchX = useRef(0);
+  const count = banners.length || 1;
+
+  const startAuto = useCallback(() => {
+    clearInterval(ivRef.current);
+    ivRef.current = setInterval(() => setSlide((s) => (s + 1) % count), 3200);
+  }, [count]);
+
+  useEffect(() => {
+    startAuto();
+    setSlide(0);
+    return () => clearInterval(ivRef.current);
+  }, [startAuto]);
+
+  const next = () => setSlide((s) => (s + 1) % count);
+  const prev = () => setSlide((s) => (s - 1 + count) % count);
+
+  return (
+    <div
+      className="relative mx-3.5 mt-3.5 h-[168px] overflow-hidden rounded-[18px] shadow-[0_6px_20px_rgba(87,18,36,0.14)] max-[360px]:h-[140px]"
+      onTouchStart={(e) => {
+        touchX.current = e.touches[0].clientX;
+        clearInterval(ivRef.current);
+      }}
+      onTouchEnd={(e) => {
+        const dx = touchX.current - e.changedTouches[0].clientX;
+        if (dx > 40) next();
+        else if (dx < -40) prev();
+        startAuto();
+      }}
+    >
+      {banners.map((b, i) => (
+        <Image
+          key={b + "-" + i}
+          src={b}
+          alt={"ZAPTO banner " + (i + 1)}
+          fill
+          priority={i === 0}
+          sizes="(max-width: 520px) 100vw, 430px"
+          className={`absolute inset-0 object-cover transition-opacity duration-500 ${
+            i === slide ? "opacity-100" : "opacity-0"
+          }`}
+        />
+      ))}
+      <div className="absolute bottom-2.5 left-1/2 flex -translate-x-1/2 gap-[5px]">
+        {banners.map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            aria-label={"Go to slide " + (i + 1)}
+            onClick={() => setSlide(i)}
+            className={`h-[5px] cursor-pointer rounded-full transition-all duration-300 ${
+              i === slide ? "w-[18px] bg-white" : "w-[5px] bg-white/45"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PlanCard({ plan, type, onBuy }) {
+  const isVip = type === "vip";
+  return (
+    <div className="group mx-3.5 mt-3.5 overflow-hidden rounded-[24px] border border-line-rose bg-white shadow-[0_4px_24px_rgba(87,18,36,0.08)]">
+      {/* IMAGE */}
+      <div className="relative h-[180px] overflow-hidden">
+        <Image
+          src={plan.img}
+          alt={plan.name}
+          fill
+          sizes="(max-width: 520px) 100vw, 430px"
+          className="absolute inset-0 object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(66,9,26,0.78)_0%,rgba(66,9,26,0.12)_55%,transparent_100%)]" />
+        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between p-4">
+          <div className="font-display text-lg font-bold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]">
+            {plan.name}
+          </div>
+          {plan.limit > 0 && (
+            <div className="rounded-full border border-white/35 bg-white/20 px-2.5 py-1 text-[10px] font-extrabold text-white backdrop-blur-sm">
+              {plan.used}/{plan.limit}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* SPECS 2x2 */}
+      <div className="grid grid-cols-2 border-b border-line-rose">
+        {[
+          { lbl: isVip ? "Value" : "Price", val: fmt(plan.price), cls: "text-maroon-700" },
+          { lbl: isVip ? "Revenue/Day" : "Daily", val: fmt(plan.daily), cls: "text-[#16a34a]" },
+          { lbl: "Cycle", val: plan.cycle + " Days", cls: "text-ink" },
+          { lbl: isVip ? "Total Profit" : "Total Return", val: fmt(plan.total), cls: "text-[#a9791c]" },
+        ].map((s) => (
+          <div
+            key={s.lbl}
+            className="border-line-rose p-3.5 max-[360px]:p-3 [&:nth-child(n+3)]:border-t [&:nth-child(odd)]:border-r"
+          >
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.4px] text-muted-rose">
+              {s.lbl}
+            </div>
+            <div className={`text-[15px] font-extrabold leading-none max-[360px]:text-sm ${s.cls}`}>
+              {s.val}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* BUY */}
+      <div className="p-4">
+        {plan.presale ? (
+          <button
+            type="button"
+            disabled
+            className="w-full cursor-not-allowed rounded-2xl border border-dashed border-line-rose bg-[#fafafa] py-[14px] text-[14px] font-bold text-muted-rose"
+          >
+            Pre Sale
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onBuy(plan)}
+            className={`flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl py-[14px] text-[15px] font-extrabold text-white transition-all duration-150 active:scale-[0.97] ${gradientBtn}`}
+          >
+            {isVip && <Crown size={18} />}
+            {isVip ? "Buy VIP Plan" : "Invest Now"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ================= MAIN PAGE ================= */
 
 export default function HomePage() {
   const router = useRouter();
-  const [phone, setPhone] = useState("");
 
+  /* page title */
+  useEffect(() => {
+    document.title = "Home";
+  }, []);
+  const [phone, setPhone] = useState("");
+  const [tab, setTab] = useState(0); // 0 = Daily, 1 = VIP
+  const [toast, setToast] = useState("");
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [notice, setNotice] = useState(false);
+  const [banners, setBanners] = useState(FALLBACK_BANNERS);
+  const [apiPlans, setApiPlans] = useState(null);
+  const [wallet, setWallet] = useState({ balance: 0, rechargeBalance: 0, totalIncome: 0 });
+  const toastTimer = useRef(null);
+
+  /* token guard — bina login /home khali nahi khulega */
   useEffect(() => {
     const token = localStorage.getItem("zapto_token");
     if (!token) {
@@ -21,73 +235,337 @@ export default function HomePage() {
       return;
     }
     setPhone(localStorage.getItem("zapto_phone") || "");
+
+    /* banners + plans + wallet — admin panel se live (fail hone par fallback) */
+    (async () => {
+      try {
+        const r = await fetch("/api/banners");
+        const d = await r.json();
+        if (d.success && d.banners && d.banners.length)
+          setBanners(d.banners.map((b) => b.image));
+      } catch (e) {}
+      try {
+        const r = await fetch("/api/plans");
+        const d = await r.json();
+        if (d.success && d.plans && d.plans.length)
+          setApiPlans(d.plans.map((p) => ({ ...p, img: p.vip ? planVip : planDaily, used: 0 })));
+      } catch (e) {}
+      try {
+        const r = await fetch("/api/wallet", {
+          headers: { Authorization: "Bearer " + token },
+        });
+        const d = await r.json();
+        if (d.success && d.wallet) setWallet(d.wallet);
+      } catch (e) {}
+    })();
   }, [router]);
+
+  /* welcome notice 800ms baad (reference jaisa) */
+  useEffect(() => {
+    const t = setTimeout(() => setNotice(true), 800);
+    return () => clearTimeout(t);
+  }, []);
+
+  /* modal/notice khule to background scroll lock */
+  useEffect(() => {
+    document.body.style.overflow = selectedPlan || notice ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedPlan, notice]);
+
+  const showToast = (msg) => {
+    clearTimeout(toastTimer.current);
+    setToast(msg);
+    toastTimer.current = setTimeout(() => setToast(""), 2600);
+  };
 
   const logout = () => {
     localStorage.removeItem("zapto_token");
     localStorage.removeItem("zapto_phone");
-    router.push("/login");
+    router.replace("/login");
+  };
+
+  const plans = tab === 0
+    ? (apiPlans || DAILY_PLANS).filter((p) => !p.vip)
+    : (apiPlans || VIP_PLANS).filter((p) => p.vip);
+
+  /* order save — localStorage (records page isi se dikhati hai) */
+  const saveOrderLocal = (o) => {
+    try {
+      const orders = JSON.parse(localStorage.getItem("zapto_orders") || "[]");
+      orders.unshift(o);
+      localStorage.setItem("zapto_orders", JSON.stringify(orders));
+    } catch (e) {}
+  };
+
+  /* Buy flow — server invest API (balance check + commission), fail hone par local */
+  const buyPlan = async (p) => {
+    if (p._id) {
+      try {
+        const token = localStorage.getItem("zapto_token");
+        const res = await fetch("/api/invest", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+          },
+          body: JSON.stringify({ planId: p._id }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          showToast(data.message || "Purchase failed");
+          return;
+        }
+        saveOrderLocal(data.order);
+        if (data.wallet) setWallet((w) => ({ ...w, ...data.wallet }));
+        showToast("Plan purchased successfully!");
+        setTimeout(() => router.push("/records"), 700);
+        return;
+      } catch (e) {
+        showToast("Network error — please try again");
+        return;
+      }
+    }
+    /* fallback demo plan (API plans load nahi hue) */
+    saveOrderLocal({
+      id: "ZP" + String(Date.now()).slice(-8),
+      name: p.name,
+      vip: !!p.vip,
+      price: p.price,
+      daily: p.daily,
+      cycle: p.cycle,
+      total: p.total,
+      boughtAt: new Date().toISOString(),
+      status: "Active",
+    });
+    showToast("Plan purchased successfully!");
+    setTimeout(() => router.push("/records"), 700);
   };
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full min-[520px]:max-w-[430px] flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:mb-10 min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
-      {/* TOP BANNER */}
-      <div className="relative overflow-hidden">
-        <Image
-          src={banner}
-          alt="ZAPTO"
-          priority
-          className="banner-fade h-[clamp(118px,36vw,156px)] w-full object-cover max-[360px]:h-[112px]"
-        />
-      </div>
-
-      {/* LOGO */}
-      <div className="relative z-20 -mt-[38px] flex h-[76px] w-[76px] shrink-0 items-center justify-center self-center overflow-hidden rounded-full border-[3px] border-white bg-[#fdf7f2] shadow-[0_10px_24px_rgba(87,18,36,0.22),0_0_0_1px_rgba(212,169,79,0.55)] max-[360px]:-mt-[33px] max-[360px]:h-[66px] max-[360px]:w-[66px]">
-        <Image
-          src={logo}
-          alt="ZAPTO logo"
-          priority
-          className="h-full w-full object-cover"
-        />
-      </div>
-
-      {/* CARD */}
-      <div className="mt-3.5 flex-1 rounded-t-[26px] bg-white px-5 pb-[30px] pt-7 shadow-[0_-6px_24px_rgba(87,18,36,0.06)] max-[360px]:rounded-t-[22px] max-[360px]:px-3.5 max-[360px]:pb-[26px] max-[360px]:pt-5">
-        {/* WELCOME */}
-        <h1 className="text-center font-display text-[26px] font-bold text-maroon-700">
-          Welcome{phone ? "," : "!"}
-        </h1>
-        {phone && (
-          <div className="mx-auto mt-3 flex w-fit items-center gap-2 rounded-full border border-line-rose bg-[#fbf1f3] px-4 py-2">
-            <Phone size={15} className="text-maroon-600" />
-            <span className="text-sm font-semibold text-maroon-800">
-              +91 {phone}
-            </span>
+    <div className="mx-auto flex min-h-dvh w-full flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:max-w-[430px] min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
+      {/* ===== HEADER ===== */}
+      <header className="flex items-center justify-between bg-[linear-gradient(135deg,#6b1830_0%,#7c1d33_55%,#93293f_100%)] px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
+            <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
           </div>
-        )}
-
-        {/* COMING SOON */}
-        <div className="mt-7 rounded-2xl border border-line-rose bg-[#fdf7f8] px-5 py-6 text-center">
-          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[#f7e3e7]">
-            <Sparkles size={20} className="text-maroon-600" />
+          <div>
+            <div className="font-display text-lg font-bold leading-none tracking-[0.5px] text-white">
+              ZAPTO
+            </div>
+            <div className="mt-0.5 text-[10px] font-medium leading-none text-gold">
+              Earn daily, withdraw daily
+            </div>
           </div>
-          <p className="mt-3 font-display text-[17px] font-bold text-maroon-700">
-            Home is on the way
-          </p>
-          <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#7d6a6e]">
-            Aapka dashboard yahan banega — games, wallet aur rewards ke saath.
-            Stay tuned!
-          </p>
         </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 rounded-full border border-gold/40 bg-white/10 px-3 py-1.5">
+            <Wallet size={14} className="text-gold" />
+            <span className="text-[13px] font-bold text-white">{fmt(wallet.balance)}</span>
+          </div>
+          <button
+            type="button"
+            aria-label="Logout"
+            onClick={logout}
+            className="grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-white/10 text-white/75 transition-colors hover:bg-white/20 hover:text-white"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
+      </header>
 
-        {/* LOGOUT */}
-        <button className={submitBtn} type="button" onClick={logout}>
-          <span className="inline-flex items-center justify-center gap-2">
-            <LogOut size={18} />
-            Logout
-          </span>
-        </button>
+      {/* ===== BANNER CAROUSEL ===== */}
+      <BannerCarousel banners={banners} />
+
+      {/* ===== QUICK MENU ===== */}
+      <div className="mx-3.5 mt-3.5 rounded-[20px] border border-maroon-900 bg-maroon-950 px-2.5 py-4 shadow-[0_8px_24px_rgba(66,9,26,0.28)]">
+        <div className="grid grid-cols-4 gap-1">
+          {QUICK_ITEMS.map(({ label, Icon, tile }) => (
+            <button
+              key={label}
+              type="button"
+              className="flex cursor-pointer flex-col items-center gap-2 py-1 transition-transform duration-150 active:scale-95"
+              onClick={() => {
+                if (label === "Recharge") router.push("/recharge");
+                else if (label === "Withdraw") router.push("/withdrawal");
+                else if (label === "Records") router.push("/records");
+                else showToast(label + " coming soon");
+              }}
+            >
+              <div className={`grid h-[52px] w-[52px] place-items-center rounded-2xl ${tile} max-[360px]:h-[46px] max-[360px]:w-[46px]`}>
+                <Icon size={23} strokeWidth={2.1} />
+              </div>
+              <span className="text-[11px] font-semibold text-[#e9d4d9]">{label}</span>
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* ===== TABS ===== */}
+      <div className="mx-3.5 mt-3.5 flex rounded-2xl border border-line-rose bg-white p-1 shadow-[0_2px_12px_rgba(87,18,36,0.06)]">
+        {["Daily Plans", "Premium VIP"].map((label, i) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => setTab(i)}
+            className={`flex-1 cursor-pointer rounded-[13px] py-2.5 font-display text-[14px] font-bold transition-all duration-200 ${
+              tab === i
+                ? `${gradientBtn} text-white`
+                : "text-muted-rose hover:text-maroon-600"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ===== PLANS ===== */}
+      <div className="pb-28">
+        {plans.map((plan) => (
+          <PlanCard key={plan.id || plan._id} plan={plan} type={tab === 0 ? "daily" : "vip"} onBuy={setSelectedPlan} />
+        ))}
+      </div>
+
+      {/* ===== BOTTOM NAV ===== */}
+      <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-line-rose bg-white/95 backdrop-blur">
+        <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
+          {NAV_ITEMS.map(({ label, Icon }, i) => (
+            <button
+              key={label}
+              type="button"
+              className="flex cursor-pointer flex-col items-center gap-1 py-2.5"
+              onClick={() => {
+                if (i === 0) return;
+                if (i === 1) router.push("/recharge");
+                else if (i === 2) router.push("/invite");
+                else if (i === 3) router.push("/records");
+                else if (i === 4) router.push("/profile");
+                else showToast(label + " coming soon");
+              }}
+            >
+              <Icon
+                size={21}
+                strokeWidth={i === 0 ? 2.4 : 2}
+                className={i === 0 ? "text-maroon-700" : "text-[#b9a5aa]"}
+              />
+              <span
+                className={`text-[10px] font-semibold ${
+                  i === 0 ? "text-maroon-700" : "text-[#b9a5aa]"
+                }`}
+              >
+                {label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* ===== CONFIRM MODAL (bottom sheet) ===== */}
+      {selectedPlan && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/45"
+          onClick={() => setSelectedPlan(null)}
+        >
+          <div
+            className="w-full max-w-[430px] animate-[slide-up_0.25s_ease] rounded-t-[24px] border-t border-line-rose bg-white px-5 pb-24 pt-2.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 h-1 w-9 rounded-full bg-line-rose" />
+            <div className="font-display text-[20px] font-bold text-ink">
+              Confirm {selectedPlan.vip ? "VIP Purchase" : "Investment"}
+            </div>
+            <p className="mt-1.5 text-[14px] leading-relaxed text-muted-rose">
+              {selectedPlan.vip ? "Activating" : "Investing in"}{" "}
+              <strong className="text-ink">{selectedPlan.name}</strong> for{" "}
+              <strong className="text-maroon-700">{fmt(selectedPlan.price)}</strong>.
+              <br />
+              Daily income:{" "}
+              <strong className="text-[#16a34a]">{fmt(selectedPlan.daily)}</strong>
+            </p>
+            <div className="mt-5 flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setSelectedPlan(null)}
+                className="flex-1 cursor-pointer rounded-[14px] border border-line-rose bg-[#faf5f6] py-3.5 text-[15px] font-bold text-[#7d6a6e]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const p = selectedPlan;
+                  setSelectedPlan(null);
+                  buyPlan(p);
+                }}
+                className={`flex-[2] cursor-pointer rounded-[14px] py-3.5 text-[15px] font-extrabold text-white ${gradientBtn}`}
+              >
+                Confirm →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== WELCOME NOTICE ===== */}
+      {notice && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-5"
+          onClick={() => setNotice(false)}
+        >
+          <div
+            className="w-full max-w-[370px] animate-[pop-in_0.25s_ease] overflow-hidden rounded-[24px] bg-white shadow-[0_20px_60px_rgba(66,9,26,0.35)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative bg-[linear-gradient(135deg,#6b1830_0%,#93293f_100%)] px-5 pb-5 pt-7 text-center">
+              <button
+                type="button"
+                aria-label="Close notice"
+                onClick={() => setNotice(false)}
+                className="absolute right-3 top-3 grid h-[30px] w-[30px] cursor-pointer place-items-center rounded-[10px] bg-white/15 text-white/80"
+              >
+                <X size={17} />
+              </button>
+              <div className="relative mx-auto mb-3 h-[60px] w-[60px] overflow-hidden rounded-2xl ring-2 ring-gold/50">
+                <Image src={logo} alt="ZAPTO" fill sizes="60px" className="object-cover" />
+              </div>
+              <div className="font-display text-[20px] font-bold text-white">Welcome to ZAPTO</div>
+              <div className="mt-1 text-[13px] text-white/65">Earn daily withdraw daily</div>
+            </div>
+            <div className="px-4 pt-4">
+              <ul className="flex flex-col gap-2">
+                {[
+                  { Icon: TrendingUp, text: "Daily income & daily withdrawals" },
+                  { Icon: Users, text: "Team commission up to 30%" },
+                  { Icon: IndianRupee, text: "Minimum withdrawal ₹130" },
+                  { Icon: CreditCard, text: "Minimum recharge ₹530" },
+                ].map(({ Icon, text }) => (
+                  <li
+                    key={text}
+                    className="flex items-center gap-2.5 rounded-xl border border-line-rose bg-[#fbf1f3] px-3.5 py-2.5 text-[13px] font-medium text-ink"
+                  >
+                    <Icon size={17} className="shrink-0 text-maroon-600" />
+                    {text}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="p-4">
+              <button
+                type="button"
+                onClick={() => showToast("Telegram channel link coming soon")}
+                className={`block w-full cursor-pointer rounded-[14px] py-3 text-center text-[14px] font-extrabold text-white ${gradientBtn}`}
+              >
+                Join Telegram Channel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== TOAST ===== */}
+      <Toast message={toast} />
     </div>
   );
 }

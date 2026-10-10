@@ -1,0 +1,212 @@
+@import "tailwindcss";
+
+/* ==========================================
+   Master Admin — Maroon Gold Theme
+   ========================================== */
+
+@theme {
+  /* Maroon scale */
+  --color-maroon-950: #42091a;
+  --color-maroon-900: #571224;
+  --color-maroon-800: #6b1830;
+  --color-maroon-700: #7c1d33; /* primary */
+  --color-maroon-600: #93293f;
+  --color-maroon-500: #a63b54;
+
+  /* Warm neutrals + accent */
+  --color-line-rose: #ecd6db;
+  --color-ink: #3d2229;
+  --color-muted-rose: #a08a8f;
+  --color-icon-rose: #b27583;
+  --color-gold: #d4a94f;
+
+  /* Fonts */
+  --font-display: "Playfair Display", Georgia, serif;
+  --font-body: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Arial, sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-ink);
+  background: #f6f0f1;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(124, 29, 51, 0.14);
+}
+
+/* Premium scrollbar */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-track {
+  background: #f3e6e9;
+}
+::-webkit-scrollbar-thumb {
+  background: #d9b8c0;
+  border-radius: 99px;
+  border: 2px solid #f3e6e9;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c493a0;
+}
+
+/* Modals / drawers */
+@keyframes pop-in {
+  from {
+    transform: scale(0.94) translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-left {
+  from {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Sidebar sidebar nav active shimmer */
+@keyframes gold-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Shared admin building blocks */
+.admin-card {
+  border-radius: 18px;
+  border: 1px solid var(--color-line-rose);
+  background: #ffffff;
+  box-shadow: 0 4px 24px rgba(87, 18, 36, 0.07);
+}
+
+.admin-input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1.5px solid var(--color-line-rose);
+  background: #ffffff;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.admin-input:focus {
+  border-color: var(--color-maroon-500);
+  box-shadow: 0 0 0 3.5px rgba(147, 41, 63, 0.12);
+}
+.admin-input::placeholder {
+  color: #c4a9b0;
+  font-weight: 400;
+}
+
+.admin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.admin-btn-primary {
+  background: linear-gradient(135deg, #7c1d33 0%, #93293f 55%, #7c1d33 100%);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(124, 29, 51, 0.32);
+}
+.admin-btn-primary:hover {
+  filter: brightness(1.08);
+}
+.admin-btn-primary:active {
+  transform: scale(0.97);
+}
+.admin-btn-ghost {
+  background: #ffffff;
+  border: 1.5px solid var(--color-line-rose);
+  color: var(--color-maroon-700);
+}
+.admin-btn-ghost:hover {
+  background: #fbf1f3;
+}
+.admin-btn-danger {
+  background: #dc2626;
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.25);
+}
+.admin-btn-danger:hover {
+  filter: brightness(1.08);
+}
+.admin-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Table */
+.admin-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13.5px;
+}
+.admin-table thead th {
+  background: #fbf3f4;
+  color: #8a6e75;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-line-rose);
+  white-space: nowrap;
+}
+.admin-table tbody td {
+  padding: 13px 16px;
+  border-bottom: 1px solid #f7ecef;
+  vertical-align: middle;
+}
+.admin-table tbody tr:hover td {
+  background: #fdf9fa;
+}
+.admin-table tbody tr:last-child td {
+  border-bottom: 0;
+}

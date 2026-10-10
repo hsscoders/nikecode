@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Phone, Lock, Eye, EyeOff } from "lucide-react";
+import { Phone, Lock, Eye, EyeOff, Clock } from "lucide-react";
 import banner from "../../public/zapto-banner.png";
 import logo from "../../public/zapto-logo.png";
 
@@ -62,21 +62,79 @@ export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [expired, setExpired] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [titles, setTitles] = useState({ login: "Login", register: "Register" });
+
+  /* site settings — admin panel se titles (fail hone par default) */
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/settings");
+        const d = await r.json();
+        if (d.success && d.settings && d.settings.site)
+          setTitles({
+            login: d.settings.site.loginTitle || "Login",
+            register: d.settings.site.registerTitle || "Register",
+          });
+      } catch (e) {}
+    })();
+  }, []);
+
+  /* page title — Login/Register text */
+  useEffect(() => {
+    document.title = titles.login || "Login";
+  }, [titles]);
+
+  /* JWT session expired flag — interceptor se wapas aaya? */
+  useEffect(() => {
+    if (window.location.search.includes("expired=1")) setExpired(true);
+  }, []);
+
+  /* JWT fix — valid token already hai to seedha /home, invalid ho to clear */
+  useEffect(() => {
+    const t = localStorage.getItem("zapto_token");
+    if (!t) return;
+    let cancel = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/wallet", {
+          headers: { Authorization: "Bearer " + t },
+        });
+        if (cancel) return;
+        if (r.ok) {
+          router.replace("/home");
+        } else if (r.status === 401 || r.status === 403) {
+          localStorage.removeItem("zapto_token");
+          localStorage.removeItem("zapto_phone");
+        }
+      } catch (e) {}
+    })();
+    return () => {
+      cancel = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (loading) return;
     setError("");
     const fd = new FormData(e.currentTarget);
+    const password = String(fd.get("password") || "");
+
+    /* client-side validation — server se pehle clear feedback */
+    if (!/^[6-9]\d{9}$/.test(phone))
+      return setError("Enter a valid 10-digit Indian mobile number");
+    if (!password)
+      return setError("Please enter your password");
+
     setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone: fd.get("phone"),
-          password: fd.get("password"),
-        }),
+        body: JSON.stringify({ phone, password }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -85,7 +143,7 @@ export default function LoginPage() {
       }
       localStorage.setItem("zapto_token", data.token);
       localStorage.setItem("zapto_phone", (data.user && data.user.phone) || "");
-      router.push("/home");
+      router.replace("/home");
     } catch (err) {
       setError("Network error — please check your connection and try again");
     } finally {
@@ -120,15 +178,23 @@ export default function LoginPage() {
         {/* TABS */}
         <div className="mb-6 flex items-baseline justify-between">
           <Link href="/login" className={`${tabBase} ${tabActive}`}>
-            Login
+            {titles.login}
           </Link>
           <Link href="/register" className={`${tabBase} ${tabInactive}`}>
-            Register
+            {titles.register}
           </Link>
         </div>
 
         {/* FORM */}
         <form onSubmit={handleSubmit} noValidate>
+          {/* SESSION EXPIRED BANNER */}
+          {expired && (
+            <div className="mb-4 flex items-center gap-2 rounded-xl border border-[#f1d3a7] bg-[#fdf6ec] px-4 py-3 text-[13.5px] font-semibold text-[#9a6b1f]">
+              <Clock size={15} className="shrink-0" />
+              Session expired — please login again
+            </div>
+          )}
+
           {/* PHONE */}
           <div className={inputGroup}>
             <div className="mr-2.5 flex min-w-16 items-center gap-1.5 border-r border-line-rose pr-2.5">
@@ -144,6 +210,12 @@ export default function LoginPage() {
               placeholder="Enter phone number"
               inputMode="numeric"
               autoComplete="tel"
+              maxLength={10}
+              value={phone}
+              onChange={(e) =>
+                setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+              }
+              autoFocus
               required
             />
           </div>

@@ -1,8 +1,9 @@
 import "./globals.css";
+import GlobalAuthGuard from "./components/GlobalAuthGuard";
 
 export const metadata = {
-  title: "ZAPTO | Client",
-  description: "ZAPTO Client — Login & Register",
+  title: "",
+  description: "Login & Register",
 };
 
 export default function RootLayout({ children }) {
@@ -20,7 +21,10 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <GlobalAuthGuard />
+        {children}
+      </body>
     </html>
   );
 }

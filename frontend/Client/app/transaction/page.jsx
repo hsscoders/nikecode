@@ -1,0 +1,261 @@
+"use client";
+
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Home,
+  IndianRupee,
+  ReceiptText,
+  Users,
+  User,
+  Wallet,
+  LogOut,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Clock3,
+} from "lucide-react";
+import logo from "../../public/zapto-logo.png";
+
+const NAV_ITEMS = [
+  { label: "Home", Icon: Home },
+  { label: "Recharge", Icon: IndianRupee },
+  { label: "Invite", Icon: Users },
+  { label: "Records", Icon: ReceiptText },
+  { label: "Account", Icon: User },
+];
+
+const TABS = ["ALL", "Recharge", "Withdraw"];
+
+/* ================= HELPERS ================= */
+
+const fmt = (n) =>
+  "₹" +
+  Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const gradientBtn =
+  "bg-[linear-gradient(135deg,#7c1d33_0%,#93293f_55%,#7c1d33_100%)] shadow-[0_8px_20px_rgba(124,29,51,0.3)]";
+
+const card =
+  "rounded-[18px] border border-line-rose bg-white shadow-[0_4px_24px_rgba(87,18,36,0.07)]";
+
+const fmtDate = (iso) =>
+  new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+
+const fmtTime = (iso) =>
+  new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+
+/* ================= SMALL PARTS ================= */
+
+/* txn row — recharge credit (green, down-left) / withdraw debit (red, up-right) */
+function TxnRow({ txn }) {
+  const isRecharge = txn.type === "recharge";
+  return (
+    <div
+      className={`${card} flex items-center gap-3.5 p-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(87,18,36,0.12)] max-[360px]:p-3`}
+    >
+      <span
+        className={`grid h-[44px] w-[44px] shrink-0 place-items-center rounded-[14px] max-[360px]:h-[40px] max-[360px]:w-[40px] ${
+          isRecharge ? "bg-[#eafaf0] text-[#16a34a]" : "bg-[#fdecec] text-[#dc2626]"
+        }`}
+      >
+        {isRecharge ? (
+          <ArrowDownLeft size={20} strokeWidth={2.2} />
+        ) : (
+          <ArrowUpRight size={20} strokeWidth={2.2} />
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-[14px] font-bold text-ink">
+            {isRecharge ? "Recharge" : "Withdraw"}
+            {txn.method && (
+              <span className="ml-1.5 text-[11px] font-semibold text-muted-rose">
+                {txn.method}
+              </span>
+            )}
+          </span>
+          <span
+            className={`shrink-0 text-[14.5px] font-extrabold max-[360px]:text-[13.5px] ${
+              isRecharge ? "text-[#16a34a]" : "text-[#dc2626]"
+            }`}
+          >
+            {isRecharge ? "+" : "-"}
+            {fmt(txn.amount)}
+          </span>
+        </div>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1 text-[11.5px] font-medium text-muted-rose">
+            <Clock3 size={11} />
+            {fmtDate(txn.at)} · {fmtTime(txn.at)}
+          </span>
+          <span
+            className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.4px] ${
+              txn.status === "Success"
+                ? "bg-[#eafaf0] text-[#16a34a]"
+                : "bg-[#fdf6e4] text-[#a9791c]"
+            }`}
+          >
+            <span
+              className={`h-[5px] w-[5px] rounded-full ${
+                txn.status === "Success" ? "bg-[#16a34a]" : "bg-[#d4a94f]"
+              }`}
+            />
+            {txn.status}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================= MAIN PAGE ================= */
+
+export default function TransactionPage() {
+  const router = useRouter();
+
+  /* page title */
+  useEffect(() => {
+    document.title = "Transaction History";
+  }, []);
+  const [tab, setTab] = useState(0); // 0=ALL, 1=Recharge, 2=Withdraw
+  const [txns, setTxns] = useState([]);
+  const [ready, setReady] = useState(false);
+
+  /* token guard + transactions load (localStorage — txn API baad me) */
+  useEffect(() => {
+    const token = localStorage.getItem("zapto_token");
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+    try {
+      setTxns(JSON.parse(localStorage.getItem("zapto_transactions") || "[]"));
+    } catch {
+      setTxns([]);
+    }
+    setReady(true);
+  }, [router]);
+
+  const filtered = txns.filter((t) => {
+    if (tab === 0) return true;
+    if (tab === 1) return t.type === "recharge";
+    return t.type === "withdraw";
+  });
+
+  return (
+    <div className="mx-auto flex min-h-dvh w-full flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:max-w-[430px] min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
+      {/* ===== HEADER (app shell) ===== */}
+      <header className="flex items-center justify-between bg-[linear-gradient(135deg,#6b1830_0%,#7c1d33_55%,#93293f_100%)] px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
+            <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
+          </div>
+          <div>
+            <div className="font-display text-lg font-bold leading-none tracking-[0.5px] text-white">
+              ZAPTO
+            </div>
+            <div className="mt-0.5 text-[10px] font-medium leading-none text-gold">
+              Earn daily, withdraw daily
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 rounded-full border border-gold/40 bg-white/10 px-3 py-1.5">
+            <Wallet size={14} className="text-gold" />
+            <span className="text-[13px] font-bold text-white">{fmt(0)}</span>
+          </div>
+          <button
+            type="button"
+            aria-label="Logout"
+            onClick={() => {
+              localStorage.removeItem("zapto_token");
+              localStorage.removeItem("zapto_phone");
+              router.replace("/login");
+            }}
+            className="grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-white/10 text-white/75 transition-colors hover:bg-white/20 hover:text-white"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
+      </header>
+
+      {/* ===== CONTENT ===== */}
+      <div className="flex-1 bg-[#faf6f7] px-3.5 pb-28 pt-3.5">
+        {/* --- TITLE --- */}
+        <div className="flex items-center justify-between">
+          <div className="font-display text-[20px] font-bold text-ink">Transaction History</div>
+          {ready && txns.length > 0 && (
+            <span className="rounded-full bg-[#f7e3e7] px-3 py-1 text-[11px] font-bold text-maroon-700">
+              {txns.length} {txns.length === 1 ? "record" : "records"}
+            </span>
+          )}
+        </div>
+
+        {/* --- TABS (skewed active pill — reference jaisa) --- */}
+        <div className={`${card} mt-3 flex p-1`}>
+          {TABS.map((label, i) => {
+            const active = tab === i;
+            return (
+              <button key={label} type="button" onClick={() => setTab(i)} className="flex-1 cursor-pointer">
+                <span
+                  className={`block -skew-x-12 px-2 py-2.5 text-[13px] font-extrabold tracking-[0.3px] transition-all duration-200 ${
+                    active ? `${gradientBtn} text-white` : "text-[#7d6a6e] hover:text-maroon-600"
+                  }`}
+                >
+                  <span className="block skew-x-12">{label}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* --- LIST / EMPTY STATE --- */}
+        {!ready ? null : filtered.length === 0 ? (
+          <div className={`${card} mt-3.5 flex flex-col items-center px-6 py-14 text-center`}>
+            <div className="grid h-[72px] w-[72px] place-items-center rounded-[22px] bg-[#f6f0f1]">
+              <ReceiptText size={34} strokeWidth={1.6} className="text-[#c4adb3]" />
+            </div>
+            <div className="mt-4 font-display text-[22px] font-extrabold tracking-[1.5px] text-[#c4adb3]">
+              NO DATA
+            </div>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-muted-rose">
+              Recharge or withdraw to see
+              <br />
+              your transactions here
+            </p>
+          </div>
+        ) : (
+          <div className="mt-3.5 flex flex-col gap-2.5">
+            {filtered.map((t) => (
+              <TxnRow key={t.id} txn={t} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ===== BOTTOM NAV (koi active nahi) ===== */}
+      <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-line-rose bg-white/95 backdrop-blur">
+        <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
+          {NAV_ITEMS.map(({ label, Icon }, i) => (
+            <button
+              key={label}
+              type="button"
+              className="flex cursor-pointer flex-col items-center gap-1 py-2.5"
+              onClick={() => {
+                if (i === 0) router.push("/home");
+                else if (i === 1) router.push("/recharge");
+                else if (i === 2) router.push("/invite");
+                else if (i === 3) router.push("/records");
+                else if (i === 4) router.push("/profile");
+              }}
+            >
+              <Icon size={21} strokeWidth={2} className="text-[#b9a5aa]" />
+              <span className="text-[10px] font-semibold text-[#b9a5aa]">{label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+    </div>
+  );
+}

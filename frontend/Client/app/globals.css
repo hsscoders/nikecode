@@ -53,6 +53,29 @@ body {
   mask-image: linear-gradient(180deg, #000 68%, rgba(0, 0, 0, 0) 100%);
 }
 
+/* Home page: bottom-sheet + popup animations */
+@keyframes slide-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 /* Tablet / Desktop backdrop */
 @media (min-width: 520px) {
   body {

@@ -11,7 +11,14 @@ const UserSchema = new mongoose.Schema(
     },
     password: { type: String, required: true }, // bcrypt hash (login)
     withdrawPassword: { type: String, required: true }, // bcrypt hash (withdrawal)
-    refBy: { type: String, default: "", trim: true },
+    refBy: { type: String, default: "", trim: true }, // referrer ka refId
+    userid: { type: String, unique: true, sparse: true, index: true }, // ZP + 6 digits
+    refId: { type: String, unique: true, sparse: true, index: true }, // ZP + 8 alnum
+    name: { type: String, default: "", trim: true },
+    balance: { type: Number, default: 0 }, // withdrawal balance
+    rechargeBalance: { type: Number, default: 0 }, // recharge wallet (plan buy)
+    totalIncome: { type: Number, default: 0 }, // total plan income
+    status: { type: String, enum: ["Active", "Banned"], default: "Active" },
   },
   { timestamps: true }
 );

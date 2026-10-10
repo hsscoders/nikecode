@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Phone,
   Lock,
@@ -12,6 +12,7 @@ import {
   Gift,
   Eye,
   EyeOff,
+  BadgeCheck,
 } from "lucide-react";
 import banner from "../../public/zapto-banner.png";
 import logo from "../../public/zapto-logo.png";
@@ -66,27 +67,127 @@ function PasswordField({ id, name, Icon, placeholder, autoComplete }) {
   );
 }
 
-export default function RegisterPage() {
+/* ===== Register Success — black full-screen loader + Success text ===== */
+
+function SuccessOverlay() {
+  return (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 px-8">
+      <div className="relative h-[86px] w-[86px] overflow-hidden rounded-full border-[3px] border-gold/70 shadow-[0_16px_44px_rgba(0,0,0,0.55)]">
+        <Image
+          src={logo}
+          alt="ZAPTO"
+          fill
+          sizes="86px"
+          className="object-cover"
+          priority
+        />
+      </div>
+      <div className="mt-7 h-9 w-9 animate-spin rounded-full border-[3px] border-white/20 border-t-gold" />
+      <div className="mt-7 font-display text-[30px] font-bold tracking-[1px] text-gold">
+        Success!
+      </div>
+      <div className="mt-2 text-center text-[13.5px] font-semibold text-white/70">
+        Account created — taking you to your dashboard...
+      </div>
+    </div>
+  );
+}
+
+/* ===== MAIN (Suspense inner — useSearchParams ke liye) ===== */
+
+function RegisterInner() {
   const router = useRouter();
+  const sp = useSearchParams();
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [refCode, setRefCode] = useState("");
+  const [phone, setPhone] = useState("");
+  const [titles, setTitles] = useState({ login: "Login", register: "Register" });
+
+  /* site settings — admin panel se titles (fail hone par default) */
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/settings");
+        const d = await r.json();
+        if (d.success && d.settings && d.settings.site)
+          setTitles({
+            login: d.settings.site.loginTitle || "Login",
+            register: d.settings.site.registerTitle || "Register",
+          });
+      } catch (e) {}
+    })();
+  }, []);
+
+  /* page title — Login/Register text */
+  useEffect(() => {
+    document.title = titles.register || "Register";
+  }, [titles]);
+
+  /* invite link se aaya? (?inviteCode=ZPXXXXXXXX) — auto-fill */
+  useEffect(() => {
+    const c = (sp.get("inviteCode") || "").trim().toLowerCase();
+    if (c) setRefCode(c);
+  }, [sp]);
+
+  /* JWT fix — valid token already hai to seedha /home, invalid ho to clear */
+  useEffect(() => {
+    const t = localStorage.getItem("zapto_token");
+    if (!t) return;
+    let cancel = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/wallet", {
+          headers: { Authorization: "Bearer " + t },
+        });
+        if (cancel) return;
+        if (r.ok) {
+          router.replace("/home");
+        } else if (r.status === 401 || r.status === 403) {
+          localStorage.removeItem("zapto_token");
+          localStorage.removeItem("zapto_phone");
+        }
+      } catch (e) {}
+    })();
+    return () => {
+      cancel = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (loading) return;
+    if (loading || success) return;
     setError("");
     const fd = new FormData(e.currentTarget);
+    const password = String(fd.get("password") || "");
+    const confirm = String(fd.get("password_confirmation") || "");
+    const withdraw = String(fd.get("withdraw_password") || "");
+
+    /* client-side validation — server se pehle clear feedback */
+    if (!/^[6-9]\d{9}$/.test(phone))
+      return setError("Enter a valid 10-digit Indian mobile number");
+    if (password.length < 6)
+      return setError("Password must be at least 6 characters");
+    if (password !== confirm)
+      return setError("Passwords do not match");
+    if (withdraw.length < 6)
+      return setError("Withdraw password must be at least 6 characters");
+    if (withdraw === password)
+      return setError("Withdraw password cannot be same as login password");
+
     setLoading(true);
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: fd.get("phone"),
-          password: fd.get("password"),
-          password_confirmation: fd.get("password_confirmation"),
-          withdraw_password: fd.get("withdraw_password"),
-          ref_by: fd.get("ref_by"),
+          phone,
+          password,
+          password_confirmation: confirm,
+          withdraw_password: withdraw,
+          ref_by: refCode.trim(),
         }),
       });
       const data = await res.json();
@@ -96,7 +197,8 @@ export default function RegisterPage() {
       }
       localStorage.setItem("zapto_token", data.token);
       localStorage.setItem("zapto_phone", (data.user && data.user.phone) || "");
-      router.push("/home");
+      setSuccess(true);
+      setTimeout(() => router.replace("/home"), 2000);
     } catch (err) {
       setError("Network error — please check your connection and try again");
     } finally {
@@ -131,10 +233,10 @@ export default function RegisterPage() {
         {/* TABS */}
         <div className="mb-6 flex items-baseline justify-between">
           <Link href="/login" className={`${tabBase} ${tabInactive}`}>
-            Login
+            {titles.login}
           </Link>
           <Link href="/register" className={`${tabBase} ${tabActive}`}>
-            Register
+            {titles.register}
           </Link>
         </div>
 
@@ -155,6 +257,11 @@ export default function RegisterPage() {
               placeholder="Enter phone number"
               inputMode="numeric"
               autoComplete="tel"
+              maxLength={10}
+              value={phone}
+              onChange={(e) =>
+                setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+              }
               required
             />
           </div>
@@ -196,9 +303,22 @@ export default function RegisterPage() {
               type="text"
               id="ref_by"
               name="ref_by"
-              placeholder="Invite code"
+              placeholder="Invite code (optional)"
+              value={refCode}
+              onChange={(e) =>
+                setRefCode(e.target.value.toLowerCase())
+              }
             />
           </div>
+
+          {/* INVITE APPLIED HINT */}
+          {refCode.trim() && (
+            <div className="-mt-2 mb-4 flex items-center gap-1.5 text-[12.5px] font-semibold text-[#15803d]">
+              <BadgeCheck size={14} className="shrink-0" />
+              Invite code applied —{" "}
+              <span className="font-extrabold tracking-[0.5px]">{refCode}</span>
+            </div>
+          )}
 
           {/* ERROR */}
           {error && (
@@ -211,7 +331,7 @@ export default function RegisterPage() {
           <button
             className={`${submitBtn} disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100`}
             type="submit"
-            disabled={loading}
+            disabled={loading || success}
           >
             {loading ? "Please wait..." : "Register"}
           </button>
@@ -228,6 +348,17 @@ export default function RegisterPage() {
           </div>
         </form>
       </div>
+
+      {/* SUCCESS OVERLAY (black loader) */}
+      {success && <SuccessOverlay />}
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterInner />
+    </Suspense>
   );
 }
