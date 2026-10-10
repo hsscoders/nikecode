@@ -22,18 +22,11 @@ import {
   Smartphone,
 } from "lucide-react";
 import logo from "../../public/zapto-logo.png";
-
-const NAV_ITEMS = [
-  { label: "Home", Icon: Home },
-  { label: "Recharge", Icon: IndianRupee },
-  { label: "Invite", Icon: Users },
-  { label: "Records", Icon: ReceiptText },
-  { label: "Account", Icon: User },
-];
+import BottomNav from "../components/BottomNav";
 
 /* menu — Plan Record / Bank Settings / Txn History / Team / Invite / Support / Download / Logout */
 const MENU_ITEMS = [
-  { label: "Plan Record", Icon: ReceiptText, tile: "bg-[#f7e3e7] text-maroon-600", to: "/records" },
+  { label: "Plan Record", Icon: ReceiptText, tile: "bg-[var(--c-tint2)] text-maroon-600", to: "/records" },
   { label: "Bank Settings", Icon: Landmark, tile: "bg-[#fdf6e4] text-[#a9791c]", to: "/card" },
   { label: "Transaction History", Icon: ArrowLeftRight, tile: "bg-[#eef4ff] text-[#2563eb]", to: "/transaction" },
   { label: "My Team", Icon: Users, tile: "bg-[#eafaf0] text-[#16a34a]", to: "/team" },
@@ -67,7 +60,7 @@ function CenterAlert({ message }) {
     <div
       role="status"
       aria-live="polite"
-      className={`fixed left-1/2 top-1/2 z-[80] flex min-w-[180px] max-w-[calc(100%-40px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2.5 rounded-full bg-maroon-950 px-6 py-3 text-[14px] font-semibold text-white shadow-[0_10px_30px_rgba(66,9,26,0.4)] transition-all duration-200 ${
+      className={`fixed left-1/2 top-1/2 z-[80] flex min-w-[180px] max-w-[calc(100%-40px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2.5 rounded-full bg-maroon-950 px-6 py-3 text-[14px] font-semibold text-white shadow-[0_10px_30px_var(--s-alert)] transition-all duration-200 ${
         message
           ? "pointer-events-auto scale-100 opacity-100"
           : "pointer-events-none scale-95 opacity-0"
@@ -85,7 +78,7 @@ function MenuRow({ Icon, tile, label, onClick, last }) {
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full cursor-pointer items-center gap-3.5 px-2 py-3.5 text-left transition-colors duration-150 hover:bg-[#fdf7f8] max-[360px]:py-3 ${
+      className={`flex w-full cursor-pointer items-center gap-3.5 px-2 py-3.5 text-left transition-colors duration-150 hover:bg-[var(--c-tint)] max-[360px]:py-3 ${
         last ? "" : "border-b border-line-rose/70"
       }`}
     >
@@ -114,6 +107,20 @@ export default function ProfilePage() {
   const [incomeTotal, setIncomeTotal] = useState(0);
   const [alertMsg, setAlertMsg] = useState("");
   const alertTimer = useRef(null);
+
+  /* realtime wallet — recharge approval / income lands here instantly */
+  useEffect(() => {
+    const h = (e) => {
+      if (!e.detail) return;
+      if (e.detail.balance !== undefined) setBalance(e.detail.balance || 0);
+      if (e.detail.rechargeBalance !== undefined)
+        setRechargeTotal(e.detail.rechargeBalance || 0);
+      if (e.detail.totalIncome !== undefined)
+        setIncomeTotal(e.detail.totalIncome || 0);
+    };
+    window.addEventListener("zapto:wallet", h);
+    return () => window.removeEventListener("zapto:wallet", h);
+  }, []);
 
   /* token guard + user data load (wallet API — real balance after admin approval) */
   useEffect(() => {
@@ -202,7 +209,7 @@ export default function ProfilePage() {
   return (
     <div className="mx-auto flex min-h-dvh w-full flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:max-w-[430px] min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
       {/* ===== HEADER (app shell) ===== */}
-      <header className="flex items-center justify-between bg-[linear-gradient(135deg,#6b1830_0%,#7c1d33_55%,#93293f_100%)] px-4 py-3">
+      <header className="flex items-center justify-between bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
             <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
@@ -233,12 +240,12 @@ export default function ProfilePage() {
       </header>
 
       {/* ===== CONTENT ===== */}
-      <div className="flex-1 bg-[#faf6f7] px-3.5 pb-28 pt-3.5">
+      <div className="flex-1 bg-[var(--c-bg)] px-3.5 pb-28 pt-3.5">
         {/* --- PROFILE HERO (maroon gradient — like the team hero) --- */}
-        <section className="rounded-[22px] bg-[linear-gradient(135deg,#6b1830_0%,#7c1d33_45%,#93293f_100%)] p-5 shadow-[0_12px_34px_rgba(66,9,26,0.3)]">
+        <section className="rounded-[22px] bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_45%,var(--c-primary2)_100%)] p-5 shadow-[0_12px_34px_var(--s-alert)]">
           <div className="absolute-pointer-events-none" />
           <div className="flex items-center gap-4">
-            <div className="relative h-[62px] w-[62px] shrink-0 overflow-hidden rounded-full border-2 border-gold/70 bg-[#fbf1f3] max-[360px]:h-[54px] max-[360px]:w-[54px]">
+            <div className="relative h-[62px] w-[62px] shrink-0 overflow-hidden rounded-full border-2 border-gold/70 bg-[var(--c-tint)] max-[360px]:h-[54px] max-[360px]:w-[54px]">
               <Image src={logo} alt="Profile avatar" fill sizes="62px" className="object-cover" />
             </div>
             <div className="min-w-0 flex-1">
@@ -315,42 +322,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* ===== BOTTOM NAV (Account active) ===== */}
-      <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-line-rose bg-white/95 backdrop-blur">
-        <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
-          {NAV_ITEMS.map(({ label, Icon }, i) => {
-            const active = i === 4;
-            return (
-              <button
-                key={label}
-                type="button"
-                className="flex cursor-pointer flex-col items-center gap-1 py-2.5"
-                onClick={() => {
-                  if (active) return;
-                  if (i === 0) router.push("/home");
-                  else if (i === 1) router.push("/recharge");
-                  else if (i === 2) router.push("/invite");
-                  else if (i === 3) router.push("/records");
-                  else showAlert(label + " coming soon");
-                }}
-              >
-                <Icon
-                  size={21}
-                  strokeWidth={active ? 2.4 : 2}
-                  className={active ? "text-maroon-700" : "text-[#b9a5aa]"}
-                />
-                <span
-                  className={`text-[10px] font-semibold ${
-                    active ? "text-maroon-700" : "text-[#b9a5aa]"
-                  }`}
-                >
-                  {label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+            <BottomNav active={4} />
 
       {/* ===== CENTERED ALERT ===== */}
       <CenterAlert message={alertMsg} />

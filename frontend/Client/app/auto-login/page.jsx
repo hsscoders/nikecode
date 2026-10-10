@@ -31,7 +31,7 @@ function AutoLoginInner() {
   }, [sp, router]);
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-[linear-gradient(135deg,#42091a_0%,#7c1d33_55%,#93293f_100%)] px-6">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-[linear-gradient(135deg,var(--c-deeper)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-6">
       <div className="relative h-[74px] w-[74px] overflow-hidden rounded-full border-[3px] border-white/90 shadow-[0_16px_40px_rgba(0,0,0,0.4)] ring-4 ring-gold/40">
         <Image src={logo} alt="ZAPTO" fill sizes="74px" className="object-cover" priority />
       </div>

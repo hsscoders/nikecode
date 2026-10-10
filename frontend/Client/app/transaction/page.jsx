@@ -16,14 +16,7 @@ import {
   Clock3,
 } from "lucide-react";
 import logo from "../../public/zapto-logo.png";
-
-const NAV_ITEMS = [
-  { label: "Home", Icon: Home },
-  { label: "Recharge", Icon: IndianRupee },
-  { label: "Invite", Icon: Users },
-  { label: "Records", Icon: ReceiptText },
-  { label: "Account", Icon: User },
-];
+import BottomNav from "../components/BottomNav";
 
 const TABS = ["ALL", "Recharge", "Withdraw", "Earnings"];
 
@@ -34,7 +27,7 @@ const fmt = (n) =>
   Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const gradientBtn =
-  "bg-[linear-gradient(135deg,#7c1d33_0%,#93293f_55%,#7c1d33_100%)] shadow-[0_8px_20px_rgba(124,29,51,0.3)]";
+  "bg-[linear-gradient(135deg,var(--c-primary)_0%,var(--c-primary2)_55%,var(--c-primary)_100%)] shadow-[0_8px_20px_var(--s-btn)]";
 
 const card =
   "rounded-[18px] border border-line-rose bg-white shadow-[0_4px_24px_rgba(87,18,36,0.07)]";
@@ -127,7 +120,7 @@ function TxnRow({ txn }) {
                   ? "bg-[#16a34a]"
                   : txn.status === "Rejected"
                     ? "bg-[#dc2626]"
-                    : "bg-[#d4a94f]"
+                    : "bg-[var(--c-accent)]"
               }`}
             />
             {txn.status}
@@ -200,7 +193,7 @@ export default function TransactionPage() {
   return (
     <div className="mx-auto flex min-h-dvh w-full flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:max-w-[430px] min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
       {/* ===== HEADER (app shell) ===== */}
-      <header className="flex items-center justify-between bg-[linear-gradient(135deg,#6b1830_0%,#7c1d33_55%,#93293f_100%)] px-4 py-3">
+      <header className="flex items-center justify-between bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
             <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
@@ -235,12 +228,12 @@ export default function TransactionPage() {
       </header>
 
       {/* ===== CONTENT ===== */}
-      <div className="flex-1 bg-[#faf6f7] px-3.5 pb-28 pt-3.5">
+      <div className="flex-1 bg-[var(--c-bg)] px-3.5 pb-28 pt-3.5">
         {/* --- TITLE --- */}
         <div className="flex items-center justify-between">
           <div className="font-display text-[20px] font-bold text-ink">Transaction History</div>
           {ready && txns.length > 0 && (
-            <span className="rounded-full bg-[#f7e3e7] px-3 py-1 text-[11px] font-bold text-maroon-700">
+            <span className="rounded-full bg-[var(--c-tint2)] px-3 py-1 text-[11px] font-bold text-maroon-700">
               {txns.length} {txns.length === 1 ? "record" : "records"}
             </span>
           )}
@@ -267,7 +260,7 @@ export default function TransactionPage() {
         {/* --- LIST / EMPTY STATE --- */}
         {!ready ? null : filtered.length === 0 ? (
           <div className={`${card} mt-3.5 flex flex-col items-center px-6 py-14 text-center`}>
-            <div className="grid h-[72px] w-[72px] place-items-center rounded-[22px] bg-[#f6f0f1]">
+            <div className="grid h-[72px] w-[72px] place-items-center rounded-[22px] bg-[var(--c-tint)]">
               <ReceiptText size={34} strokeWidth={1.6} className="text-[#c4adb3]" />
             </div>
             <div className="mt-4 font-display text-[22px] font-extrabold tracking-[1.5px] text-[#c4adb3]">
@@ -288,28 +281,7 @@ export default function TransactionPage() {
         )}
       </div>
 
-      {/* ===== BOTTOM NAV (nothing active) ===== */}
-      <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-line-rose bg-white/95 backdrop-blur">
-        <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
-          {NAV_ITEMS.map(({ label, Icon }, i) => (
-            <button
-              key={label}
-              type="button"
-              className="flex cursor-pointer flex-col items-center gap-1 py-2.5"
-              onClick={() => {
-                if (i === 0) router.push("/home");
-                else if (i === 1) router.push("/recharge");
-                else if (i === 2) router.push("/invite");
-                else if (i === 3) router.push("/records");
-                else if (i === 4) router.push("/profile");
-              }}
-            >
-              <Icon size={21} strokeWidth={2} className="text-[#b9a5aa]" />
-              <span className="text-[10px] font-semibold text-[#b9a5aa]">{label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
+            <BottomNav active={-1} />
     </div>
   );
 }

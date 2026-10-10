@@ -3,28 +3,55 @@
 /* ==========================================
    ZAPTO — Maroon Light Theme (Tailwind v4)
    Design tokens -> Tailwind utilities
+
+   THEMING: every theme-able token points at a runtime CSS
+   variable (--c-*). The admin "Font & Color" panel saves
+   primary + accent + fonts; AppearanceProvider derives all
+   shades and sets the --c-* vars on <html> at runtime.
    ========================================== */
 
-@theme {
-  /* Maroon scale */
-  --color-maroon-950: #42091a;
-  --color-maroon-900: #571224;
-  --color-maroon-800: #6b1830;
-  --color-maroon-700: #7c1d33; /* primary */
-  --color-maroon-600: #93293f;
-  --color-maroon-500: #a63b54;
-
-  /* Warm neutrals + accent */
-  --color-line-rose: #ecd6db;
-  --color-ink: #3d2229;
-  --color-muted-rose: #a08a8f;
-  --color-icon-rose: #b27583;
-  --color-gold: #d4a94f;
-
-  /* Fonts */
-  --font-display: "Playfair Display", Georgia, serif;
-  --font-body: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+/* Runtime theme variables (defaults = classic maroon & gold) */
+:root {
+  --c-primary: #7c1d33;
+  --c-primary2: #93293f;
+  --c-primary3: #a63b54;
+  --c-deep: #6b1830;
+  --c-deep2: #571224;
+  --c-deeper: #42091a;
+  --c-accent: #d4a94f;
+  --c-bg: #faf6f7;
+  --c-tint: #fbf1f3;
+  --c-tint2: #f7e3e7;
+  --c-line: #ecd6db;
+  --c-ink: #3d2229;
+  --c-muted: #a08a8f;
+  --c-icon: #b27583;
+  --s-btn: rgba(124, 29, 51, 0.35);
+  --s-alert: rgba(66, 9, 26, 0.4);
+  --f-display: "Playfair Display", Georgia, serif;
+  --f-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     Arial, sans-serif;
+}
+
+@theme {
+  /* Maroon scale -> runtime vars */
+  --color-maroon-950: var(--c-deeper);
+  --color-maroon-900: var(--c-deep2);
+  --color-maroon-800: var(--c-deep);
+  --color-maroon-700: var(--c-primary);
+  --color-maroon-600: var(--c-primary2);
+  --color-maroon-500: var(--c-primary3);
+
+  /* Warm neutrals + accent -> runtime vars */
+  --color-line-rose: var(--c-line);
+  --color-ink: var(--c-ink);
+  --color-muted-rose: var(--c-muted);
+  --color-icon-rose: var(--c-icon);
+  --color-gold: var(--c-accent);
+
+  /* Fonts -> runtime vars */
+  --font-display: var(--f-display);
+  --font-body: var(--f-body);
 }
 
 html,
@@ -35,16 +62,18 @@ body {
 }
 
 body {
-  font-family: var(--font-body);
-  color: var(--color-ink);
-  background: linear-gradient(180deg, #ffffff 0%, #faf2f3 48%, #f3e1e5 100%);
+  font-family: var(--f-body);
+  color: var(--c-ink);
+  background: linear-gradient(180deg, #ffffff 0%, var(--c-tint) 48%, var(--c-tint2) 100%);
   min-height: 100dvh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  /* smooth one-click theme change */
+  transition: background 0.35s ease, color 0.35s ease;
 }
 
 ::selection {
-  background: rgba(124, 29, 51, 0.14);
+  background: color-mix(in srgb, var(--c-primary) 14%, transparent);
 }
 
 /* Banner bottom fade — background ke sath merge ho jaye */
@@ -79,6 +108,11 @@ body {
 /* Tablet / Desktop backdrop */
 @media (min-width: 520px) {
   body {
-    background: linear-gradient(160deg, #fdf7f8 0%, #f6e7ea 45%, #ecd3d9 100%);
+    background: linear-gradient(
+      160deg,
+      var(--c-tint) 0%,
+      var(--c-tint2) 45%,
+      var(--c-line) 100%
+    );
   }
 }

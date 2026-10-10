@@ -69,8 +69,50 @@ const SettingSchema = new mongoose.Schema(
       creditTime: { type: String, default: "00:00" },
       lastCreditDate: { type: String, default: "" }, // YYYY-MM-DD (IST) — prevents double credit
     },
+    /* Look & feel — one-click color theme + font style for the whole client site.
+       Presets carry a full hand-tuned palette on the client; custom colors are
+       derived with warm HSL mixing (see applyTheme in AppearanceProvider).
+       bgTone tunes the page background: warm (hue-tinted), neutral, white. */
+    appearance: {
+      preset: { type: String, default: "maroon" },
+      primary: { type: String, default: "#7c1d33" },
+      accent: { type: String, default: "#d4a94f" },
+      fontHead: { type: String, default: "playfair" },
+      fontBody: { type: String, default: "inter" },
+      bgTone: { type: String, default: "warm" },
+    },
   },
   { timestamps: true }
 );
 
 module.exports = mongoose.model("Setting", SettingSchema);
+
+/* Whitelists shared by the admin settings route (attached after the model) */
+const Setting = module.exports;
+Setting.HEAD_FONTS = [
+  "playfair",
+  "poppins",
+  "merriweather",
+  "bebas",
+  "dancingscript",
+  "rubik",
+  "oswald",
+  "montserrat",
+  "lora",
+  "quicksand",
+  "caveat",
+  "josefin",
+];
+Setting.BODY_FONTS = [
+  "inter",
+  "poppins",
+  "nunito",
+  "rubik",
+  "dmsans",
+  "roboto",
+  "opensans",
+  "lato",
+  "mulish",
+  "worksans",
+];
+Setting.BG_TONES = ["warm", "neutral", "white"];

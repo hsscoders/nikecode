@@ -22,16 +22,11 @@ import {
   Clock,
 } from "lucide-react";
 import logo from "../../public/zapto-logo.png";
+import useLiveWallet from "../components/useLiveWallet";
+import BottomNav from "../components/BottomNav";
+import { useSettings } from "../components/SettingsProvider";
 
 /* ================= DATA (live from admin recharge settings) ================= */
-
-const NAV_ITEMS = [
-  { label: "Home", Icon: Home },
-  { label: "Recharge", Icon: IndianRupee },
-  { label: "Invite", Icon: Users },
-  { label: "Records", Icon: ReceiptText },
-  { label: "Account", Icon: User },
-];
 
 /* Method icon map — admin saves icon keys, client renders lucide icons */
 const METHOD_ICONS = {
@@ -63,6 +58,17 @@ const DEFAULT_RECHARGE = {
   },
 };
 
+/* Merge admin recharge settings over the defaults (shared by the SSR
+   seed and the live fetch — one source of truth for the shape) */
+function mergeRecharge(source) {
+  if (!source) return DEFAULT_RECHARGE;
+  const rc = { ...DEFAULT_RECHARGE, ...source };
+  rc.manual = { ...DEFAULT_RECHARGE.manual, ...(source.manual || {}) };
+  rc.quickAmounts = Array.isArray(rc.quickAmounts) ? rc.quickAmounts : [];
+  rc.methods = Array.isArray(rc.methods) ? rc.methods : [];
+  return rc;
+}
+
 /* ================= HELPERS ================= */
 
 const fmt = (n) =>
@@ -70,7 +76,7 @@ const fmt = (n) =>
   Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const gradientBtn =
-  "bg-[linear-gradient(135deg,#7c1d33_0%,#93293f_55%,#7c1d33_100%)] shadow-[0_10px_24px_rgba(124,29,51,0.35)]";
+  "bg-[linear-gradient(135deg,var(--c-primary)_0%,var(--c-primary2)_55%,var(--c-primary)_100%)] shadow-[0_10px_24px_var(--s-btn)]";
 
 const card =
   "rounded-[18px] border border-line-rose bg-white shadow-[0_4px_24px_rgba(87,18,36,0.07)]";
@@ -83,7 +89,7 @@ function CenterAlert({ message }) {
     <div
       role="status"
       aria-live="polite"
-      className={`fixed left-1/2 top-1/2 z-[80] flex min-w-[180px] max-w-[calc(100%-40px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2.5 rounded-full bg-maroon-950 px-6 py-3 text-[14px] font-semibold text-white shadow-[0_10px_30px_rgba(66,9,26,0.4)] transition-all duration-200 ${
+      className={`fixed left-1/2 top-1/2 z-[80] flex min-w-[180px] max-w-[calc(100%-40px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2.5 rounded-full bg-maroon-950 px-6 py-3 text-[14px] font-semibold text-white shadow-[0_10px_30px_var(--s-alert)] transition-all duration-200 ${
         message
           ? "pointer-events-auto scale-100 opacity-100"
           : "pointer-events-none scale-95 opacity-0"
@@ -117,11 +123,19 @@ export default function RechargePage() {
   useEffect(() => {
     document.title = "Recharge";
   }, []);
+  /* SSR-seeded admin settings — first paint already shows the real
+     min/max amounts (no 1s default flash after refresh) */
+  const gs = useSettings();
   const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState("");
+  const [method, setMethod] = useState(
+    () =>
+      (((gs && gs.recharge ? mergeRecharge(gs.recharge).methods : []) || []).find((m) => m.active) || {})
+        .name || ""
+  );
   const [alertMsg, setAlertMsg] = useState("");
   const [wallet, setWallet] = useState({ rechargeBalance: 0 });
-  const [cfg, setCfg] = useState(DEFAULT_RECHARGE);
+  useLiveWallet(setWallet); /* realtime — recharge approval lands here instantly */
+  const [cfg, setCfg] = useState(() => mergeRecharge(gs && gs.recharge));
   const [manualOpen, setManualOpen] = useState(false);
   const alertTimer = useRef(null);
 
@@ -145,10 +159,7 @@ export default function RechargePage() {
         const r = await fetch("/api/settings");
         const d = await r.json();
         if (d.success && d.settings && d.settings.recharge) {
-          const rc = { ...DEFAULT_RECHARGE, ...d.settings.recharge };
-          rc.manual = { ...DEFAULT_RECHARGE.manual, ...(d.settings.recharge.manual || {}) };
-          rc.quickAmounts = Array.isArray(rc.quickAmounts) ? rc.quickAmounts : [];
-          rc.methods = Array.isArray(rc.methods) ? rc.methods : [];
+          const rc = mergeRecharge(d.settings.recharge);
           setCfg(rc);
           /* preselect first active method */
           const first = rc.methods.find((m) => m.active);
@@ -271,7 +282,7 @@ export default function RechargePage() {
   return (
     <div className="mx-auto flex min-h-dvh w-full flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:max-w-[430px] min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
       {/* ===== HEADER (app shell — same as home/invite) ===== */}
-      <header className="flex items-center justify-between bg-[linear-gradient(135deg,#6b1830_0%,#7c1d33_55%,#93293f_100%)] px-4 py-3">
+      <header className="flex items-center justify-between bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
             <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
@@ -302,11 +313,11 @@ export default function RechargePage() {
       </header>
 
       {/* ===== CONTENT ===== */}
-      <div className="flex-1 bg-[#faf6f7] px-3.5 pb-28 pt-3.5">
+      <div className="flex-1 bg-[var(--c-bg)] px-3.5 pb-28 pt-3.5">
         {/* --- TITLE (same row style as the withdrawal page) --- */}
         <div className="flex items-center justify-between">
           <div className="font-display text-[20px] font-bold text-ink">Recharge</div>
-          <span className="rounded-full bg-[#f7e3e7] px-3 py-1 text-[10.5px] font-bold uppercase tracking-[0.5px] text-maroon-700">
+          <span className="rounded-full bg-[var(--c-tint2)] px-3 py-1 text-[10.5px] font-bold uppercase tracking-[0.5px] text-maroon-700">
             Min ₹{(Number(cfg.minAmount) || 0).toLocaleString("en-IN")}
           </span>
         </div>
@@ -314,7 +325,7 @@ export default function RechargePage() {
         {/* --- AMOUNT (same card layout as the withdrawal page) --- */}
         <div className={`${card} mt-3 p-4`}>
           <label className="mb-1.5 block text-[12.5px] font-bold text-ink">Amount</label>
-          <div className="flex items-center gap-2.5 rounded-xl bg-[#fbf1f3] px-3.5 py-3 transition-all duration-150 focus-within:ring-[3px] focus-within:ring-maroon-600/15">
+          <div className="flex items-center gap-2.5 rounded-xl bg-[var(--c-tint)] px-3.5 py-3 transition-all duration-150 focus-within:ring-[3px] focus-within:ring-maroon-600/15">
             <IndianRupee size={17} strokeWidth={2.4} className="shrink-0 text-icon-rose" />
             <input
               className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[15px] font-semibold text-ink outline-none placeholder:text-[13.5px] placeholder:font-medium placeholder:text-[#bd9fa6]"
@@ -344,8 +355,8 @@ export default function RechargePage() {
                     onClick={() => setAmount(String(amt))}
                     className={`cursor-pointer rounded-full border px-4 py-1.5 text-[13px] font-bold transition-all duration-150 active:scale-[0.95] ${
                       active
-                        ? "border-maroon-600/40 bg-[#fbf1f3] text-maroon-700"
-                        : "border-line-rose bg-white text-ink hover:bg-[#fbf1f3]"
+                        ? "border-maroon-600/40 bg-[var(--c-tint)] text-maroon-700"
+                        : "border-line-rose bg-white text-ink hover:bg-[var(--c-tint)]"
                     }`}
                   >
                     ₹{Number(amt).toLocaleString("en-IN")}
@@ -383,7 +394,7 @@ export default function RechargePage() {
               const selected = method === m.name;
               const tile =
                 m.icon === "smartphone"
-                  ? "bg-[#f7e3e7] text-maroon-600"
+                  ? "bg-[var(--c-tint2)] text-maroon-600"
                   : m.icon === "landmark"
                     ? "bg-[#fdf6e4] text-[#a9791c]"
                     : m.icon === "rupee"
@@ -391,7 +402,7 @@ export default function RechargePage() {
                       : m.icon === "message"
                         ? "bg-[#eef4ff] text-[#2563eb]"
                         : m.icon === "credit-card"
-                          ? "bg-[#f7e3e7] text-maroon-600"
+                          ? "bg-[var(--c-tint2)] text-maroon-600"
                           : "bg-[#eafaf0] text-[#16a34a]";
               return (
                 <button
@@ -401,8 +412,8 @@ export default function RechargePage() {
                   aria-pressed={selected}
                   className={`mb-1.5 flex w-full cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all duration-150 active:scale-[0.99] ${
                     selected
-                      ? "border-maroon-600/35 bg-[#fbf1f3]"
-                      : "border-line-rose/70 bg-white hover:bg-[#fdf7f8]"
+                      ? "border-maroon-600/35 bg-[var(--c-tint)]"
+                      : "border-line-rose/70 bg-white hover:bg-[var(--c-tint)]"
                   } last:mb-0`}
                 >
                   <span
@@ -443,14 +454,14 @@ export default function RechargePage() {
                 type="button"
                 aria-label="Close"
                 onClick={() => setManualOpen(false)}
-                className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] bg-[#fbf1f3] text-[#a08a8f]"
+                className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] bg-[var(--c-tint)] text-[#a08a8f]"
               >
                 <X size={16} />
               </button>
             </div>
 
             {/* amount summary */}
-            <div className="mt-3 flex items-center justify-between rounded-xl border border-line-rose bg-[#fbf1f3] px-4 py-3">
+            <div className="mt-3 flex items-center justify-between rounded-xl border border-line-rose bg-[var(--c-tint)] px-4 py-3">
               <span className="text-[13px] font-semibold text-[#7d6a6e]">
                 Pay via {method}
               </span>
@@ -491,7 +502,7 @@ export default function RechargePage() {
                 <button
                   type="button"
                   onClick={copyUpi}
-                  className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[#fbf1f3] px-3.5 py-2 text-[12px] font-extrabold text-maroon-700 transition-all active:scale-95"
+                  className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[var(--c-tint)] px-3.5 py-2 text-[12px] font-extrabold text-maroon-700 transition-all active:scale-95"
                 >
                   <Copy size={13} />
                   Copy
@@ -523,7 +534,7 @@ export default function RechargePage() {
               <button
                 type="button"
                 onClick={() => setManualOpen(false)}
-                className="flex-1 cursor-pointer rounded-[14px] border border-line-rose bg-[#faf5f6] py-3.5 text-[15px] font-bold text-[#7d6a6e]"
+                className="flex-1 cursor-pointer rounded-[14px] border border-line-rose bg-[var(--c-tint)] py-3.5 text-[15px] font-bold text-[#7d6a6e]"
               >
                 Cancel
               </button>
@@ -542,42 +553,7 @@ export default function RechargePage() {
         </div>
       )}
 
-      {/* ===== BOTTOM NAV (Recharge active) ===== */}
-      <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-line-rose bg-white/95 backdrop-blur">
-        <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
-          {NAV_ITEMS.map(({ label, Icon }, i) => {
-            const active = i === 1;
-            return (
-              <button
-                key={label}
-                type="button"
-                className="flex cursor-pointer flex-col items-center gap-1 py-2.5"
-                onClick={() => {
-                  if (active) return;
-                  if (i === 0) router.push("/home");
-                  else if (i === 2) router.push("/invite");
-                  else if (i === 3) router.push("/records");
-                  else if (i === 4) router.push("/profile");
-                  else showAlert(label + " coming soon");
-                }}
-              >
-                <Icon
-                  size={21}
-                  strokeWidth={active ? 2.4 : 2}
-                  className={active ? "text-maroon-700" : "text-[#b9a5aa]"}
-                />
-                <span
-                  className={`text-[10px] font-semibold ${
-                    active ? "text-maroon-700" : "text-[#b9a5aa]"
-                  }`}
-                >
-                  {label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+            <BottomNav active={1} />
 
       {/* ===== CENTERED ALERT ===== */}
       <CenterAlert message={alertMsg} />

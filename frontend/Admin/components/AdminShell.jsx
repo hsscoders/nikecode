@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard,
   Gem,
@@ -17,12 +17,14 @@ import {
   SlidersHorizontal,
   Bell,
   Clock3,
+  Palette,
   LogOut,
   Menu,
   X,
   ChevronRight,
   ChevronDown,
 } from "lucide-react";
+import { io } from "socket.io-client";
 import logo from "../public/admin-logo.png";
 
 const NAV = [
@@ -56,6 +58,7 @@ const NAV = [
         children: [
           { label: "Site Settings", href: "/admin/settings", Icon: SlidersHorizontal },
           { label: "Popup", href: "/admin/settings/popup", Icon: Bell },
+          { label: "Font & Color", href: "/admin/settings/appearance", Icon: Palette },
           { label: "Recharge Setting", href: "/admin/settings/recharge", Icon: ArrowDownToLine },
           { label: "Withdrawal Setting", href: "/admin/settings/withdraw", Icon: ArrowUpFromLine },
           { label: "Income Time", href: "/admin/settings/income-time", Icon: Clock3 },
@@ -71,6 +74,34 @@ export default function AdminShell({ title, sub, children }) {
   const [drawer, setDrawer] = useState(false);
   const [ready, setReady] = useState(false);
   const [openMenus, setOpenMenus] = useState({});
+  const [liveMsg, setLiveMsg] = useState("");
+  const liveTimer = useRef(null);
+
+  /* realtime — instant alert when a user submits a recharge / withdrawal */
+  useEffect(() => {
+    let sock;
+    try {
+      const token = localStorage.getItem("admin_token");
+      sock = io({
+        path: "/api/socket.io",
+        addTrailingSlash: false,
+        transports: ["polling", "websocket"],
+        auth: { token },
+        reconnectionDelayMax: 10000,
+      });
+      sock.on("txns:new", (d) => {
+        clearTimeout(liveTimer.current);
+        setLiveMsg((d && d.message) || "New request");
+        liveTimer.current = setTimeout(() => setLiveMsg(""), 5000);
+      });
+    } catch (e) {}
+    return () => {
+      try {
+        if (sock) sock.disconnect();
+      } catch (e) {}
+      clearTimeout(liveTimer.current);
+    };
+  }, []);
 
   /* Auto-open the drop-down when a child route is active (refresh / direct link too) */
   useEffect(() => {
@@ -288,6 +319,21 @@ export default function AdminShell({ title, sub, children }) {
 
         {/* CONTENT */}
         <main className="flex-1 px-3 py-4 sm:px-4 sm:py-5 lg:px-7 lg:py-6">{ready ? children : null}</main>
+
+        {/* LIVE TOAST — realtime new request alerts (top center, all pages) */}
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed left-1/2 top-4 z-[90] flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-2.5 rounded-full bg-[linear-gradient(135deg,#42091a,#6b1830)] px-5 py-2.5 text-[13px] font-bold text-white shadow-[0_12px_30px_rgba(66,9,26,0.45)] transition-all duration-200 ${
+            liveMsg ? "scale-100 opacity-100" : "pointer-events-none scale-90 opacity-0"
+          }`}
+        >
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-gold" />
+          </span>
+          <span className="truncate">{liveMsg}</span>
+        </div>
 
         {/* FOOTER */}
         <footer className="px-4 pb-5 pt-2 text-center text-[11.5px] font-medium text-[#b9a5aa] lg:px-7">

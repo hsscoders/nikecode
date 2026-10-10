@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import banner from "../../public/zapto-banner.png";
 import logo from "../../public/zapto-logo.png";
+import { useSettings } from "../components/SettingsProvider";
 
 /* ===== Shared Tailwind blocks — consistent across both pages ===== */
 
@@ -31,12 +32,12 @@ const tabBase =
   "pb-2 font-display text-[17px] font-bold tracking-[0.2px] transition-colors duration-200 max-[360px]:text-base";
 
 const tabActive =
-  "relative text-maroon-700 after:absolute after:bottom-0 after:left-0 after:h-[3px] after:w-full after:rounded-full after:bg-[linear-gradient(90deg,#d4a94f,#7c1d33)]";
+  "relative text-maroon-700 after:absolute after:bottom-0 after:left-0 after:h-[3px] after:w-full after:rounded-full after:bg-[linear-gradient(90deg,var(--c-accent),var(--c-primary))]";
 
 const tabInactive = "text-muted-rose hover:text-maroon-600";
 
 const submitBtn =
-  "mt-2.5 h-[50px] w-full cursor-pointer rounded-full bg-[linear-gradient(135deg,#7c1d33_0%,#93293f_55%,#7c1d33_100%)] font-display text-[19px] font-bold tracking-[0.4px] text-white shadow-[0_12px_26px_rgba(124,29,51,0.32),inset_0_1px_0_rgba(255,255,255,0.16)] transition-all duration-200 hover:brightness-[1.07] hover:shadow-[0_14px_30px_rgba(124,29,51,0.38),inset_0_1px_0_rgba(255,255,255,0.16)] active:scale-[0.98] max-[360px]:h-[46px] max-[360px]:text-lg";
+  "mt-2.5 h-[50px] w-full cursor-pointer rounded-full bg-[linear-gradient(135deg,var(--c-primary)_0%,var(--c-primary2)_55%,var(--c-primary)_100%)] font-display text-[19px] font-bold tracking-[0.4px] text-white shadow-[0_12px_26px_var(--s-btn),inset_0_1px_0_rgba(255,255,255,0.16)] transition-all duration-200 hover:brightness-[1.07] hover:shadow-[0_14px_30px_var(--s-btn),inset_0_1px_0_rgba(255,255,255,0.16)] active:scale-[0.98] max-[360px]:h-[46px] max-[360px]:text-lg";
 
 function PasswordField({ id, name, Icon, placeholder, autoComplete }) {
   const [show, setShow] = useState(false);
@@ -103,7 +104,17 @@ function RegisterInner() {
   const [error, setError] = useState("");
   const [refCode, setRefCode] = useState("");
   const [phone, setPhone] = useState("");
-  const [titles, setTitles] = useState({ login: "Login", register: "Register" });
+  /* SSR-seeded site titles — real admin titles on the very first
+     paint (no 1s "Login/Register" default flash after refresh) */
+  const gs = useSettings();
+  const [titles, setTitles] = useState(() =>
+    gs && gs.site
+      ? {
+          login: gs.site.loginTitle || "Login",
+          register: gs.site.registerTitle || "Register",
+        }
+      : { login: "Login", register: "Register" }
+  );
 
   /* site settings — titles from the admin panel (defaults on failure) */
   useEffect(() => {

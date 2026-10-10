@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import logo from "../../public/zapto-logo.png";
 import teamBanner from "../../public/zapto-team-banner.png";
+import BottomNav from "../components/BottomNav";
 
 /* ================= DEMO DATA (the team API will take over later) ================= */
 
@@ -46,14 +47,6 @@ const teamCommission = [1, 2, 3].reduce(
   0
 );
 
-const NAV_ITEMS = [
-  { label: "Home", Icon: Home },
-  { label: "Recharge", Icon: IndianRupee },
-  { label: "Invite", Icon: Users },
-  { label: "Records", Icon: ReceiptText },
-  { label: "Account", Icon: User },
-];
-
 /* ================= HELPERS ================= */
 
 const fmt2 = (n) =>
@@ -71,7 +64,7 @@ function CenterAlert({ message }) {
     <div
       role="status"
       aria-live="polite"
-      className={`fixed left-1/2 top-1/2 z-[80] flex min-w-[180px] max-w-[calc(100%-40px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2.5 rounded-full bg-maroon-950 px-6 py-3 text-[14px] font-semibold text-white shadow-[0_10px_30px_rgba(66,9,26,0.4)] transition-all duration-200 ${
+      className={`fixed left-1/2 top-1/2 z-[80] flex min-w-[180px] max-w-[calc(100%-40px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2.5 rounded-full bg-maroon-950 px-6 py-3 text-[14px] font-semibold text-white shadow-[0_10px_30px_var(--s-alert)] transition-all duration-200 ${
         message
           ? "pointer-events-auto scale-100 opacity-100"
           : "pointer-events-none scale-95 opacity-0"
@@ -124,7 +117,7 @@ export default function TeamPage() {
   return (
     <div className="mx-auto flex min-h-dvh w-full flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:max-w-[430px] min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
       {/* ===== HEADER (app shell — same as home/invite/recharge) ===== */}
-      <header className="flex items-center justify-between bg-[linear-gradient(135deg,#6b1830_0%,#7c1d33_55%,#93293f_100%)] px-4 py-3">
+      <header className="flex items-center justify-between bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
             <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
@@ -155,7 +148,7 @@ export default function TeamPage() {
       </header>
 
       {/* ===== TEAM HERO (gradient section — stats + level pills) ===== */}
-      <section className="bg-[linear-gradient(180deg,#93293f_0%,#7c1d33_45%,#6b1830_100%)] px-3.5 pb-5">
+      <section className="bg-[linear-gradient(180deg,var(--c-primary2)_0%,var(--c-primary)_45%,var(--c-deep)_100%)] px-3.5 pb-5">
         {/* team banner */}
         <div className="relative mt-0 h-[150px] overflow-hidden rounded-b-[18px] max-[360px]:h-[125px]">
           <Image
@@ -166,7 +159,7 @@ export default function TeamPage() {
             sizes="(max-width: 520px) 100vw, 430px"
             className="object-cover"
           />
-          <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(66,9,26,0.55)_0%,transparent_60%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_top,var(--s-alert)_0%,transparent_60%)]" />
         </div>
 
         {/* stats — Team Commission / Team Recharge / Team Members */}
@@ -245,7 +238,7 @@ export default function TeamPage() {
                 className={`flex gap-3.5 rounded-[20px] border border-line-rose bg-white p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(87,18,36,0.12)] ${cardShadow} max-[360px]:p-3.5`}
               >
                 {/* avatar */}
-                <div className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-[16px] border-2 border-gold/45 bg-[#fbf1f3] max-[360px]:h-[46px] max-[360px]:w-[46px]">
+                <div className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-[16px] border-2 border-gold/45 bg-[var(--c-tint)] max-[360px]:h-[46px] max-[360px]:w-[46px]">
                   <Image src={logo} alt="Member avatar" fill sizes="52px" className="object-cover" />
                 </div>
 
@@ -255,7 +248,7 @@ export default function TeamPage() {
                     <div className="truncate text-[14px] font-bold tracking-[-0.2px] text-ink">
                       {maskPhone(m.phone)}
                     </div>
-                    <span className="shrink-0 rounded-full bg-[#fbf1f3] px-2.5 py-1 text-[10px] font-bold text-maroon-700">
+                    <span className="shrink-0 rounded-full bg-[var(--c-tint)] px-2.5 py-1 text-[10px] font-bold text-maroon-700">
                       {m.date}
                     </span>
                   </div>
@@ -293,29 +286,7 @@ export default function TeamPage() {
         )}
       </div>
 
-      {/* ===== BOTTOM NAV (team — nothing active) ===== */}
-      <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-line-rose bg-white/95 backdrop-blur">
-        <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
-          {NAV_ITEMS.map(({ label, Icon }, i) => (
-            <button
-              key={label}
-              type="button"
-              className="flex cursor-pointer flex-col items-center gap-1 py-2.5"
-              onClick={() => {
-                if (i === 0) router.push("/home");
-                else if (i === 1) router.push("/recharge");
-                else if (i === 2) router.push("/invite");
-                else if (i === 3) router.push("/records");
-                else if (i === 4) router.push("/profile");
-                else showAlert(label + " coming soon");
-              }}
-            >
-              <Icon size={21} strokeWidth={2} className="text-[#b9a5aa]" />
-              <span className="text-[10px] font-semibold text-[#b9a5aa]">{label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
+            <BottomNav active={-1} />
 
       {/* ===== CENTERED ALERT ===== */}
       <CenterAlert message={alertMsg} />

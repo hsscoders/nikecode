@@ -20,14 +20,7 @@ import {
 import logo from "../../public/zapto-logo.png";
 import planDaily from "../../public/plan-daily.png";
 import planVip from "../../public/plan-vip.png";
-
-const NAV_ITEMS = [
-  { label: "Home", Icon: Home },
-  { label: "Recharge", Icon: IndianRupee },
-  { label: "Invite", Icon: Users },
-  { label: "Records", Icon: ReceiptText },
-  { label: "Account", Icon: User },
-];
+import BottomNav from "../components/BottomNav";
 
 /* ================= HELPERS ================= */
 
@@ -36,7 +29,7 @@ const fmt = (n) =>
   Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const gradientBtn =
-  "bg-[linear-gradient(135deg,#7c1d33_0%,#93293f_55%,#7c1d33_100%)] shadow-[0_10px_24px_rgba(124,29,51,0.35)]";
+  "bg-[linear-gradient(135deg,var(--c-primary)_0%,var(--c-primary2)_55%,var(--c-primary)_100%)] shadow-[0_10px_24px_var(--s-btn)]";
 
 const card =
   "rounded-[18px] border border-line-rose bg-white shadow-[0_4px_24px_rgba(87,18,36,0.07)]";
@@ -52,7 +45,7 @@ function CenterAlert({ message }) {
     <div
       role="status"
       aria-live="polite"
-      className={`fixed left-1/2 top-1/2 z-[80] flex min-w-[180px] max-w-[calc(100%-40px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2.5 rounded-full bg-maroon-950 px-6 py-3 text-[14px] font-semibold text-white shadow-[0_10px_30px_rgba(66,9,26,0.4)] transition-all duration-200 ${
+      className={`fixed left-1/2 top-1/2 z-[80] flex min-w-[180px] max-w-[calc(100%-40px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2.5 rounded-full bg-maroon-950 px-6 py-3 text-[14px] font-semibold text-white shadow-[0_10px_30px_var(--s-alert)] transition-all duration-200 ${
         message
           ? "pointer-events-auto scale-100 opacity-100"
           : "pointer-events-none scale-95 opacity-0"
@@ -103,7 +96,7 @@ function OrderCard({ order }) {
       </div>
 
       {/* specs — 3 col (color coding like the plan card's 2x2) */}
-      <div className="mt-3.5 grid grid-cols-3 rounded-[12px] border border-line-rose/70 bg-[#fbf1f3] p-2.5 max-[360px]:p-2">
+      <div className="mt-3.5 grid grid-cols-3 rounded-[12px] border border-line-rose/70 bg-[var(--c-tint)] p-2.5 max-[360px]:p-2">
         {[
           { lbl: "Price", val: fmt(order.price), cls: "text-maroon-700" },
           { lbl: "Daily", val: fmt(order.daily), cls: "text-[#16a34a]" },
@@ -184,7 +177,7 @@ export default function OrderedPage() {
   return (
     <div className="mx-auto flex min-h-dvh w-full flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:max-w-[430px] min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
       {/* ===== HEADER (app shell — same as the other pages) ===== */}
-      <header className="flex items-center justify-between bg-[linear-gradient(135deg,#6b1830_0%,#7c1d33_55%,#93293f_100%)] px-4 py-3">
+      <header className="flex items-center justify-between bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
             <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
@@ -215,19 +208,19 @@ export default function OrderedPage() {
       </header>
 
       {/* ===== CONTENT ===== */}
-      <div className="flex-1 bg-[#faf6f7] px-3.5 pb-28 pt-3.5">
+      <div className="flex-1 bg-[var(--c-bg)] px-3.5 pb-28 pt-3.5">
         {/* --- PAGE TITLE --- */}
         <div className="flex items-center justify-between">
           <div className="font-display text-[20px] font-bold text-ink">My Orders</div>
           {ready && orders.length > 0 && (
-            <span className="rounded-full bg-[#f7e3e7] px-3 py-1 text-[11px] font-bold text-maroon-700">
+            <span className="rounded-full bg-[var(--c-tint2)] px-3 py-1 text-[11px] font-bold text-maroon-700">
               {orders.length} {orders.length === 1 ? "plan" : "plans"} active
             </span>
           )}
         </div>
 
         {/* --- SUMMARY (like the team page stats) --- */}
-        <div className="mt-3 rounded-[20px] border border-maroon-900 bg-maroon-950 px-2 py-3.5 shadow-[0_8px_24px_rgba(66,9,26,0.28)]">
+        <div className="mt-3 rounded-[20px] border border-maroon-900 bg-maroon-950 px-2 py-3.5 shadow-[0_8px_24px_var(--s-alert)]">
           <div className="grid grid-cols-3">
             {[
               { lbl: "Total Orders", val: String(orders.length) },
@@ -258,7 +251,7 @@ export default function OrderedPage() {
         {/* --- ORDERS LIST / EMPTY STATE --- */}
         {!ready ? null : orders.length === 0 ? (
           <div className={`${card} mt-3.5 flex flex-col items-center px-6 py-12 text-center`}>
-            <div className="grid h-[72px] w-[72px] place-items-center rounded-[22px] bg-[#f7e3e7]">
+            <div className="grid h-[72px] w-[72px] place-items-center rounded-[22px] bg-[var(--c-tint2)]">
               <ShoppingBag size={34} strokeWidth={1.7} className="text-maroon-600" />
             </div>
             <div className="mt-4 font-display text-[18px] font-bold text-ink">No orders yet</div>
@@ -284,42 +277,7 @@ export default function OrderedPage() {
         )}
       </div>
 
-      {/* ===== BOTTOM NAV (Records active) ===== */}
-      <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-line-rose bg-white/95 backdrop-blur">
-        <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
-          {NAV_ITEMS.map(({ label, Icon }, i) => {
-            const active = i === 3;
-            return (
-              <button
-                key={label}
-                type="button"
-                className="flex cursor-pointer flex-col items-center gap-1 py-2.5"
-                onClick={() => {
-                  if (active) return;
-                  if (i === 0) router.push("/home");
-                  else if (i === 1) router.push("/recharge");
-                  else if (i === 2) router.push("/invite");
-                  else if (i === 4) router.push("/profile");
-                  else showAlert(label + " coming soon");
-                }}
-              >
-                <Icon
-                  size={21}
-                  strokeWidth={active ? 2.4 : 2}
-                  className={active ? "text-maroon-700" : "text-[#b9a5aa]"}
-                />
-                <span
-                  className={`text-[10px] font-semibold ${
-                    active ? "text-maroon-700" : "text-[#b9a5aa]"
-                  }`}
-                >
-                  {label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+            <BottomNav active={3} />
 
       {/* ===== CENTERED ALERT ===== */}
       <CenterAlert message={alertMsg} />

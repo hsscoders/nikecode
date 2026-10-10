@@ -10,6 +10,7 @@ const Deposit = require("../models/Deposit");
 const Withdrawal = require("../models/Withdrawal");
 const Setting = require("../models/Setting");
 const Transaction = require("../models/Transaction");
+const { emitToUser, emitAdmin, emitAll } = require("../live");
 
 /* All admin routes protected */
 router.use(adminAuth);
@@ -503,6 +504,9 @@ router.post("/deposits", async (req, res) => {
     if (deposit.status === "Success")
       await User.updateOne({ _id: user._id }, { $inc: { rechargeBalance: amt } });
 
+    /* realtime — the user's open tabs pick up the new recharge balance */
+    emitToUser(user.phone, "wallet:refresh", { reason: "deposit", status: deposit.status });
+
     /* ledger entry */
     await Transaction.create({
       user: user._id,
@@ -544,6 +548,9 @@ router.put("/deposits/:id", async (req, res) => {
 
     /* keep the ledger entry in sync */
     await Transaction.updateMany({ refId: String(deposit._id) }, { status });
+
+    /* realtime — the user's open tabs pick up the new recharge balance */
+    emitToUser(deposit.phone, "wallet:refresh", { reason: "deposit", status });
 
     res.json({ success: true, message: "Deposit " + status.toLowerCase(), deposit });
   } catch (e) {
@@ -591,6 +598,9 @@ router.put("/withdrawals/:id", async (req, res) => {
 
     /* keep the ledger entry in sync */
     await Transaction.updateMany({ refId: String(wd._id) }, { status });
+
+    /* realtime — the user's open tabs pick up the refund / debit */
+    emitToUser(wd.phone, "wallet:refresh", { reason: "withdraw", status });
 
     res.json({ success: true, message: "Withdrawal " + status.toLowerCase(), withdrawal: wd });
   } catch (e) {
@@ -700,7 +710,54 @@ router.put("/settings", async (req, res) => {
       }
     }
 
+    /* Appearance (Font & Color) — one-click theme for the whole client site.
+       Presets carry hand-tuned palettes on the client; only colors + font keys
+       + background tone are stored here. Saving broadcasts the new theme to
+       every connected user in realtime (socket appearance:changed). */
+    let appearanceChanged = false;
+    if (b.appearance) {
+      if (!s.appearance) s.appearance = {};
+      const a = b.appearance;
+      const HEX = /^#[0-9a-fA-F]{6}$/;
+      if (a.preset !== undefined) {
+        s.appearance.preset = String(a.preset).trim().slice(0, 30);
+        appearanceChanged = true;
+      }
+      if (a.primary !== undefined) {
+        if (!HEX.test(String(a.primary).trim()))
+          return res.status(400).json({ success: false, message: "Invalid primary color" });
+        s.appearance.primary = String(a.primary).trim().toLowerCase();
+        appearanceChanged = true;
+      }
+      if (a.accent !== undefined) {
+        if (!HEX.test(String(a.accent).trim()))
+          return res.status(400).json({ success: false, message: "Invalid accent color" });
+        s.appearance.accent = String(a.accent).trim().toLowerCase();
+        appearanceChanged = true;
+      }
+      if (a.fontHead !== undefined) {
+        if (!Setting.HEAD_FONTS.includes(a.fontHead))
+          return res.status(400).json({ success: false, message: "Invalid heading font" });
+        s.appearance.fontHead = a.fontHead;
+        appearanceChanged = true;
+      }
+      if (a.fontBody !== undefined) {
+        if (!Setting.BODY_FONTS.includes(a.fontBody))
+          return res.status(400).json({ success: false, message: "Invalid body font" });
+        s.appearance.fontBody = a.fontBody;
+        appearanceChanged = true;
+      }
+      if (a.bgTone !== undefined) {
+        if (!Setting.BG_TONES.includes(a.bgTone))
+          return res.status(400).json({ success: false, message: "Invalid background tone" });
+        s.appearance.bgTone = a.bgTone;
+        appearanceChanged = true;
+      }
+    }
+
     await s.save();
+    /* Push the new look to every open client page instantly (no reload) */
+    if (appearanceChanged) emitAll("appearance:changed", s.appearance);
     res.json({ success: true, message: "Settings saved", settings: s });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to save settings" });

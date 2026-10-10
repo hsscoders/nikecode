@@ -5,6 +5,10 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const http = require("http");
+const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
+const { live } = require("./live");
 const authRoutes = require("./routes/auth");
 const adminAuthRoutes = require("./routes/adminAuth");
 const adminRoutes = require("./routes/admin");
@@ -17,8 +21,41 @@ const Banner = require("./models/Banner");
 const Invest = require("./models/Invest");
 const User = require("./models/User");
 const Transaction = require("./models/Transaction");
+const { emitToUser } = require("./live");
 
 const app = express();
+
+/* ============ SOCKET.IO (realtime updates) ============
+   Client/admin connect through the Next.js rewrite proxy
+   (/api/socket.io -> backend). Transport: long-polling first, the
+   upgrade to websocket is attempted automatically when possible. */
+const server = http.createServer(app);
+const io = new Server(server, {
+  path: "/api/socket.io",
+  addTrailingSlash: false, /* Next.js rewrite 308-strips the trailing slash */
+  cors: { origin: true, credentials: true },
+  pingInterval: 25000,
+  pingTimeout: 60000,
+});
+live.io = io;
+
+/* Socket auth — one JWT secret for both; admin tokens carry role: "admin".
+   Users join their own room (wallet pushes), admins join the admins room. */
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth && socket.handshake.auth.token;
+    if (!token) return next(); /* anonymous sockets are allowed but receive nothing */
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role === "admin") socket.data.admin = true;
+    else socket.data.phone = decoded.phone || "";
+  } catch (e) {}
+  next();
+});
+
+io.on("connection", (socket) => {
+  if (socket.data.phone) socket.join("user:" + socket.data.phone);
+  if (socket.data.admin) socket.join("admins");
+});
 
 /* ImgBB upload — route-specific parser for large base64 payloads
    (mounted before the global 100kb json limit, otherwise 413) */
@@ -97,6 +134,10 @@ async function seed() {
       { key: "global", income: { $exists: false } },
       { $set: { income: { creditTime: "00:00", lastCreditDate: "" } } }
     );
+    await Setting.updateOne(
+      { key: "global", appearance: { $exists: false } },
+      { $set: { appearance: { preset: "maroon", primary: "#7c1d33", accent: "#d4a94f", fontHead: "playfair", fontBody: "inter" } } }
+    );
     await Invest.updateMany(
       { paidDays: { $exists: false } },
       { $set: { paidDays: 0 } }
@@ -149,6 +190,8 @@ async function runIncomeCredit() {
       amount: inv.daily,
       status: "Success",
     });
+    /* realtime — push the new balance to the user's open tabs */
+    emitToUser(inv.phone, "wallet:refresh", { reason: "income" });
     if (dayNo >= Number(inv.cycle))
       await Invest.updateOne({ _id: inv._id }, { status: "Completed" });
     paid++;
@@ -186,4 +229,4 @@ mongoose
     process.exit(1);
   });
 
-app.listen(PORT, () => console.log(`🚀 ZAPTO API ready on :${PORT}`));
+server.listen(PORT, () => console.log(`🚀 ZAPTO API ready on :${PORT} (socket.io on /api/socket.io)`));

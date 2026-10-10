@@ -20,14 +20,9 @@ import {
   Clock,
 } from "lucide-react";
 import logo from "../../public/zapto-logo.png";
-
-const NAV_ITEMS = [
-  { label: "Home", Icon: Home },
-  { label: "Recharge", Icon: IndianRupee },
-  { label: "Invite", Icon: Users },
-  { label: "Records", Icon: ReceiptText },
-  { label: "Account", Icon: User },
-];
+import useLiveWallet from "../components/useLiveWallet";
+import BottomNav from "../components/BottomNav";
+import { useSettings } from "../components/SettingsProvider";
 
 /* Fallback when the settings API fails — mirrors admin defaults */
 const DEFAULT_WITHDRAW = {
@@ -43,7 +38,7 @@ const fmt = (n) =>
   Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const gradientBtn =
-  "bg-[linear-gradient(135deg,#7c1d33_0%,#93293f_55%,#7c1d33_100%)] shadow-[0_10px_24px_rgba(124,29,51,0.35)]";
+  "bg-[linear-gradient(135deg,var(--c-primary)_0%,var(--c-primary2)_55%,var(--c-primary)_100%)] shadow-[0_10px_24px_var(--s-btn)]";
 
 const card =
   "rounded-[18px] border border-line-rose bg-white shadow-[0_4px_24px_rgba(87,18,36,0.07)]";
@@ -56,7 +51,7 @@ function CenterAlert({ message }) {
     <div
       role="status"
       aria-live="polite"
-      className={`fixed left-1/2 top-1/2 z-[80] flex min-w-[180px] max-w-[calc(100%-40px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2.5 rounded-full bg-maroon-950 px-6 py-3 text-[14px] font-semibold text-white shadow-[0_10px_30px_rgba(66,9,26,0.4)] transition-all duration-200 ${
+      className={`fixed left-1/2 top-1/2 z-[80] flex min-w-[180px] max-w-[calc(100%-40px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2.5 rounded-full bg-maroon-950 px-6 py-3 text-[14px] font-semibold text-white shadow-[0_10px_30px_var(--s-alert)] transition-all duration-200 ${
         message
           ? "pointer-events-auto scale-100 opacity-100"
           : "pointer-events-none scale-95 opacity-0"
@@ -71,7 +66,7 @@ function CenterAlert({ message }) {
 /* password field with an eye toggle — same as the login page */
 function PasswordField({ value, onChange, show, onToggle }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-xl bg-[#fbf1f3] px-3.5 py-3 transition-all duration-150 focus-within:ring-[3px] focus-within:ring-maroon-600/15">
+    <div className="flex items-center gap-2.5 rounded-xl bg-[var(--c-tint)] px-3.5 py-3 transition-all duration-150 focus-within:ring-[3px] focus-within:ring-maroon-600/15">
       <LockKeyhole size={17} strokeWidth={2.3} className="shrink-0 text-icon-rose" />
       <input
         className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[15px] font-semibold text-ink outline-none placeholder:text-[13.5px] placeholder:font-medium placeholder:text-[#bd9fa6]"
@@ -102,6 +97,9 @@ export default function WithdrawalPage() {
   useEffect(() => {
     document.title = "Withdrawal";
   }, []);
+  /* SSR-seeded admin settings — first paint already shows the real
+     min/max limits (no 1s default flash after refresh) */
+  const gs = useSettings();
   const [amount, setAmount] = useState("");
   const [wpass, setWpass] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -109,7 +107,10 @@ export default function WithdrawalPage() {
   const [ready, setReady] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
   const [wallet, setWallet] = useState({ balance: 0 });
-  const [cfg, setCfg] = useState(DEFAULT_WITHDRAW);
+  useLiveWallet(setWallet); /* realtime — withdrawal approval / refund lands here instantly */
+  const [cfg, setCfg] = useState(() =>
+    gs && gs.withdraw ? { ...DEFAULT_WITHDRAW, ...gs.withdraw } : DEFAULT_WITHDRAW
+  );
   const alertTimer = useRef(null);
 
   /* token guard + bound card load + wallet balance */
@@ -210,7 +211,7 @@ export default function WithdrawalPage() {
   return (
     <div className="mx-auto flex min-h-dvh w-full flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:max-w-[430px] min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
       {/* ===== HEADER (app shell) ===== */}
-      <header className="flex items-center justify-between bg-[linear-gradient(135deg,#6b1830_0%,#7c1d33_55%,#93293f_100%)] px-4 py-3">
+      <header className="flex items-center justify-between bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
             <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
@@ -241,11 +242,11 @@ export default function WithdrawalPage() {
       </header>
 
       {/* ===== CONTENT ===== */}
-      <div className="flex-1 bg-[#faf6f7] px-3.5 pb-28 pt-3.5">
+      <div className="flex-1 bg-[var(--c-bg)] px-3.5 pb-28 pt-3.5">
         {/* --- TITLE --- */}
         <div className="flex items-center justify-between">
           <div className="font-display text-[20px] font-bold text-ink">Withdraw</div>
-          <span className="rounded-full bg-[#f7e3e7] px-3 py-1 text-[10.5px] font-bold uppercase tracking-[0.5px] text-maroon-700">
+          <span className="rounded-full bg-[var(--c-tint2)] px-3 py-1 text-[10.5px] font-bold uppercase tracking-[0.5px] text-maroon-700">
             Min ₹{(Number(cfg.minAmount) || 0).toLocaleString("en-IN")}
           </span>
         </div>
@@ -253,7 +254,7 @@ export default function WithdrawalPage() {
         {/* --- AMOUNT + PASSWORD --- */}
         <div className={`${card} mt-3 p-4`}>
           <label className="mb-1.5 block text-[12.5px] font-bold text-ink">Amount</label>
-          <div className="flex items-center gap-2.5 rounded-xl bg-[#fbf1f3] px-3.5 py-3 transition-all duration-150 focus-within:ring-[3px] focus-within:ring-maroon-600/15">
+          <div className="flex items-center gap-2.5 rounded-xl bg-[var(--c-tint)] px-3.5 py-3 transition-all duration-150 focus-within:ring-[3px] focus-within:ring-maroon-600/15">
             <IndianRupee size={17} strokeWidth={2.4} className="shrink-0 text-icon-rose" />
             <input
               className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[15px] font-semibold text-ink outline-none placeholder:text-[13.5px] placeholder:font-medium placeholder:text-[#bd9fa6]"
@@ -334,15 +335,15 @@ export default function WithdrawalPage() {
               <button
                 type="button"
                 onClick={() => router.push("/card")}
-                className="mt-2 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-[12px] border border-maroon-700/25 bg-white py-2.5 text-[13px] font-bold text-maroon-700 transition-all duration-150 active:scale-[0.98] hover:bg-[#fbf1f3]"
+                className="mt-2 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-[12px] border border-maroon-700/25 bg-white py-2.5 text-[13px] font-bold text-maroon-700 transition-all duration-150 active:scale-[0.98] hover:bg-[var(--c-tint)]"
               >
                 <Link2 size={14} strokeWidth={2.3} />
                 Update Bank Card
               </button>
             </>
           ) : (
-            <div className="mt-3 flex flex-col items-center rounded-[14px] border border-dashed border-line-rose bg-[#fdf7f8] px-4 py-7 text-center">
-              <div className="grid h-[54px] w-[54px] place-items-center rounded-[16px] bg-[#f7e3e7]">
+            <div className="mt-3 flex flex-col items-center rounded-[14px] border border-dashed border-line-rose bg-[var(--c-tint)] px-4 py-7 text-center">
+              <div className="grid h-[54px] w-[54px] place-items-center rounded-[16px] bg-[var(--c-tint2)]">
                 <CreditCard size={26} strokeWidth={1.8} className="text-maroon-600" />
               </div>
               <div className="mt-3 text-[14px] font-bold text-ink">No bank card bound yet</div>
@@ -362,29 +363,7 @@ export default function WithdrawalPage() {
         </div>
       </div>
 
-      {/* ===== BOTTOM NAV (nothing active) ===== */}
-      <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-line-rose bg-white/95 backdrop-blur">
-        <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
-          {NAV_ITEMS.map(({ label, Icon }, i) => (
-            <button
-              key={label}
-              type="button"
-              className="flex cursor-pointer flex-col items-center gap-1 py-2.5"
-              onClick={() => {
-                if (i === 0) router.push("/home");
-                else if (i === 1) router.push("/recharge");
-                else if (i === 2) router.push("/invite");
-                else if (i === 3) router.push("/records");
-                else if (i === 4) router.push("/profile");
-                else showAlert(label + " coming soon");
-              }}
-            >
-              <Icon size={21} strokeWidth={2} className="text-[#b9a5aa]" />
-              <span className="text-[10px] font-semibold text-[#b9a5aa]">{label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
+            <BottomNav active={-1} />
 
       {/* ===== CENTERED ALERT ===== */}
       <CenterAlert message={alertMsg} />

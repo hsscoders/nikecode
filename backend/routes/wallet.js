@@ -8,6 +8,7 @@ const Withdrawal = require("../models/Withdrawal");
 const Plan = require("../models/Plan");
 const Setting = require("../models/Setting");
 const Transaction = require("../models/Transaction");
+const { emitToUser, emitAdmin } = require("../live");
 
 /* ============ WALLET SUMMARY (profile/home) ============ */
 router.get("/wallet", userAuth, async (req, res) => {
@@ -71,6 +72,14 @@ router.post("/deposit", userAuth, async (req, res) => {
       amount,
       status: "Pending",
       refId: String(deposit._id),
+    });
+
+    /* realtime — alert the admin panel instantly */
+    emitAdmin("txns:new", {
+      type: "recharge",
+      phone: req.user.phone,
+      amount,
+      message: "New recharge request — \u20B9" + amount + " from " + req.user.phone,
     });
 
     res.json({
@@ -162,6 +171,9 @@ router.post("/invest", userAuth, async (req, res) => {
     } catch (e) {
       console.error("commission error:", e.message);
     }
+
+    /* realtime — push the new recharge balance to the buyer's other tabs */
+    emitToUser(req.user.phone, "wallet:refresh", { reason: "invest" });
 
     res.json({
       success: true,
@@ -277,6 +289,15 @@ router.post("/withdraw", userAuth, async (req, res) => {
       status: "Pending",
       refId: String(wd._id),
     });
+
+    /* realtime — alert the admin panel + sync the user's other tabs */
+    emitAdmin("txns:new", {
+      type: "withdraw",
+      phone: req.user.phone,
+      amount,
+      message: "New withdrawal request — \u20B9" + amount + " from " + req.user.phone,
+    });
+    emitToUser(req.user.phone, "wallet:refresh", { reason: "withdraw" });
 
     res.json({
       success: true,

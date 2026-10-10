@@ -53,6 +53,7 @@ router.get("/settings", async (req, res) => {
             recharge: s.recharge || null,
             withdraw: s.withdraw || null,
             income: s.income ? { creditTime: s.income.creditTime } : null,
+            appearance: s.appearance || null,
           }
         : null,
     });

@@ -26,6 +26,9 @@ import banner2 from "../../public/zapto-banner-2.png";
 import planDaily from "../../public/plan-daily.png";
 import planVip from "../../public/plan-vip.png";
 import logo from "../../public/zapto-logo.png";
+import useLiveWallet from "../components/useLiveWallet";
+import BottomNav from "../components/BottomNav";
+import { useSettings } from "../components/SettingsProvider";
 
 /* ================= DEMO FALLBACK (live plans/banners come from the admin panel) ================= */
 
@@ -43,18 +46,10 @@ const VIP_PLANS = [
 ];
 
 const QUICK_ITEMS = [
-  { label: "Recharge", Icon: CreditCard, tile: "bg-[#f7e3e7] text-maroon-600" },
+  { label: "Recharge", Icon: CreditCard, tile: "bg-[var(--c-tint2)] text-maroon-600" },
   { label: "Withdraw", Icon: IndianRupee, tile: "bg-[#fdf6e4] text-[#a9791c]" },
   { label: "Records", Icon: ReceiptText, tile: "bg-[#eafaf0] text-[#16a34a]" },
   { label: "Channel", Icon: MessageCircle, tile: "bg-[#eef4ff] text-[#2563eb]" },
-];
-
-const NAV_ITEMS = [
-  { label: "Home", Icon: Home },
-  { label: "Recharge", Icon: CreditCard },
-  { label: "Invite", Icon: Users },
-  { label: "Records", Icon: ReceiptText },
-  { label: "Account", Icon: User },
 ];
 
 /* ================= WELCOME POPUP (controlled from the admin panel) ================= */
@@ -90,14 +85,14 @@ const DEFAULT_POPUP = {
 const fmt = (n) => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
 const gradientBtn =
-  "bg-[linear-gradient(135deg,#7c1d33_0%,#93293f_55%,#7c1d33_100%)] shadow-[0_10px_24px_rgba(124,29,51,0.35)]";
+  "bg-[linear-gradient(135deg,var(--c-primary)_0%,var(--c-primary2)_55%,var(--c-primary)_100%)] shadow-[0_10px_24px_var(--s-btn)]";
 
 /* ================= SMALL PARTS ================= */
 
 function Toast({ message }) {
   if (!message) return null;
   return (
-    <div className="fixed left-1/2 top-5 z-[70] -translate-x-1/2 whitespace-nowrap rounded-xl bg-maroon-900 px-5 py-2.5 text-[14px] font-semibold text-white shadow-[0_10px_30px_rgba(66,9,26,0.4)]">
+    <div className="fixed left-1/2 top-5 z-[70] -translate-x-1/2 whitespace-nowrap rounded-xl bg-maroon-900 px-5 py-2.5 text-[14px] font-semibold text-white shadow-[0_10px_30px_var(--s-alert)]">
       {message}
     </div>
   );
@@ -180,7 +175,7 @@ function PlanCard({ plan, type, onBuy }) {
           sizes="(max-width: 520px) 100vw, 430px"
           className="absolute inset-0 object-cover transition-transform duration-500 group-hover:scale-[1.04]"
         />
-        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(66,9,26,0.78)_0%,rgba(66,9,26,0.12)_55%,transparent_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_top,var(--s-alert)_0%,var(--s-alert)_55%,transparent_100%)]" />
         <div className="absolute inset-x-0 bottom-0 flex items-end justify-between p-4">
           <div className="font-display text-lg font-bold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]">
             {plan.name}
@@ -257,8 +252,14 @@ export default function HomePage() {
   const [banners, setBanners] = useState(FALLBACK_BANNERS);
   const [apiPlans, setApiPlans] = useState(null);
   const [wallet, setWallet] = useState({ balance: 0, rechargeBalance: 0, totalIncome: 0 });
-  const [popupCfg, setPopupCfg] = useState(DEFAULT_POPUP);
-  const [cfgReady, setCfgReady] = useState(false); // hold the notice until the popup config loads
+  useLiveWallet(setWallet); /* realtime — recharge approval / income / commission */
+  /* SSR-seeded popup config — the notice renders with the real admin
+     text on the very first paint (no 1s default/absent flash) */
+  const gs = useSettings();
+  const [popupCfg, setPopupCfg] = useState(() =>
+    gs && gs.popup ? { ...DEFAULT_POPUP, ...gs.popup } : DEFAULT_POPUP
+  );
+  const [cfgReady, setCfgReady] = useState(() => !!(gs && gs.popup)); // SSR config already present
   const toastTimer = useRef(null);
 
   /* token guard — /home stays locked without login */
@@ -401,7 +402,7 @@ export default function HomePage() {
   return (
     <div className="mx-auto flex min-h-dvh w-full flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:max-w-[430px] min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
       {/* ===== HEADER ===== */}
-      <header className="flex items-center justify-between bg-[linear-gradient(135deg,#6b1830_0%,#7c1d33_55%,#93293f_100%)] px-4 py-3">
+      <header className="flex items-center justify-between bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
             <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
@@ -435,7 +436,7 @@ export default function HomePage() {
       <BannerCarousel banners={banners} />
 
       {/* ===== QUICK MENU ===== */}
-      <div className="mx-3.5 mt-3.5 rounded-[20px] border border-maroon-900 bg-maroon-950 px-2.5 py-4 shadow-[0_8px_24px_rgba(66,9,26,0.28)]">
+      <div className="mx-3.5 mt-3.5 rounded-[20px] border border-maroon-900 bg-maroon-950 px-2.5 py-4 shadow-[0_8px_24px_var(--s-alert)]">
         <div className="grid grid-cols-4 gap-1">
           {QUICK_ITEMS.map(({ label, Icon, tile }) => (
             <button
@@ -483,39 +484,7 @@ export default function HomePage() {
         ))}
       </div>
 
-      {/* ===== BOTTOM NAV ===== */}
-      <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-line-rose bg-white/95 backdrop-blur">
-        <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
-          {NAV_ITEMS.map(({ label, Icon }, i) => (
-            <button
-              key={label}
-              type="button"
-              className="flex cursor-pointer flex-col items-center gap-1 py-2.5"
-              onClick={() => {
-                if (i === 0) return;
-                if (i === 1) router.push("/recharge");
-                else if (i === 2) router.push("/invite");
-                else if (i === 3) router.push("/records");
-                else if (i === 4) router.push("/profile");
-                else showToast(label + " coming soon");
-              }}
-            >
-              <Icon
-                size={21}
-                strokeWidth={i === 0 ? 2.4 : 2}
-                className={i === 0 ? "text-maroon-700" : "text-[#b9a5aa]"}
-              />
-              <span
-                className={`text-[10px] font-semibold ${
-                  i === 0 ? "text-maroon-700" : "text-[#b9a5aa]"
-                }`}
-              >
-                {label}
-              </span>
-            </button>
-          ))}
-        </div>
-      </nav>
+            <BottomNav active={0} />
 
       {/* ===== CONFIRM MODAL (bottom sheet) ===== */}
       {selectedPlan && (
@@ -543,7 +512,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={() => setSelectedPlan(null)}
-                className="flex-1 cursor-pointer rounded-[14px] border border-line-rose bg-[#faf5f6] py-3.5 text-[15px] font-bold text-[#7d6a6e]"
+                className="flex-1 cursor-pointer rounded-[14px] border border-line-rose bg-[var(--c-tint)] py-3.5 text-[15px] font-bold text-[#7d6a6e]"
               >
                 Cancel
               </button>
@@ -570,10 +539,10 @@ export default function HomePage() {
           onClick={() => setNotice(false)}
         >
           <div
-            className="w-full max-w-[370px] animate-[pop-in_0.25s_ease] overflow-hidden rounded-[24px] bg-white shadow-[0_20px_60px_rgba(66,9,26,0.35)]"
+            className="w-full max-w-[370px] animate-[pop-in_0.25s_ease] overflow-hidden rounded-[24px] bg-white shadow-[0_20px_60px_var(--s-alert)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative bg-[linear-gradient(135deg,#6b1830_0%,#93293f_100%)] px-5 pb-5 pt-7 text-center">
+            <div className="relative bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary2)_100%)] px-5 pb-5 pt-7 text-center">
               <button
                 type="button"
                 aria-label="Close notice"
@@ -598,7 +567,7 @@ export default function HomePage() {
                     return (
                       <li
                         key={b.text + "-" + i}
-                        className="flex items-center gap-2.5 rounded-xl border border-line-rose bg-[#fbf1f3] px-3.5 py-2.5 text-[13px] font-medium text-ink"
+                        className="flex items-center gap-2.5 rounded-xl border border-line-rose bg-[var(--c-tint)] px-3.5 py-2.5 text-[13px] font-medium text-ink"
                       >
                         <Ico size={17} className="shrink-0 text-maroon-600" />
                         {b.text}
