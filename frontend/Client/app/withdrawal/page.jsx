@@ -225,20 +225,6 @@ export default function WithdrawalPage() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-full border border-gold/40 bg-white/10 px-3 py-1.5">
-            <Wallet size={14} className="text-gold" />
-            <span className="text-[13px] font-bold text-white">{fmt(0)}</span>
-          </div>
-          <button
-            type="button"
-            aria-label="Logout"
-            onClick={logout}
-            className="grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-white/10 text-white/75 transition-colors hover:bg-white/20 hover:text-white"
-          >
-            <LogOut size={16} />
-          </button>
-        </div>
       </header>
 
       {/* ===== CONTENT ===== */}
@@ -268,7 +254,7 @@ export default function WithdrawalPage() {
           </div>
 
           <div className="mt-2.5 flex items-center gap-1.5 text-[12.5px] text-[#7d6a6e]">
-            Balance :
+            Withdrawable Balance :
             <span className="font-bold text-ink">{fmt(wallet.balance)}</span>
           </div>
 

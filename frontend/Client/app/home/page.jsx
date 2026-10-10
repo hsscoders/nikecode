@@ -336,15 +336,13 @@ export default function HomePage() {
     toastTimer.current = setTimeout(() => setToast(""), 2600);
   };
 
-  const logout = () => {
-    localStorage.removeItem("zapto_token");
-    localStorage.removeItem("zapto_phone");
-    router.replace("/login");
-  };
-
   const plans = tab === 0
     ? (apiPlans || DAILY_PLANS).filter((p) => !p.vip)
     : (apiPlans || VIP_PLANS).filter((p) => p.vip);
+
+  /* plan buy power — recharge balance ONLY (income & wallet balance are withdrawable, not spendable) */
+  const rechargeShort =
+    !!selectedPlan && Number(wallet.rechargeBalance) < Number(selectedPlan.price);
 
   /* order save — localStorage (the records page reads from here) */
   const saveOrderLocal = (o) => {
@@ -415,20 +413,6 @@ export default function HomePage() {
               Earn daily, withdraw daily
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-full border border-gold/40 bg-white/10 px-3 py-1.5">
-            <Wallet size={14} className="text-gold" />
-            <span className="text-[13px] font-bold text-white">{fmt(wallet.balance)}</span>
-          </div>
-          <button
-            type="button"
-            aria-label="Logout"
-            onClick={logout}
-            className="grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-white/10 text-white/75 transition-colors hover:bg-white/20 hover:text-white"
-          >
-            <LogOut size={16} />
-          </button>
         </div>
       </header>
 
@@ -508,6 +492,30 @@ export default function HomePage() {
               Daily income:{" "}
               <strong className="text-[#16a34a]">{fmt(selectedPlan.daily)}</strong>
             </p>
+
+            {/* plan buy power — recharge balance ONLY (income & balance stay withdrawable) */}
+            <div className="mt-3.5 flex items-center justify-between rounded-xl border border-line-rose bg-[var(--c-tint)] px-4 py-3">
+              <span className="text-[12.5px] font-bold text-ink">Recharge Balance</span>
+              <span
+                className={`text-[14.5px] font-extrabold ${
+                  rechargeShort ? "text-red-600" : "text-maroon-700"
+                }`}
+              >
+                {fmt(wallet.rechargeBalance)}
+              </span>
+            </div>
+            {rechargeShort ? (
+              <div className="mt-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12.5px] font-semibold leading-relaxed text-red-600">
+                Insufficient recharge balance — plans are bought with recharge money only
+                (income &amp; balance are withdrawable, not spendable).
+              </div>
+            ) : (
+              <div className="mt-2 px-1 text-[11.5px] leading-relaxed text-muted-rose">
+                Plan purchase uses recharge balance only — income &amp; balance stay
+                withdrawable.
+              </div>
+            )}
+
             <div className="mt-5 flex gap-2.5">
               <button
                 type="button"
@@ -516,17 +524,30 @@ export default function HomePage() {
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const p = selectedPlan;
-                  setSelectedPlan(null);
-                  buyPlan(p);
-                }}
-                className={`flex-[2] cursor-pointer rounded-[14px] py-3.5 text-[15px] font-extrabold text-white ${gradientBtn}`}
-              >
-                Confirm →
-              </button>
+              {rechargeShort ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPlan(null);
+                    router.push("/recharge");
+                  }}
+                  className={`flex-[2] cursor-pointer rounded-[14px] py-3.5 text-[15px] font-extrabold text-white ${gradientBtn}`}
+                >
+                  Recharge Now →
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const p = selectedPlan;
+                    setSelectedPlan(null);
+                    buyPlan(p);
+                  }}
+                  className={`flex-[2] cursor-pointer rounded-[14px] py-3.5 text-[15px] font-extrabold text-white ${gradientBtn}`}
+                >
+                  Confirm →
+                </button>
+              )}
             </div>
           </div>
         </div>
