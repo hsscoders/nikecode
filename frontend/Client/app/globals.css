@@ -76,7 +76,7 @@ body {
   background: color-mix(in srgb, var(--c-primary) 14%, transparent);
 }
 
-/* Banner bottom fade — background ke sath merge ho jaye */
+/* Banner bottom fade — merges into the page background */
 .banner-fade {
   -webkit-mask-image: linear-gradient(180deg, #000 68%, rgba(0, 0, 0, 0) 100%);
   mask-image: linear-gradient(180deg, #000 68%, rgba(0, 0, 0, 0) 100%);

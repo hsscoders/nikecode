@@ -18,12 +18,14 @@ router.get("/wallet", userAuth, async (req, res) => {
     wallet: {
       balance: u.balance,
       rechargeBalance: u.rechargeBalance,
+      totalRecharge: u.totalRecharge || 0,
       totalIncome: u.totalIncome,
       userid: u.userid,
       refId: u.refId,
       phone: u.phone,
       name: u.name,
       status: u.status,
+      bank: u.bank || null,
     },
   });
 });
@@ -67,7 +69,7 @@ router.post("/deposit", userAuth, async (req, res) => {
       userid: req.user.userid || "",
       phone: req.user.phone,
       type: "recharge",
-      title: "Recharge — " + method,
+      title: "Recharge",
       method,
       amount,
       status: "Pending",
@@ -111,6 +113,21 @@ router.post("/invest", userAuth, async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "This plan is in pre-sale" });
+    /* per-user purchase limit — count the user's ACTIVE holdings of this plan
+       (re-buying is allowed again once a cycle completes) */
+    if (plan.limit > 0) {
+      const activeCount = await Invest.countDocuments({
+        user: req.user._id,
+        planId: plan._id,
+        status: "Active",
+      });
+      if (activeCount >= plan.limit)
+        return res.status(400).json({
+          success: false,
+          message:
+            "Plan limit reached — you already hold the maximum active purchases of this plan",
+        });
+    }
     if (req.user.rechargeBalance < plan.price)
       return res.status(400).json({
         success: false,
@@ -161,8 +178,8 @@ router.post("/invest", userAuth, async (req, res) => {
             userid: ref.userid || "",
             phone: ref.phone,
             type: "commission",
-            title:
-              "Level " + level + " commission (" + rate + "%) — plan bought by " + req.user.phone,
+            title: "Team Commission",
+            method: "Level " + level + " (" + rate + "%) — plan bought by " + req.user.phone,
             amount: amt,
             status: "Success",
           });
@@ -174,6 +191,19 @@ router.post("/invest", userAuth, async (req, res) => {
       console.error("commission error:", e.message);
     }
 
+    /* ledger entry — "Buy Plan" shows in the transaction history */
+    await Transaction.create({
+      user: req.user._id,
+      userid: req.user.userid || "",
+      phone: req.user.phone,
+      type: "invest",
+      title: "Buy Plan",
+      method: plan.name,
+      amount: plan.price,
+      status: "Success",
+      refId: String(invest._id),
+    });
+
     /* realtime — push the new recharge balance to the buyer's other tabs */
     emitToUser(req.user.phone, "wallet:refresh", { reason: "invest" });
     /* pages push — /records shows the new plan instantly */
@@ -184,6 +214,7 @@ router.post("/invest", userAuth, async (req, res) => {
       message: "Plan purchased successfully!",
       order: {
         id: "ZP" + String(Date.now()).slice(-8),
+        planId: plan._id,
         name: invest.planName,
         vip: invest.vip,
         price: invest.price,
@@ -338,14 +369,18 @@ router.post("/withdraw", userAuth, async (req, res) => {
       }
     );
 
-    /* ledger entry */
+    /* ledger entry — amount is the NET the user receives (after the charge),
+       so /transaction shows ₹180 for a ₹200 request with a 10% fee */
     await Transaction.create({
       user: req.user._id,
       userid: req.user.userid || "",
       phone: req.user.phone,
       type: "withdraw",
-      title: "Withdrawal — " + String(bank.bankName || "Bank"),
-      amount,
+      title: "Withdrawal",
+      amount: netAmount,
+      chargePercent: chargePct,
+      charge,
+      netAmount,
       status: "Pending",
       refId: String(wd._id),
     });
@@ -387,7 +422,77 @@ router.post("/withdraw", userAuth, async (req, res) => {
   }
 });
 
+/* ============ BANK CARD — save the payout account from the /card page ============
+   The card used to live only in the browser's localStorage, so it disappeared
+   whenever that storage got cleared (or the user switched device). It is now
+   saved on the user document server-side and restored from there. */
+router.put("/bank", userAuth, async (req, res) => {
+  try {
+    const { realName, ifsc, account, bankName } = req.body || {};
+    const name = String(realName || "").trim().slice(0, 30);
+    const code = String(ifsc || "").trim().toUpperCase();
+    const acc = String(account || "").trim();
+    const bank = String(bankName || "").trim().slice(0, 30);
+    if (name.length < 3)
+      return res
+        .status(400)
+        .json({ success: false, message: "Enter your real name" });
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(code))
+      return res
+        .status(400)
+        .json({ success: false, message: "Enter a valid IFSC code" });
+    if (!/\d{9,18}/.test(acc))
+      return res
+        .status(400)
+        .json({ success: false, message: "Enter a valid bank account number" });
+    if (!bank)
+      return res
+        .status(400)
+        .json({ success: false, message: "Enter bank name" });
+
+    await User.updateOne(
+      { _id: req.user._id },
+      { bank: { realName: name, bankName: bank, account: acc, ifsc: code } }
+    );
+    res.json({
+      success: true,
+      message: "Bank card saved successfully!",
+      bank: { realName: name, bankName: bank, account: acc, ifsc: code },
+    });
+  } catch (e) {
+    console.error("bank save error:", e.message);
+    res.status(500).json({ success: false, message: "Failed to save bank card" });
+  }
+});
+
 /* ============ TRANSACTION HISTORY (ledger) ============ */
+router.get("/invests", userAuth, async (req, res) => {
+  try {
+    const invests = await Invest.find({ user: req.user._id })
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .lean();
+    res.json({
+      success: true,
+      invests: invests.map((iv) => ({
+        id: "ZP" + String(iv._id).slice(-8),
+        planId: iv.planId,
+        name: iv.planName,
+        vip: !!iv.vip,
+        price: iv.price,
+        daily: iv.daily,
+        cycle: iv.cycle,
+        total: iv.total,
+        boughtAt: iv.createdAt,
+        status: iv.status,
+        paidDays: iv.paidDays || 0,
+      })),
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: "Failed to load orders" });
+  }
+});
+
 router.get("/transactions", userAuth, async (req, res) => {
   try {
     const txns = await Transaction.find({ user: req.user._id })

@@ -17,6 +17,7 @@ import {
 import banner from "../../public/aramco-vip-banner.png";
 import logo from "../../public/aramco-badge.png";
 import { useSettings } from "../components/SettingsProvider";
+import { clearUserSession } from "../components/liveCache";
 
 /* ===== Shared Tailwind blocks — consistent across both pages ===== */
 
@@ -206,6 +207,8 @@ function RegisterInner() {
         setError(data.message || "Something went wrong, please try again");
         return;
       }
+      /* fresh account — clear any previous user's data on this device first */
+      clearUserSession();
       localStorage.setItem("zapto_token", data.token);
       localStorage.setItem("zapto_phone", (data.user && data.user.phone) || "");
       setSuccess(true);

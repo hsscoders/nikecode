@@ -4,11 +4,11 @@ import { useEffect } from "react";
 import { readCache } from "./liveCache";
 
 /* Subscribe to realtime wallet pushes + instant cache hydration.
-   - Mount par: localStorage cache (zapto_cache_wallet) se TURANT seed —
-     refresh ke baad ₹0 ka flash nahi, pichhli balance foran dikhti hai.
-   - Live: GlobalAuthGuard har /api/wallet response ko cache + "zapto:wallet"
-     CustomEvent me fan-out karta hai; socket wallet:refresh bhi isi se
-     aata hai — page hamesha fresh rehta hai. */
+   - On mount: instantly seeds from the localStorage cache (zapto_cache_wallet) —
+     no ₹0 flash after refresh, the previous balance shows immediately.
+   - Live: GlobalAuthGuard caches every /api/wallet response and fans it out
+     through the "zapto:wallet" CustomEvent; the socket wallet:refresh event
+     feeds into the same flow — the page always stays fresh. */
 export default function useLiveWallet(setWallet) {
   useEffect(() => {
     if (typeof window === "undefined" || typeof setWallet !== "function") return;

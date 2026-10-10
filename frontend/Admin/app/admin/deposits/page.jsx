@@ -214,7 +214,7 @@ export default function DepositsPage() {
                 {filtered.map((d) => (
                   <tr key={d._id}>
                     <td className="whitespace-nowrap font-medium text-[#7d6a6e]">{fmtD(d.createdAt)}</td>
-                    <td className="font-bold text-ink">+91 {d.phone}</td>
+                    <td className="whitespace-nowrap font-bold text-ink">+91 {d.phone}</td>
                     <td className="font-semibold text-[#7d6a6e]">{d.userid || "—"}</td>
                     <td className="font-extrabold text-maroon-700">{fmt0(d.amount)}</td>
                     <td className="font-semibold text-ink">{d.method}</td>
@@ -286,7 +286,7 @@ export default function DepositsPage() {
             {picked ? (
               <div className="flex items-center justify-between rounded-xl border border-maroon-600/40 bg-[#fbf1f3] px-4 py-3">
                 <div>
-                  <div className="text-[14px] font-bold text-ink">+91 {picked.phone}</div>
+                  <div className="whitespace-nowrap text-[14px] font-bold text-ink">+91 {picked.phone}</div>
                   <div className="text-[11.5px] font-semibold text-muted-rose">
                     {picked.userid || "No ID"} · Bal {fmt0(picked.rechargeBalance)}
                   </div>
@@ -319,7 +319,7 @@ export default function DepositsPage() {
                         }}
                         className="flex w-full cursor-pointer items-center justify-between border-b border-line-rose/60 bg-white px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-[#fbf1f3]"
                       >
-                        <span className="text-[13.5px] font-bold text-ink">+91 {u.phone}</span>
+                        <span className="whitespace-nowrap text-[13.5px] font-bold text-ink">+91 {u.phone}</span>
                         <span className="text-[11.5px] font-semibold text-muted-rose">
                           {u.userid || ""} {u.name ? "· " + u.name : ""}
                         </span>

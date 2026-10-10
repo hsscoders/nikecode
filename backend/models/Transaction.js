@@ -8,13 +8,17 @@ const TransactionSchema = new mongoose.Schema(
     phone: { type: String, default: "", index: true },
     type: {
       type: String,
-      enum: ["recharge", "withdraw", "commission", "income"],
+      enum: ["recharge", "withdraw", "commission", "income", "bonus", "invest"],
       default: "recharge",
       index: true,
     },
     title: { type: String, default: "" },
     method: { type: String, default: "" },
     amount: { type: Number, default: 0 },
+    /* withdraw snapshot — amount is the NET the user receives, charge is the fee */
+    chargePercent: { type: Number, default: 0 },
+    charge: { type: Number, default: 0 },
+    netAmount: { type: Number, default: 0 },
     status: {
       type: String,
       enum: ["Pending", "Success", "Rejected"],

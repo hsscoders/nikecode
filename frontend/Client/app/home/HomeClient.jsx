@@ -178,7 +178,7 @@ function BannerCarousel({ banners }) {
   );
 }
 
-function PlanCard({ plan, type, onBuy }) {
+function PlanCard({ plan, type, onBuy, used = 0 }) {
   const isVip = type === "vip";
   return (
     <div className="group mx-3.5 mt-3.5 overflow-hidden rounded-[24px] border border-line-rose bg-white shadow-[0_4px_24px_rgba(87,18,36,0.08)]">
@@ -198,7 +198,7 @@ function PlanCard({ plan, type, onBuy }) {
           </div>
           {plan.limit > 0 && (
             <div className="rounded-full border border-white/35 bg-white/20 px-2.5 py-1 text-[10px] font-extrabold text-white backdrop-blur-sm">
-              {plan.used}/{plan.limit}
+              {used}/{plan.limit}
             </div>
           )}
         </div>
@@ -283,6 +283,10 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
   );
   const [wallet, setWallet] = useState({ balance: 0, rechargeBalance: 0, totalIncome: 0 });
   useLiveWallet(setWallet); /* realtime — recharge approval / income / commission */
+  /* per-plan active holdings (badge shows the real used/limit) — cache is
+     read in an effect (NOT in state init) so server/client HTML match and
+     hydration never mismatches; server fetch corrects it right after */
+  const [usedByPlan, setUsedByPlan] = useState({});
   /* SSR-seeded popup config — the notice renders with the real admin
      text on the very first paint (no 1s default/absent flash) */
   const gs = useSettings();
@@ -301,11 +305,21 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
     }
     setPhone(localStorage.getItem("zapto_phone") || "");
 
-    /* SSR/CACHE FAILSAFE — server render fail hua to localStorage cache
-       se turant seed karo (repeat visit par kabhi khali skeleton nahi) */
+    /* SSR/CACHE FAILSAFE — if server render failed, seed from localStorage
+       cache instantly (never show an empty skeleton on repeat visits) */
     if (banners === null) {
       const cb = readCache("banners");
       if (cb) setBanners(cb);
+    }
+    /* per-plan used/limit badge — instant from the orders cache */
+    const cachedInv = readCache("invests");
+    if (Array.isArray(cachedInv) && cachedInv.length) {
+      const counts = {};
+      cachedInv.forEach((o) => {
+        if (o && o.planId && o.status === "Active")
+          counts[o.planId] = (counts[o.planId] || 0) + 1;
+      });
+      setUsedByPlan(counts);
     }
     if (apiPlans === null) {
       const cp = readCache("plans");
@@ -323,6 +337,22 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
       setCfgReady(true);
       fetchBanners();
       fetchPlans();
+      /* user's orders — feeds the per-plan used/limit badge + cached for /records */
+      try {
+        const ro = await fetch("/api/invests", {
+          headers: { Authorization: "Bearer " + token },
+        });
+        const od = await ro.json();
+        if (od.success && Array.isArray(od.invests)) {
+          writeCache("invests", od.invests);
+          const counts = {};
+          od.invests.forEach((o) => {
+            if (o && o.planId && o.status === "Active")
+              counts[o.planId] = (counts[o.planId] || 0) + 1;
+          });
+          setUsedByPlan(counts);
+        }
+      } catch (e) {}
       try {
         const r = await fetch("/api/wallet", {
           headers: { Authorization: "Bearer " + token },
@@ -404,6 +434,10 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
       const orders = JSON.parse(localStorage.getItem("zapto_orders") || "[]");
       orders.unshift(o);
       localStorage.setItem("zapto_orders", JSON.stringify(orders));
+      /* same list cached for the records page + the used/limit badge */
+      writeCache("invests", orders);
+      if (o && o.planId && o.status === "Active")
+        setUsedByPlan((m) => ({ ...m, [o.planId]: (m[o.planId] || 0) + 1 }));
     } catch (e) {}
   };
 
@@ -524,7 +558,13 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
       {/* ===== PLANS ===== */}
       <div className="pb-28">
         {plans.map((plan) => (
-          <PlanCard key={plan.id || plan._id} plan={plan} type={tab === 0 ? "daily" : "vip"} onBuy={setSelectedPlan} />
+          <PlanCard
+            key={plan.id || plan._id}
+            plan={plan}
+            type={tab === 0 ? "daily" : "vip"}
+            onBuy={setSelectedPlan}
+            used={usedByPlan[plan._id] || 0}
+          />
         ))}
       </div>
 

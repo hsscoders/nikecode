@@ -4,13 +4,15 @@ import Image from "next/image";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import logo from "../../public/aramco-logo.png";
+import { clearUserSession } from "../components/liveCache";
 
-/* One-click login — link sent from the admin panel: /auto-login?token=...&phone=... */
+/* One-click login — opened by the admin panel: /auto-login?code=...
+   The one-time code is exchanged for a normal 7-day session token. */
 
 function AutoLoginInner() {
   const router = useRouter();
   const sp = useSearchParams();
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
 
   /* page title */
   useEffect(() => {
@@ -18,16 +20,35 @@ function AutoLoginInner() {
   }, []);
 
   useEffect(() => {
-    const token = sp.get("token");
-    const phone = sp.get("phone") || "";
-    if (!token) {
-      setError(true);
-      setTimeout(() => router.replace("/login"), 900);
+    const code = sp.get("code") || "";
+    if (!code) {
+      setError("Invalid login link — redirecting to login...");
+      setTimeout(() => router.replace("/login"), 1200);
       return;
     }
-    localStorage.setItem("zapto_token", token);
-    localStorage.setItem("zapto_phone", phone);
-    setTimeout(() => router.replace("/home"), 700);
+    (async () => {
+      try {
+        /* wipe any previous account's cached data before switching */
+        clearUserSession();
+        const r = await fetch("/api/auth/auto-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+        const d = await r.json();
+        if (!r.ok || !d.success || !d.token) {
+          setError(d.message || "Invalid login link — redirecting to login...");
+          setTimeout(() => router.replace("/login"), 1500);
+          return;
+        }
+        localStorage.setItem("zapto_token", d.token);
+        localStorage.setItem("zapto_phone", d.user ? d.user.phone : "");
+        router.replace("/home");
+      } catch (e) {
+        setError("Network error — redirecting to login...");
+        setTimeout(() => router.replace("/login"), 1500);
+      }
+    })();
   }, [sp, router]);
 
   return (
@@ -39,9 +60,7 @@ function AutoLoginInner() {
         SAUDI ARAMCO
       </div>
       {error ? (
-        <div className="mt-3 text-[13.5px] font-semibold text-white/70">
-          Invalid login link — redirecting to login...
-        </div>
+        <div className="mt-3 text-[13.5px] font-semibold text-white/70">{error}</div>
       ) : (
         <>
           <div className="mt-3 text-[13.5px] font-semibold text-white/70">

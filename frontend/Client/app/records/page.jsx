@@ -20,7 +20,9 @@ import {
 import logo from "../../public/aramco-logo.png";
 import planDaily from "../../public/plan-daily.png";
 import planVip from "../../public/plan-vip.png";
+import { clearUserSession, readCache, writeCache } from "../components/liveCache";
 import BottomNav from "../components/BottomNav";
+import useLive from "../components/useLive";
 
 /* ================= HELPERS ================= */
 
@@ -89,9 +91,19 @@ function OrderCard({ order }) {
             Order ID: {order.id}
           </div>
         </div>
-        <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#eafaf0] px-2.5 py-1 text-[10px] font-extrabold text-[#16a34a]">
-          <span className="h-[6px] w-[6px] rounded-full bg-[#16a34a]" />
-          Active
+        <span
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
+            order.status === "Completed"
+              ? "bg-[#fdf6e4] text-[#a9791c]"
+              : "bg-[#eafaf0] text-[#16a34a]"
+          }`}
+        >
+          <span
+            className={`h-[6px] w-[6px] rounded-full ${
+              order.status === "Completed" ? "bg-[#a9791c]" : "bg-[#16a34a]"
+            }`}
+          />
+          {order.status === "Completed" ? "Completed" : "Active"}
         </span>
       </div>
 
@@ -139,20 +151,48 @@ export default function OrderedPage() {
   const [alertMsg, setAlertMsg] = useState("");
   const alertTimer = useRef(null);
 
-  /* token guard + orders load (localStorage — the order API comes later) */
+  /* token guard + orders load — instant paint from the orders cache, then
+     the SERVER list (truth: active/completed status, works on any device) */
   useEffect(() => {
     const token = localStorage.getItem("zapto_token");
     if (!token) {
       router.replace("/login");
       return;
     }
-    try {
-      setOrders(JSON.parse(localStorage.getItem("zapto_orders") || "[]"));
-    } catch {
-      setOrders([]);
+    const cached = readCache("invests");
+    if (Array.isArray(cached) && cached.length) {
+      setOrders(cached);
+    } else {
+      try {
+        setOrders(JSON.parse(localStorage.getItem("zapto_orders") || "[]"));
+      } catch {
+        setOrders([]);
+      }
     }
     setReady(true);
+    (async () => {
+      try {
+        const r = await fetch("/api/invests", {
+          headers: { Authorization: "Bearer " + token },
+        });
+        const d = await r.json();
+        if (d.success && Array.isArray(d.invests)) {
+          setOrders(d.invests);
+          writeCache("invests", d.invests);
+          try {
+            localStorage.setItem("zapto_orders", JSON.stringify(d.invests));
+          } catch (e) {}
+        }
+      } catch (e) {}
+    })();
   }, [router]);
+
+  /* LIVE — a new plan purchase (from this or another tab) → list refreshes
+     instantly from the refreshed orders cache, without a reload */
+  useLive("activity:update", () => {
+    const cached = readCache("invests");
+    if (Array.isArray(cached) && cached.length) setOrders(cached);
+  });
 
   /* Centered alert — 2s auto-hide */
   const showAlert = (msg) => {
@@ -165,14 +205,18 @@ export default function OrderedPage() {
   };
 
   const logout = () => {
-    localStorage.removeItem("zapto_token");
-    localStorage.removeItem("zapto_phone");
+    /* full session wipe — the next account on this device must not see this
+       user's data (balance / orders / bank card / caches) */
+    clearUserSession();
     router.replace("/login");
   };
 
-  /* summary — derived from the orders */
+  /* summary — invested = every order ever; daily income = ACTIVE plans only
+     (a completed cycle stops paying) */
   const totalInvested = orders.reduce((s, o) => s + (Number(o.price) || 0), 0);
-  const dailyIncome = orders.reduce((s, o) => s + (Number(o.daily) || 0), 0);
+  const dailyIncome = orders
+    .filter((o) => (o.status || "Active") === "Active")
+    .reduce((s, o) => s + (Number(o.daily) || 0), 0);
 
   return (
     <div className="mx-auto flex min-h-dvh w-full flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:max-w-[430px] min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">

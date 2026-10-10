@@ -2,6 +2,9 @@ const router = require("express").Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const Setting = require("../models/Setting");
+const Transaction = require("../models/Transaction");
+const LoginCode = require("../models/LoginCode");
 
 /* Normalize the phone: strip +91 / 0 prefix and spaces, keep 10 digits */
 function cleanPhone(v) {
@@ -98,6 +101,34 @@ router.post("/register", async (req, res) => {
       refId,
     });
 
+    /* Register bonus — admin-controlled signup credit. Goes to
+       rechargeBalance (plan-buy wallet) + a "Bonus" ledger entry so the
+       user sees it in the transaction history. Fail-safe: a bonus problem
+       never fails the registration. */
+    try {
+      const s = await Setting.findOne({ key: "global" }).lean();
+      const rb = s && s.registerBonus;
+      const amt = Math.round(Number(rb && rb.amount) * 100) / 100;
+      if (rb && rb.enabled === true && amt > 0) {
+        await User.updateOne(
+          { _id: user._id },
+          { $inc: { rechargeBalance: amt } }
+        );
+        await Transaction.create({
+          user: user._id,
+          userid: user.userid,
+          phone: user.phone,
+          type: "bonus",
+          title: "Bonus",
+          method: "Register bonus",
+          amount: amt,
+          status: "Success",
+        });
+      }
+    } catch (be) {
+      console.error("register bonus error:", be.message);
+    }
+
     const token = signToken(user);
     return res.json({
       success: true,
@@ -171,6 +202,60 @@ router.post("/login", async (req, res) => {
     });
   } catch (e) {
     console.error("login error:", e.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "Server error, please try again" });
+  }
+});
+
+/* ============ ONE-CLICK LOGIN (admin initiated) ============
+   The admin panel opens the client app with a one-time code; the app
+   exchanges it here for a normal 7-day session token. Codes are single-use
+   and expire after 7 days, so a leaked link can never be replayed. */
+router.post("/auto-login", async (req, res) => {
+  try {
+    const code = String((req.body && req.body.code) || "").trim();
+    if (!code)
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid login link" });
+
+    const lc = await LoginCode.findOne({ code });
+    if (!lc || lc.used || lc.expiresAt < new Date())
+      return res.status(400).json({
+        success: false,
+        message: "This login link is invalid or has expired",
+      });
+
+    lc.used = true;
+    lc.usedAt = new Date();
+    await lc.save();
+
+    const user = await User.findById(lc.user);
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "Account not found. Please register first." });
+    if (user.status === "Banned")
+      return res.status(403).json({
+        success: false,
+        message: "Your account has been banned. Contact support.",
+      });
+
+    const token = signToken(user);
+    return res.json({
+      success: true,
+      message: "Login successful",
+      token,
+      user: {
+        phone: user.phone,
+        userid: user.userid,
+        refId: user.refId,
+        status: user.status,
+      },
+    });
+  } catch (e) {
+    console.error("auto-login error:", e.message);
     return res
       .status(500)
       .json({ success: false, message: "Server error, please try again" });

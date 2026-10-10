@@ -96,15 +96,32 @@ export default function InvitePage() {
   const [alertMsg, setAlertMsg] = useState("");
   const alertTimer = useRef(null);
 
-  /* INSTANT PAINT — pichhli baar ka invite code localStorage se turant:
-     refresh par "Generating your invite code..." ka lamba flash nahi.
-     Network phir bhi background me verify/fresh karta hai. */
+  /* INSTANT PAINT — the previous invite code shows instantly from localStorage:
+     no long "Generating your invite code..." flash on refresh.
+     The network still verifies/refreshes in the background. */
   useEffect(() => {
     const cached = readCache("ref");
     if (cached && cached.refId) {
       setRefId(cached.refId);
       setLink(window.location.origin + "/register?inviteCode=" + cached.refId);
     }
+  }, []);
+
+  /* LIVE — refId syncs instantly on wallet pushes (new users / first visit) */
+  useEffect(() => {
+    const h = (e) => {
+      const w = e.detail || {};
+      if (w.refId) {
+        setRefId((prev) => {
+          if (prev === w.refId) return prev;
+          writeCache("ref", { refId: w.refId });
+          return w.refId;
+        });
+        setLink(window.location.origin + "/register?inviteCode=" + w.refId);
+      }
+    };
+    window.addEventListener("zapto:wallet", h);
+    return () => window.removeEventListener("zapto:wallet", h);
   }, []);
 
   /* token guard — /invite stays locked without login */

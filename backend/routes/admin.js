@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const adminAuth = require("../middleware/adminAuth");
 const User = require("../models/User");
 const Plan = require("../models/Plan");
@@ -10,6 +11,7 @@ const Deposit = require("../models/Deposit");
 const Withdrawal = require("../models/Withdrawal");
 const Setting = require("../models/Setting");
 const Transaction = require("../models/Transaction");
+const LoginCode = require("../models/LoginCode");
 const { emitToUser, emitAdmin, emitAll } = require("../live");
 const {
   isRemote,
@@ -586,17 +588,24 @@ router.patch("/users/:id/status", async (req, res) => {
   }
 });
 
-/* One-click login — generate a user token */
+/* One-click login (admin only) — create a single-use code. The panel opens
+   the client app with it directly; the app exchanges the code for a normal
+   7-day session token. No link is shown or copied — click and you are in. */
 router.post("/users/:id/onelogin", async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
-    const token = jwt.sign(
-      { id: user._id, phone: user.phone, role: "user" },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-    res.json({ success: true, token, phone: user.phone, userid: user.userid });
+
+    /* housekeeping — drop expired codes so the collection stays tiny */
+    await LoginCode.deleteMany({ expiresAt: { $lt: new Date() } });
+
+    const code = crypto.randomBytes(24).toString("hex");
+    await LoginCode.create({
+      code,
+      user: user._id,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+    res.json({ success: true, code, phone: user.phone, userid: user.userid });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to generate login" });
   }
@@ -650,7 +659,10 @@ router.post("/deposits", async (req, res) => {
       note: "Added by admin",
     });
     if (deposit.status === "Success")
-      await User.updateOne({ _id: user._id }, { $inc: { rechargeBalance: amt } });
+      await User.updateOne(
+        { _id: user._id },
+        { $inc: { rechargeBalance: amt, totalRecharge: amt } }
+      );
 
     /* realtime — the user's open tabs pick up the new recharge balance */
     emitToUser(user.phone, "wallet:refresh", { reason: "deposit", status: deposit.status });
@@ -661,7 +673,7 @@ router.post("/deposits", async (req, res) => {
       userid: user.userid || "",
       phone: user.phone,
       type: "recharge",
-      title: "Recharge — " + deposit.method,
+      title: "Recharge",
       method: deposit.method,
       amount: amt,
       status: deposit.status,
@@ -686,9 +698,15 @@ router.put("/deposits/:id", async (req, res) => {
       return res.json({ success: true, message: "No change", deposit });
 
     if (status === "Success" && deposit.status !== "Success")
-      await User.updateOne({ _id: deposit.user }, { $inc: { rechargeBalance: deposit.amount } });
+      await User.updateOne(
+        { _id: deposit.user },
+        { $inc: { rechargeBalance: deposit.amount, totalRecharge: deposit.amount } }
+      );
     if (status !== "Success" && deposit.status === "Success")
-      await User.updateOne({ _id: deposit.user }, { $inc: { rechargeBalance: -deposit.amount } });
+      await User.updateOne(
+        { _id: deposit.user },
+        { $inc: { rechargeBalance: -deposit.amount, totalRecharge: -deposit.amount } }
+      );
 
     deposit.status = status;
     deposit.processedAt = new Date();
@@ -863,6 +881,18 @@ router.put("/settings", async (req, res) => {
         s.withdraw.endTime = String(w.endTime);
       if (w.enabled !== undefined) s.withdraw.enabled = !!w.enabled;
       if (w.note !== undefined) s.withdraw.note = String(w.note).trim().slice(0, 300);
+    }
+
+    /* Register bonus — signup credit switch + amount (₹, 0–100000).
+       Credited server-side in the register API when enabled. */
+    if (b.registerBonus) {
+      const rb = b.registerBonus;
+      if (rb.enabled !== undefined) s.registerBonus.enabled = !!rb.enabled;
+      if (rb.amount !== undefined)
+        s.registerBonus.amount = Math.min(
+          100000,
+          Math.max(0, num(rb.amount))
+        );
     }
 
     /* Income time — daily plan income auto-credit time (IST, HH:MM) */

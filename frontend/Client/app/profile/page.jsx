@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import logo from "../../public/aramco-logo.png";
 import BottomNav from "../components/BottomNav";
+import { readCache, clearUserSession } from "../components/liveCache";
 
 /* menu — Plan Record / Bank Settings / Txn History / Team / Invite / Support / Download / Logout */
 const MENU_ITEMS = [
@@ -113,8 +114,8 @@ export default function ProfilePage() {
     const h = (e) => {
       if (!e.detail) return;
       if (e.detail.balance !== undefined) setBalance(e.detail.balance || 0);
-      if (e.detail.rechargeBalance !== undefined)
-        setRechargeTotal(e.detail.rechargeBalance || 0);
+      if (e.detail.totalRecharge !== undefined)
+        setRechargeTotal(e.detail.totalRecharge || 0);
       if (e.detail.totalIncome !== undefined)
         setIncomeTotal(e.detail.totalIncome || 0);
     };
@@ -139,7 +140,7 @@ export default function ProfilePage() {
         });
         const d = await r.json();
         if (d.success && d.wallet) {
-          setRechargeTotal(d.wallet.rechargeBalance || 0);
+          setRechargeTotal(d.wallet.totalRecharge || 0);
           setIncomeTotal(d.wallet.totalIncome || 0);
           setBalance(d.wallet.balance || 0);
           if (d.wallet.userid) {
@@ -162,6 +163,28 @@ export default function ProfilePage() {
     }
     setUid(id);
   }, [router]);
+
+  /* INSTANT + LIVE — balance shows from cache instantly (no ₹0 flash), plus
+     live updates on zapto:wallet (GlobalAuthGuard caches + fans out every
+     wallet response — recharge/income approvals show up immediately) */
+  useEffect(() => {
+    const apply = (w) => {
+      setRechargeTotal(w.totalRecharge || 0);
+      setIncomeTotal(w.totalIncome || 0);
+      setBalance(w.balance || 0);
+      if (w.userid) {
+        setUid(w.userid);
+        localStorage.setItem("zapto_uid", w.userid);
+      }
+    };
+    const c = readCache("wallet");
+    if (c) apply(c);
+    const h = (e) => {
+      if (e.detail) apply(e.detail);
+    };
+    window.addEventListener("zapto:wallet", h);
+    return () => window.removeEventListener("zapto:wallet", h);
+  }, []);
 
   const showAlert = (msg) => {
     clearTimeout(alertTimer.current);
@@ -196,8 +219,9 @@ export default function ProfilePage() {
   };
 
   const logout = () => {
-    localStorage.removeItem("zapto_token");
-    localStorage.removeItem("zapto_phone");
+    /* full session wipe — the next account on this device must not see this
+       user's balance, transactions, orders, invite code or bank card */
+    clearUserSession();
     router.replace("/login");
   };
 

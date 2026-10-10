@@ -17,6 +17,7 @@ const UserSchema = new mongoose.Schema(
     name: { type: String, default: "", trim: true },
     balance: { type: Number, default: 0 }, // withdrawal balance
     rechargeBalance: { type: Number, default: 0 }, // recharge wallet (plan buy)
+    totalRecharge: { type: Number, default: 0 }, // cumulative successful recharges (never decreases on plan buy)
     totalIncome: { type: Number, default: 0 }, // total plan income
     status: { type: String, enum: ["Active", "Banned"], default: "Active" },
     /* Bank card saved on the first withdrawal (admin can view it in Manage Users) */

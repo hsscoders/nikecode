@@ -102,7 +102,7 @@ export default function InvestsPage() {
                 {invests.map((inv) => (
                   <tr key={inv._id}>
                     <td className="whitespace-nowrap font-medium text-[#7d6a6e]">{fmtD(inv.createdAt)}</td>
-                    <td className="font-bold text-ink">+91 {inv.phone}</td>
+                    <td className="whitespace-nowrap font-bold text-ink">+91 {inv.phone}</td>
                     <td className="font-semibold text-[#7d6a6e]">{inv.userid || "—"}</td>
                     <td>
                       <div className="flex items-center gap-2">

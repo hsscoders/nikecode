@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { io } from "socket.io-client";
+import { clearUserSession } from "./liveCache";
 
 /* Global JWT guard — when an authed API returns 401 (expired/invalid
    token) on any page, clear the token and send the user to /login?expired=1.
@@ -68,10 +69,10 @@ export default function GlobalAuthGuard() {
     window.__zaptoAuthHooked = true;
 
     /* ---- wallet response interceptor ----
-       HAR successful /api/wallet response (kisi bhi page se) →
-       localStorage cache + "zapto:wallet" fan-out. Isse agle refresh par
-       har page ka balance localStorage se TURANT dikhta hai (₹0 flash
-       khatam) — network ke baad fresh value aati hai. */
+       EVERY successful /api/wallet response (from any page) →
+       localStorage cache + "zapto:wallet" fan-out. This way, on the next
+       refresh every page shows its balance instantly from localStorage
+       (no ₹0 flash) — the fresh value arrives after the network call. */
     const orig = window.fetch.bind(window);
     window.fetch = async (...args) => {
       const res = await orig(...args);
@@ -107,8 +108,9 @@ export default function GlobalAuthGuard() {
           !url.includes("/api/auth/") &&
           !onAuthPage
         ) {
-          localStorage.removeItem("zapto_token");
-          localStorage.removeItem("zapto_phone");
+          /* session expired — wipe EVERYTHING user-specific before the
+             redirect so no data leaks into the next login */
+          clearUserSession();
           try {
             if (window.__zaptoSocket) window.__zaptoSocket.disconnect();
           } catch (e) {}

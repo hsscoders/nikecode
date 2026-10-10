@@ -99,7 +99,10 @@ export default function CardPage() {
   const [alertMsg, setAlertMsg] = useState("");
   const alertTimer = useRef(null);
 
-  /* token guard + already-bound card prefill (edit mode) */
+  /* token guard + already-bound card prefill (edit mode).
+     The bank lives on the SERVER now (user.bank) — localStorage is only an
+     instant prefill. The fresh copy always comes from GET /api/wallet, so the
+     card never disappears even if the browser storage gets cleared. */
   useEffect(() => {
     const token = localStorage.getItem("zapto_token");
     if (!token) {
@@ -115,6 +118,22 @@ export default function CardPage() {
         setBankName(saved.bankName || "");
       }
     } catch {}
+    /* server copy — the source of truth (overrides the local prefill) */
+    (async () => {
+      try {
+        const r = await fetch("/api/wallet", {
+          headers: { Authorization: "Bearer " + token },
+        });
+        const d = await r.json();
+        const b = d && d.success && d.wallet && d.wallet.bank;
+        if (b && (b.account || b.ifsc)) {
+          setRealName(b.realName || "");
+          setIfsc(b.ifsc || "");
+          setAccount(b.account || "");
+          setBankName(b.bankName || "");
+        }
+      } catch (e) {}
+    })();
   }, [router]);
 
   const showAlert = (msg) => {
@@ -181,11 +200,34 @@ export default function CardPage() {
     if (account.length < 9) return showAlert("Account number looks too short");
     if (!bankName.trim()) return showAlert("Enter bank name");
 
+    /* save on the server (user.bank) — survives cleared storage & new devices */
+    try {
+      const token = localStorage.getItem("zapto_token");
+      const r = await fetch("/api/bank", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify({
+          realName: name,
+          ifsc,
+          account,
+          bankName: bankName.trim(),
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.success) return showAlert(d.message || "Could not save the bank card");
+    } catch (e) {
+      return showAlert("Network error — please try again");
+    }
+
+    /* local mirror for the instant prefill on the next visit */
     localStorage.setItem(
       "zapto_bank_card",
       JSON.stringify({ realName: name, ifsc, account, bankName: bankName.trim() })
     );
-    showAlert("Bank card bound successfully!");
+    showAlert("Bank card saved successfully!");
     setTimeout(() => router.push("/withdrawal"), 900);
   };
 

@@ -187,7 +187,8 @@ async function runIncomeCredit() {
       userid: inv.userid || "",
       phone: inv.phone || "",
       type: "income",
-      title: "Daily income — " + inv.planName + " (Day " + dayNo + "/" + inv.cycle + ")",
+      title: "Daily Income",
+      method: inv.planName + " (Day " + dayNo + "/" + inv.cycle + ")",
       amount: inv.daily,
       status: "Success",
     });

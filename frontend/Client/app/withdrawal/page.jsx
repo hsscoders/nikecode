@@ -26,6 +26,7 @@ import useLiveWallet from "../components/useLiveWallet";
 import useLive from "../components/useLive";
 import BottomNav from "../components/BottomNav";
 import { useSettings } from "../components/SettingsProvider";
+import { readCache, writeCache } from "../components/liveCache";
 
 /* Fallback when the settings API fails — mirrors admin defaults */
 const DEFAULT_WITHDRAW = {
@@ -136,7 +137,7 @@ export default function WithdrawalPage() {
   const alertTimer = useRef(null);
 
   /* token guard + bound card load + wallet balance */
-  /* wallet + today-count refresh — initial load AND live pushes dono ke liye */
+  /* wallet + today-count refresh — used for BOTH the initial load and live pushes */
   const refreshData = useCallback(async () => {
     const token = localStorage.getItem("zapto_token");
     if (!token) return;
@@ -146,7 +147,20 @@ export default function WithdrawalPage() {
           headers: { Authorization: "Bearer " + token },
         });
         const d = await r.json();
-        if (d.success && d.wallet) setWallet(d.wallet);
+        if (d.success && d.wallet) {
+          setWallet(d.wallet);
+          /* bank card from the server — restores the bound card even when the
+             browser storage was cleared (the card lives on the user account) */
+          const b = d.wallet.bank;
+          if (b && b.account && b.ifsc) {
+            setBankCard(b);
+            try {
+              localStorage.setItem("zapto_bank_card", JSON.stringify(b));
+            } catch (e) {}
+          } else if (!localStorage.getItem("zapto_bank_card")) {
+            router.replace("/card");
+          }
+        }
       } catch (e) {}
       /* withdrawal settings — admin panel live (limits + charge + switch + window) */
       try {
@@ -172,6 +186,7 @@ export default function WithdrawalPage() {
               ) === today
           ).length;
           setDoneToday(n);
+          writeCache("wdToday", { d: today, n }); /* date-stamped — yesterday's count never shows today */
         }
       } catch (e) {}
     })();
@@ -183,18 +198,18 @@ export default function WithdrawalPage() {
       router.replace("/login");
       return;
     }
-    /* bank card guard — no bound card → straight to /card until the bank is added */
+    /* bank card — instant from localStorage, then confirmed from the server.
+       No card anywhere → straight to /card until the bank is added. */
     let saved = null;
     try {
       saved = JSON.parse(localStorage.getItem("zapto_bank_card") || "null");
     } catch {
       saved = null;
     }
-    setBankCard(saved);
-    if (!saved || !saved.ifsc || !saved.account) {
-      router.replace("/card");
-      return;
-    }
+    if (saved && saved.ifsc && saved.account) setBankCard(saved);
+    /* INSTANT — today's withdrawal count from cache (no 0 flash) */
+    const ct = readCache("wdToday");
+    if (ct && ct.d === istToday() && typeof ct.n === "number") setDoneToday(ct.n);
     refreshData();
     setReady(true);
   }, [router, refreshData]);
@@ -279,13 +294,14 @@ export default function WithdrawalPage() {
     } catch (e) {
       /* network fail — only a local txn record (offline demo) */
     }
-    /* withdraw txn record — shows up in transaction history */
+    /* withdraw txn record — offline fallback only (the server ledger is the
+       source of truth); stores the NET amount like the server does */
     try {
       const txns = JSON.parse(localStorage.getItem("zapto_transactions") || "[]");
       txns.unshift({
         id: "WD" + String(Date.now()).slice(-8),
         type: "withdraw",
-        amount: Number(amount),
+        amount: netAmt,
         at: new Date().toISOString(),
         status: "Pending",
       });

@@ -71,6 +71,13 @@ const SettingSchema = new mongoose.Schema(
       enabled: { type: Boolean, default: true }, // master switch — false stops ALL withdrawals
       note: { type: String, default: "Withdrawals are processed within 24 hours" },
     },
+    /* Register bonus — admin-controlled signup credit for every NEW user.
+       Credited to rechargeBalance (plan-buy wallet) on successful register,
+       with a "bonus" ledger entry in the transaction history. */
+    registerBonus: {
+      enabled: { type: Boolean, default: false }, // master switch — off = no bonus
+      amount: { type: Number, default: 0 }, // ₹ credited on register (0 = no bonus)
+    },
     /* Daily plan income auto-credit — admin sets the time (IST, HH:MM) */
     income: {
       creditTime: { type: String, default: "00:00" },

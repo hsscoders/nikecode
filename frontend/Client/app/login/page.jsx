@@ -8,6 +8,7 @@ import { Phone, Lock, Eye, EyeOff, Clock } from "lucide-react";
 import banner from "../../public/aramco-vip-banner.png";
 import logo from "../../public/aramco-badge.png";
 import { useSettings } from "../components/SettingsProvider";
+import { clearUserSession } from "../components/liveCache";
 
 /* ===== Shared Tailwind blocks — consistent across both pages ===== */
 
@@ -152,6 +153,9 @@ export default function LoginPage() {
         setError(data.message || "Something went wrong, please try again");
         return;
       }
+      /* account switch safety — wipe the previous user's data (wallet /
+         transactions / orders / bank card caches) before this login lands */
+      clearUserSession();
       localStorage.setItem("zapto_token", data.token);
       localStorage.setItem("zapto_phone", (data.user && data.user.phone) || "");
       router.replace("/home");

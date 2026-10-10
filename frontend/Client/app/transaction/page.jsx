@@ -18,8 +18,20 @@ import {
 import logo from "../../public/aramco-logo.png";
 import BottomNav from "../components/BottomNav";
 import useLive from "../components/useLive";
+import { readCache, writeCache } from "../components/liveCache";
 
 const TABS = ["ALL", "Recharge", "Withdraw", "Earnings"];
+
+/* clean labels — the ledger always shows short type names
+   (Recharge / Withdrawal / Bonus / Buy Plan / Daily Income / Team Commission) */
+const TYPE_LABELS = {
+  recharge: "Recharge",
+  withdraw: "Withdrawal",
+  commission: "Team Commission",
+  income: "Daily Income",
+  bonus: "Bonus",
+  invest: "Buy Plan",
+};
 
 /* ================= HELPERS ================= */
 
@@ -41,26 +53,18 @@ const fmtTime = (iso) =>
 
 /* ================= SMALL PARTS ================= */
 
-/* txn row — recharge/income (green, down-left) / withdraw (red, up-right) /
-   commission (gold, team) — style follows the record type */
+/* txn row — recharge/income/bonus (green, down-left) / withdraw + buy plan
+   (red, up-right) / commission (gold, team) — style follows the record type */
 function TxnRow({ txn }) {
   const kind =
-    txn.type === "withdraw"
+    txn.type === "withdraw" || txn.type === "invest"
       ? "withdraw"
       : txn.type === "commission"
         ? "commission"
-        : "credit"; /* recharge + income */
+        : "credit"; /* recharge + income + bonus */
   const isDebit = kind === "withdraw";
   const isCommission = kind === "commission";
-  const title =
-    txn.title ||
-    (txn.type === "recharge"
-      ? "Recharge"
-      : txn.type === "withdraw"
-        ? "Withdraw"
-        : txn.type === "commission"
-          ? "Team Commission"
-          : "Daily Income");
+  const title = TYPE_LABELS[txn.type] || "Transaction";
   return (
     <div
       className={`${card} flex items-center gap-3.5 p-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(87,18,36,0.12)] max-[360px]:p-3`}
@@ -84,14 +88,7 @@ function TxnRow({ txn }) {
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-[14px] font-bold text-ink">
-            {title}
-            {txn.method && !title.includes(txn.method) && (
-              <span className="ml-1.5 text-[11px] font-semibold text-muted-rose">
-                {txn.method}
-              </span>
-            )}
-          </span>
+          <span className="truncate text-[14px] font-bold text-ink">{title}</span>
           <span
             className={`shrink-0 text-[14.5px] font-extrabold max-[360px]:text-[13.5px] ${
               isDebit ? "text-[#dc2626]" : isCommission ? "text-[#a9791c]" : "text-[#16a34a]"
@@ -155,17 +152,17 @@ export default function TransactionPage() {
       });
       const d = await r.json();
       if (d.success && Array.isArray(d.txns)) {
-        setTxns(
-          d.txns.map((t) => ({
-            id: t._id,
-            type: t.type,
-            title: t.title,
-            method: t.method || "",
-            amount: t.amount,
-            status: t.status,
-            at: t.createdAt,
-          }))
-        );
+        const mapped = d.txns.map((t) => ({
+          id: t._id,
+          type: t.type,
+          title: t.title,
+          method: t.method || "",
+          amount: t.amount,
+          status: t.status,
+          at: t.createdAt,
+        }));
+        setTxns(mapped);
+        writeCache("txns", mapped); /* next refresh: instant list */
         setReady(true);
         return;
       }
@@ -185,6 +182,13 @@ export default function TransactionPage() {
       router.replace("/login");
       return;
     }
+    /* INSTANT — the previous transaction list paints instantly from cache
+       (no empty-list flash on refresh), then the network refreshes it */
+    const cached = readCache("txns");
+    if (cached && cached.length) {
+      setTxns(cached);
+      setReady(true);
+    }
     loadTxns();
   }, [router, loadTxns]);
 
@@ -194,8 +198,8 @@ export default function TransactionPage() {
   const filtered = txns.filter((t) => {
     if (tab === 0) return true;
     if (tab === 1) return t.type === "recharge";
-    if (tab === 2) return t.type === "withdraw";
-    return t.type === "commission" || t.type === "income";
+    if (tab === 2) return t.type === "withdraw" || t.type === "invest";
+    return t.type === "commission" || t.type === "income" || t.type === "bonus";
   });
 
   return (

@@ -7,8 +7,6 @@ import {
   Ban,
   ShieldCheck,
   LogIn,
-  Copy,
-  ExternalLink,
   Users,
   RefreshCw,
   Eye,
@@ -18,7 +16,7 @@ import {
   ReceiptText,
 } from "lucide-react";
 import AdminShell from "../../../components/AdminShell";
-import { api, fmt0, fmtDate, fmtD, CLIENT_URL } from "../../../lib/api";
+import { api, fmt0, fmtDate, fmtD } from "../../../lib/api";
 import {
   Modal,
   Pill,
@@ -97,7 +95,7 @@ function TeamBlock({ label, list }) {
           {list.map((u) => (
             <tr key={u._id}>
               <td className="font-bold text-maroon-700">{u.userid || "—"}</td>
-              <td className="font-semibold text-ink">+91 {u.phone}</td>
+              <td className="whitespace-nowrap font-semibold text-ink">+91 {u.phone}</td>
               <td className="font-bold text-[#16a34a]">{fmt0(u.rechargeBalance)}</td>
               <td className="font-bold text-[#a9791c]">{fmt0(u.totalIncome)}</td>
               <td><Pill value={u.status} /></td>
@@ -117,7 +115,6 @@ export default function UsersPage() {
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState(EMPTY_EDIT);
   const [saving, setSaving] = useState(false);
-  const [oneLogin, setOneLogin] = useState(null); // { link, phone }
   const [viewUser, setViewUser] = useState(null);
   const [details, setDetails] = useState(null);
   const { toast, showToast, isError } = useToast();
@@ -199,13 +196,17 @@ export default function UsersPage() {
     }
   };
 
+  /* One-click login — opens the user's app session directly in a new tab.
+     The one-time code is exchanged for a 7-day session; no link is shown. */
   const oneClickLogin = async (u) => {
+    /* open synchronously so the browser never blocks the popup */
+    const win = window.open("", "_blank");
     try {
       const d = await api("/api/admin/users/" + u._id + "/onelogin", { method: "POST" });
-      const link =
-        CLIENT_URL + "/auto-login?token=" + encodeURIComponent(d.token) + "&phone=" + d.phone;
-      setOneLogin({ link, phone: d.phone });
+      if (win) win.location = "/auto-login?code=" + encodeURIComponent(d.code);
+      showToast("One-click login opened — session valid for 7 days");
     } catch (e) {
+      if (win) win.close();
       showToast(e.message, true);
     }
   };
@@ -318,7 +319,7 @@ export default function UsersPage() {
                         {u.refId || "—"}
                       </button>
                     </td>
-                    <td className="font-bold text-ink">+91 {u.phone}</td>
+                    <td className="whitespace-nowrap font-bold text-ink">+91 {u.phone}</td>
                     <td className="font-semibold text-[#7d6a6e]">{u.refBy || "—"}</td>
                     <td className="font-bold text-[#16a34a]">{fmt0(u.rechargeBalance)}</td>
                     <td className="font-bold text-maroon-700">{fmt0(u.balance)}</td>
@@ -365,13 +366,13 @@ export default function UsersPage() {
                         >
                           {u.status === "Banned" ? <ShieldCheck size={14} /> : <Ban size={14} />}
                         </button>
-                        {/* One-click login */}
+                        {/* One-click login — direct session, admin only */}
                         <button
                           type="button"
                           aria-label="One click login"
                           onClick={() => oneClickLogin(u)}
                           className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line-rose bg-white text-[#a9791c] transition-colors hover:bg-[#fdf6e4]"
-                          title="One-click login"
+                          title="Login as this user — opens the app, valid 7 days"
                         >
                           <LogIn size={14} />
                         </button>
@@ -676,41 +677,6 @@ export default function UsersPage() {
             )}
           </>
         )}
-      </Modal>
-
-      {/* ===== ONE-CLICK LOGIN MODAL ===== */}
-      <Modal
-        open={!!oneLogin}
-        title="One-Click Login"
-        sub={oneLogin ? "+91 " + oneLogin.phone : ""}
-        onClose={() => setOneLogin(null)}
-        footer={
-          <>
-            <button
-              type="button"
-              className="admin-btn admin-btn-ghost"
-              onClick={() => copyText(oneLogin.link, "Login link copied!")}
-            >
-              <Copy size={15} />
-              Copy Link
-            </button>
-            <button
-              type="button"
-              className="admin-btn admin-btn-primary"
-              onClick={() => window.open(oneLogin.link, "_blank")}
-            >
-              <ExternalLink size={15} />
-              Open Client App
-            </button>
-          </>
-        }
-      >
-        <p className="text-[13.5px] leading-relaxed text-[#7d6a6e]">
-          With this link the user can log in directly to the app without a password. The link is valid for 7 days.
-        </p>
-        <div className="mt-3 break-all rounded-xl border border-line-rose bg-[#fbf1f3] px-4 py-3 font-mono text-[12px] font-medium text-maroon-800">
-          {oneLogin?.link}
-        </div>
       </Modal>
     </AdminShell>
   );

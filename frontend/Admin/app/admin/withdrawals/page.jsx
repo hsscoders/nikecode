@@ -160,9 +160,17 @@ export default function WithdrawalsPage() {
                 {filtered.map((w) => (
                   <tr key={w._id}>
                     <td className="whitespace-nowrap font-medium text-[#7d6a6e]">{fmtD(w.createdAt)}</td>
-                    <td className="font-bold text-ink">+91 {w.phone}</td>
+                    <td className="whitespace-nowrap font-bold text-ink">+91 {w.phone}</td>
                     <td className="font-semibold text-[#7d6a6e]">{w.userid || "—"}</td>
-                    <td className="font-extrabold text-maroon-700">{fmt0(w.amount)}</td>
+                    <td className="whitespace-nowrap">
+                      <div className="font-extrabold text-maroon-700">
+                        {fmt0(w.netAmount ?? w.amount)}
+                      </div>
+                      <div className="text-[11px] font-semibold text-[#7d6a6e]">
+                        Req {fmt0(w.amount)}
+                        {w.charge ? " · Fee " + fmt0(w.charge) : ""}
+                      </div>
+                    </td>
                     <td>
                       <button
                         type="button"
@@ -226,6 +234,12 @@ export default function WithdrawalsPage() {
               { lbl: "Bank Name", val: view.bankName },
               { lbl: "Account Number", val: view.account },
               { lbl: "IFSC Code", val: view.ifsc },
+              { lbl: "Requested Amount", val: fmt0(view.amount) },
+              {
+                lbl: "Charge" + (view.chargePercent ? " (" + view.chargePercent + "%)" : ""),
+                val: view.charge ? "− " + fmt0(view.charge) : "—",
+              },
+              { lbl: "Net Payable", val: fmt0(view.netAmount ?? view.amount) },
               { lbl: "Requested At", val: fmtD(view.createdAt) },
               { lbl: "Processed At", val: view.processedAt ? fmtD(view.processedAt) : "—" },
             ].map(({ lbl, val }) => (
@@ -252,7 +266,9 @@ export default function WithdrawalsPage() {
         confirmLabel={confirm?.action === "Success" ? "Approve" : confirm?.action === "Rejected" ? "Reject" : "Processing"}
         message={
           confirm
-            ? `${fmt0(confirm.wd.amount)} withdrawal request of +91 ${confirm.wd.phone}${
+            ? `${fmt0(confirm.wd.amount)} withdrawal request of +91 ${confirm.wd.phone} — payable ${fmt0(
+                confirm.wd.netAmount ?? confirm.wd.amount
+              )}${
                 confirm.action === "Success"
                   ? " will be approved — amount will be marked as paid."
                   : confirm.action === "Rejected"
