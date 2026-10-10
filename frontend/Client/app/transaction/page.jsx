@@ -25,7 +25,7 @@ const NAV_ITEMS = [
   { label: "Account", Icon: User },
 ];
 
-const TABS = ["ALL", "Recharge", "Withdraw"];
+const TABS = ["ALL", "Recharge", "Withdraw", "Earnings"];
 
 /* ================= HELPERS ================= */
 
@@ -47,29 +47,52 @@ const fmtTime = (iso) =>
 
 /* ================= SMALL PARTS ================= */
 
-/* txn row — recharge credit (green, down-left) / withdraw debit (red, up-right) */
+/* txn row — recharge/income (green, down-left) / withdraw (red, up-right) /
+   commission (gold, team) — style follows the record type */
 function TxnRow({ txn }) {
-  const isRecharge = txn.type === "recharge";
+  const kind =
+    txn.type === "withdraw"
+      ? "withdraw"
+      : txn.type === "commission"
+        ? "commission"
+        : "credit"; /* recharge + income */
+  const isDebit = kind === "withdraw";
+  const isCommission = kind === "commission";
+  const title =
+    txn.title ||
+    (txn.type === "recharge"
+      ? "Recharge"
+      : txn.type === "withdraw"
+        ? "Withdraw"
+        : txn.type === "commission"
+          ? "Team Commission"
+          : "Daily Income");
   return (
     <div
       className={`${card} flex items-center gap-3.5 p-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(87,18,36,0.12)] max-[360px]:p-3`}
     >
       <span
         className={`grid h-[44px] w-[44px] shrink-0 place-items-center rounded-[14px] max-[360px]:h-[40px] max-[360px]:w-[40px] ${
-          isRecharge ? "bg-[#eafaf0] text-[#16a34a]" : "bg-[#fdecec] text-[#dc2626]"
+          isDebit
+            ? "bg-[#fdecec] text-[#dc2626]"
+            : isCommission
+              ? "bg-[#fdf6e4] text-[#a9791c]"
+              : "bg-[#eafaf0] text-[#16a34a]"
         }`}
       >
-        {isRecharge ? (
-          <ArrowDownLeft size={20} strokeWidth={2.2} />
-        ) : (
+        {isDebit ? (
           <ArrowUpRight size={20} strokeWidth={2.2} />
+        ) : isCommission ? (
+          <Users size={20} strokeWidth={2.2} />
+        ) : (
+          <ArrowDownLeft size={20} strokeWidth={2.2} />
         )}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <span className="truncate text-[14px] font-bold text-ink">
-            {isRecharge ? "Recharge" : "Withdraw"}
-            {txn.method && (
+            {title}
+            {txn.method && !title.includes(txn.method) && (
               <span className="ml-1.5 text-[11px] font-semibold text-muted-rose">
                 {txn.method}
               </span>
@@ -77,10 +100,10 @@ function TxnRow({ txn }) {
           </span>
           <span
             className={`shrink-0 text-[14.5px] font-extrabold max-[360px]:text-[13.5px] ${
-              isRecharge ? "text-[#16a34a]" : "text-[#dc2626]"
+              isDebit ? "text-[#dc2626]" : isCommission ? "text-[#a9791c]" : "text-[#16a34a]"
             }`}
           >
-            {isRecharge ? "+" : "-"}
+            {isDebit ? "-" : "+"}
             {fmt(txn.amount)}
           </span>
         </div>
@@ -93,12 +116,18 @@ function TxnRow({ txn }) {
             className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.4px] ${
               txn.status === "Success"
                 ? "bg-[#eafaf0] text-[#16a34a]"
-                : "bg-[#fdf6e4] text-[#a9791c]"
+                : txn.status === "Rejected"
+                  ? "bg-[#fdecec] text-[#dc2626]"
+                  : "bg-[#fdf6e4] text-[#a9791c]"
             }`}
           >
             <span
               className={`h-[5px] w-[5px] rounded-full ${
-                txn.status === "Success" ? "bg-[#16a34a]" : "bg-[#d4a94f]"
+                txn.status === "Success"
+                  ? "bg-[#16a34a]"
+                  : txn.status === "Rejected"
+                    ? "bg-[#dc2626]"
+                    : "bg-[#d4a94f]"
               }`}
             />
             {txn.status}
@@ -118,29 +147,54 @@ export default function TransactionPage() {
   useEffect(() => {
     document.title = "Transaction History";
   }, []);
-  const [tab, setTab] = useState(0); // 0=ALL, 1=Recharge, 2=Withdraw
+  const [tab, setTab] = useState(0); // 0=ALL, 1=Recharge, 2=Withdraw, 3=Earnings
   const [txns, setTxns] = useState([]);
   const [ready, setReady] = useState(false);
 
-  /* token guard + transactions load (localStorage — txn API baad me) */
+  /* token guard + transactions from the server ledger (localStorage fallback) */
   useEffect(() => {
     const token = localStorage.getItem("zapto_token");
     if (!token) {
       router.replace("/login");
       return;
     }
-    try {
-      setTxns(JSON.parse(localStorage.getItem("zapto_transactions") || "[]"));
-    } catch {
-      setTxns([]);
-    }
-    setReady(true);
+    (async () => {
+      try {
+        const r = await fetch("/api/transactions", {
+          headers: { Authorization: "Bearer " + token },
+        });
+        const d = await r.json();
+        if (d.success && Array.isArray(d.txns)) {
+          setTxns(
+            d.txns.map((t) => ({
+              id: t._id,
+              type: t.type,
+              title: t.title,
+              method: t.method || "",
+              amount: t.amount,
+              status: t.status,
+              at: t.createdAt,
+            }))
+          );
+          setReady(true);
+          return;
+        }
+      } catch (e) {}
+      /* fallback — offline/local records */
+      try {
+        setTxns(JSON.parse(localStorage.getItem("zapto_transactions") || "[]"));
+      } catch {
+        setTxns([]);
+      }
+      setReady(true);
+    })();
   }, [router]);
 
   const filtered = txns.filter((t) => {
     if (tab === 0) return true;
     if (tab === 1) return t.type === "recharge";
-    return t.type === "withdraw";
+    if (tab === 2) return t.type === "withdraw";
+    return t.type === "commission" || t.type === "income";
   });
 
   return (
@@ -192,7 +246,7 @@ export default function TransactionPage() {
           )}
         </div>
 
-        {/* --- TABS (skewed active pill — reference jaisa) --- */}
+        {/* --- TABS (skewed active pill — reference style) --- */}
         <div className={`${card} mt-3 flex p-1`}>
           {TABS.map((label, i) => {
             const active = tab === i;
@@ -234,7 +288,7 @@ export default function TransactionPage() {
         )}
       </div>
 
-      {/* ===== BOTTOM NAV (koi active nahi) ===== */}
+      {/* ===== BOTTOM NAV (nothing active) ===== */}
       <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-line-rose bg-white/95 backdrop-blur">
         <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
           {NAV_ITEMS.map(({ label, Icon }, i) => (

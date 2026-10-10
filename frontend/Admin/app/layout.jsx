@@ -5,6 +5,13 @@ export const metadata = {
   description: "Admin Panel — Manage plans, users, deposits, withdrawals & site settings",
 };
 
+/* Explicit viewport — keeps the panel sized correctly on mobile browsers */
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">

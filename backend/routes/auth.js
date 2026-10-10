@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
-/* +91 / 0 prefix aur spaces clean karke 10-digit phone banao */
+/* Normalize the phone: strip +91 / 0 prefix and spaces, keep 10 digits */
 function cleanPhone(v) {
   let p = String(v || "").replace(/\D/g, "");
   if (p.length === 12 && p.startsWith("91")) p = p.slice(2);
@@ -19,7 +19,7 @@ function signToken(user) {
   );
 }
 
-/* unique userid (ZP+6 digits) + refId (ZP+8 alnum) generate karo */
+/* Generate a unique userid (ZP+6 digits) + refId (ZP+8 alnum) */
 async function uniqueIds() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   for (let i = 0; i < 15; i++) {
@@ -75,7 +75,7 @@ router.post("/register", async (req, res) => {
         message: "This mobile number is already registered. Please login.",
       });
 
-    /* Invite code validate — sirf valid refId (ZP+8) accept, warna clear error */
+    /* Invite code validation — only accept a valid refId (ZP+8), otherwise a clear error */
     const refCode = String(ref_by || "").trim().toUpperCase();
     if (refCode) {
       const refUser = await User.findOne({ refId: refCode });
@@ -138,7 +138,7 @@ router.post("/login", async (req, res) => {
         message: "Your account has been banned. Contact support.",
       });
 
-    /* purane users ke liye userid/refId backfill (migration on the fly) */
+    /* Backfill userid/refId for old users (migration on the fly) */
     if (!user.userid || !user.refId) {
       try {
         const ids = await uniqueIds();

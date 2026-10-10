@@ -3,7 +3,7 @@ const Plan = require("../models/Plan");
 const Banner = require("../models/Banner");
 const Setting = require("../models/Setting");
 
-/* Banner image URLs absolute banao (client/admin dono origin se chale) */
+/* Make banner image URLs work from both client and admin origins */
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:3030";
 
 /* ============ PUBLIC PLANS (client home) ============ */
@@ -27,9 +27,9 @@ router.get("/banners", async (req, res) => {
         _id: b._id,
         title: b.title,
         link: b.link,
-        /* Local images relative path me jayein (/banners/...) — client/admin
-           origin par rewrite proxy se serve hote hain (cross-device safe).
-           ImgBB jaise full URLs as-is. */
+        /* Local images keep a relative path (/banners/...) — they are served
+           to the client/admin origins through the rewrite proxy (cross-device safe).
+           Full URLs like ImgBB stay as-is. */
         image: b.image,
       })),
     });
@@ -45,7 +45,16 @@ router.get("/settings", async (req, res) => {
     const s = await Setting.findOne({ key: "global" }).lean();
     res.json({
       success: true,
-      settings: s ? { commission: s.commission, site: s.site } : null,
+      settings: s
+        ? {
+            commission: s.commission,
+            site: s.site,
+            popup: s.popup || null,
+            recharge: s.recharge || null,
+            withdraw: s.withdraw || null,
+            income: s.income ? { creditTime: s.income.creditTime } : null,
+          }
+        : null,
     });
   } catch (e) {
     console.error("public settings error:", e.message);

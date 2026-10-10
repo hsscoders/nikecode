@@ -29,6 +29,13 @@ const NAV_ITEMS = [
   { label: "Account", Icon: User },
 ];
 
+/* Fallback when the settings API fails — mirrors admin defaults */
+const DEFAULT_WITHDRAW = {
+  minAmount: 130,
+  maxAmount: 50000,
+  note: "Withdrawals are processed within 24 hours",
+};
+
 /* ================= HELPERS ================= */
 
 const fmt = (n) =>
@@ -43,7 +50,7 @@ const card =
 
 /* ================= SMALL PARTS ================= */
 
-/* Centered alert — baaki pages jaisa (2s auto-hide) */
+/* Centered alert — same as the other pages (2s auto-hide) */
 function CenterAlert({ message }) {
   return (
     <div
@@ -61,7 +68,7 @@ function CenterAlert({ message }) {
   );
 }
 
-/* eye toggle wala password field — login page jaisa */
+/* password field with an eye toggle — same as the login page */
 function PasswordField({ value, onChange, show, onToggle }) {
   return (
     <div className="flex items-center gap-2.5 rounded-xl bg-[#fbf1f3] px-3.5 py-3 transition-all duration-150 focus-within:ring-[3px] focus-within:ring-maroon-600/15">
@@ -102,6 +109,7 @@ export default function WithdrawalPage() {
   const [ready, setReady] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
   const [wallet, setWallet] = useState({ balance: 0 });
+  const [cfg, setCfg] = useState(DEFAULT_WITHDRAW);
   const alertTimer = useRef(null);
 
   /* token guard + bound card load + wallet balance */
@@ -124,6 +132,13 @@ export default function WithdrawalPage() {
         const d = await r.json();
         if (d.success && d.wallet) setWallet(d.wallet);
       } catch (e) {}
+      /* withdrawal settings — admin panel live (limits + note) */
+      try {
+        const r = await fetch("/api/settings");
+        const d = await r.json();
+        if (d.success && d.settings && d.settings.withdraw)
+          setCfg({ ...DEFAULT_WITHDRAW, ...d.settings.withdraw });
+      } catch (e) {}
     })();
     setReady(true);
   }, [router]);
@@ -144,11 +159,14 @@ export default function WithdrawalPage() {
   };
 
   const withdraw = async () => {
+    const minW = Number(cfg.minAmount) || 0;
+    const maxW = Number(cfg.maxAmount) || 0;
     if (!bankCard) return showAlert("Bind your bank card first");
     if (!amount || Number(amount) <= 0) return showAlert("Enter the withdrawal amount");
-    if (Number(amount) < 130) return showAlert("Minimum withdrawal is ₹130");
+    if (minW && Number(amount) < minW) return showAlert("Minimum withdrawal is ₹" + minW);
+    if (maxW && Number(amount) > maxW) return showAlert("Maximum withdrawal is ₹" + maxW);
     if (!wpass) return showAlert("Enter the withdrawal password");
-    /* withdraw request — server balance check karta hai, admin panel me Pending dikhega */
+    /* withdraw request — server validates balance, appears as Pending in the admin panel */
     const token = localStorage.getItem("zapto_token");
     try {
       const res = await fetch("/api/withdraw", {
@@ -170,9 +188,9 @@ export default function WithdrawalPage() {
       }
       if (data.wallet) setWallet((w) => ({ ...w, ...data.wallet }));
     } catch (e) {
-      /* network fail — sirf local txn record (offline demo) */
+      /* network fail — only a local txn record (offline demo) */
     }
-    /* withdraw txn record — transaction history me dikhega */
+    /* withdraw txn record — shows up in transaction history */
     try {
       const txns = JSON.parse(localStorage.getItem("zapto_transactions") || "[]");
       txns.unshift({
@@ -228,7 +246,7 @@ export default function WithdrawalPage() {
         <div className="flex items-center justify-between">
           <div className="font-display text-[20px] font-bold text-ink">Withdraw</div>
           <span className="rounded-full bg-[#f7e3e7] px-3 py-1 text-[10.5px] font-bold uppercase tracking-[0.5px] text-maroon-700">
-            Min ₹130
+            Min ₹{(Number(cfg.minAmount) || 0).toLocaleString("en-IN")}
           </span>
         </div>
 
@@ -275,7 +293,7 @@ export default function WithdrawalPage() {
 
           <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] font-medium text-muted-rose">
             <Clock size={12} />
-            Withdrawals are processed within 24 hours
+            {cfg.note || "Withdrawals are processed within 24 hours"}
           </div>
         </div>
 
@@ -344,7 +362,7 @@ export default function WithdrawalPage() {
         </div>
       </div>
 
-      {/* ===== BOTTOM NAV (koi active nahi) ===== */}
+      {/* ===== BOTTOM NAV (nothing active) ===== */}
       <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-line-rose bg-white/95 backdrop-blur">
         <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
           {NAV_ITEMS.map(({ label, Icon }, i) => (

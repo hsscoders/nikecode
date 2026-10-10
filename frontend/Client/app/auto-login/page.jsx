@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import logo from "../../public/zapto-logo.png";
 
-/* One-click login — admin panel se aaya link: /auto-login?token=...&phone=... */
+/* One-click login — link sent from the admin panel: /auto-login?token=...&phone=... */
 
 function AutoLoginInner() {
   const router = useRouter();

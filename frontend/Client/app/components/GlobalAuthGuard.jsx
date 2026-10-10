@@ -2,10 +2,10 @@
 
 import { useEffect } from "react";
 
-/* Global JWT guard — kisi bhi page par authed API 401 (expired/invalid
-   token) return kare to token clear karke /login?expired=1 bhej do.
-   Login/register/auto-login pages exclude hain (wahan 401 = galat
-   password hota hai, redirect loop nahi banana). */
+/* Global JWT guard — when an authed API returns 401 (expired/invalid
+   token) on any page, clear the token and send the user to /login?expired=1.
+   Login/register/auto-login pages are excluded (there a 401 just means a
+   wrong password — no redirect loops). */
 export default function GlobalAuthGuard() {
   useEffect(() => {
     if (typeof window === "undefined") return;

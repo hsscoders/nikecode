@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* Assets /admin/_next/* prefix me serve honge taaki Client (:3000) ke
-     /admin/* proxy rewrite se bhi sahi load hon (preview single-port hai) */
+  /* Assets are served under the /admin/_next/* prefix so they also load correctly
+     through the Client (:3000) /admin/* proxy rewrite (single-port preview) */
   assetPrefix: "/admin",
   async rewrites() {
     return [

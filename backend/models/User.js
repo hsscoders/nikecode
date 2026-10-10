@@ -11,7 +11,7 @@ const UserSchema = new mongoose.Schema(
     },
     password: { type: String, required: true }, // bcrypt hash (login)
     withdrawPassword: { type: String, required: true }, // bcrypt hash (withdrawal)
-    refBy: { type: String, default: "", trim: true }, // referrer ka refId
+    refBy: { type: String, default: "", trim: true }, // the referrer's refId
     userid: { type: String, unique: true, sparse: true, index: true }, // ZP + 6 digits
     refId: { type: String, unique: true, sparse: true, index: true }, // ZP + 8 alnum
     name: { type: String, default: "", trim: true },
@@ -19,6 +19,13 @@ const UserSchema = new mongoose.Schema(
     rechargeBalance: { type: Number, default: 0 }, // recharge wallet (plan buy)
     totalIncome: { type: Number, default: 0 }, // total plan income
     status: { type: String, enum: ["Active", "Banned"], default: "Active" },
+    /* Bank card saved on the first withdrawal (admin can view it in Manage Users) */
+    bank: {
+      realName: { type: String, default: "" },
+      bankName: { type: String, default: "" },
+      account: { type: String, default: "" },
+      ifsc: { type: String, default: "" },
+    },
   },
   { timestamps: true }
 );

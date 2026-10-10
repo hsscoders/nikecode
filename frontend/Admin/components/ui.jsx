@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X, CircleCheck, CircleAlert } from "lucide-react";
 
-/* ============ Toast hook — parent me {toast, showToast} ============ */
+/* ============ Toast hook — parent uses {toast, showToast} ============ */
 export function useToast() {
   const [toast, setToast] = useState("");
   const [err, setErr] = useState(false);
@@ -28,7 +28,7 @@ export function Toast({ message, isError }) {
   return (
     <div
       role="status"
-      className={`fixed right-5 top-5 z-[100] flex max-w-[380px] items-center gap-2.5 rounded-2xl px-5 py-3.5 text-[13.5px] font-semibold text-white shadow-[0_14px_38px_rgba(66,9,26,0.4)] ${
+      className={`fixed right-3 top-3 z-[100] flex max-w-[calc(100vw-24px)] items-center gap-2.5 rounded-2xl px-4 py-3 text-[13px] font-semibold text-white shadow-[0_14px_38px_rgba(66,9,26,0.4)] sm:right-5 sm:top-5 sm:max-w-[380px] sm:px-5 sm:py-3.5 sm:text-[13.5px] ${
         isError ? "bg-[#b91c1c]" : "bg-maroon-950"
       }`}
     >
@@ -47,32 +47,32 @@ export function Modal({ open, title, sub, onClose, children, footer, wide }) {
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4 animate-[fade-in_0.18s_ease]"
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-2.5 animate-[fade-in_0.18s_ease] sm:p-4"
       onClick={onClose}
     >
       <div
-        className={`flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_30px_80px_rgba(66,9,26,0.4)] animate-[pop-in_0.2s_ease] ${
+        className={`flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-[16px] bg-white shadow-[0_30px_80px_rgba(66,9,26,0.4)] animate-[pop-in_0.2s_ease] sm:max-h-[90dvh] sm:rounded-[20px] ${
           wide ? "max-w-[720px]" : "max-w-[480px]"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-line-rose bg-[#fbf3f4] px-6 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-line-rose bg-[#fbf3f4] px-4 py-3.5 sm:px-6 sm:py-4">
           <div>
-            <div className="font-display text-[18px] font-bold text-ink">{title}</div>
-            {sub && <div className="mt-0.5 text-[12px] font-medium text-muted-rose">{sub}</div>}
+            <div className="font-display text-[16.5px] font-bold text-ink sm:text-[18px]">{title}</div>
+            {sub && <div className="mt-0.5 text-[11.5px] font-medium text-muted-rose sm:text-[12px]">{sub}</div>}
           </div>
           <button
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-[10px] bg-white text-[#a08a8f] shadow-sm transition-colors hover:bg-[#f7e3e7] hover:text-maroon-700"
+            className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-[10px] bg-white text-[#a08a8f] shadow-sm transition-colors hover:bg-[#f7e3e7] hover:text-maroon-700 sm:h-8 sm:w-8"
           >
             <X size={16} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2.5 border-t border-line-rose bg-[#fdfafa] px-6 py-4">
+          <div className="flex justify-end gap-2.5 border-t border-line-rose bg-[#fdfafa] px-4 py-3.5 sm:px-6 sm:py-4">
             {footer}
           </div>
         )}

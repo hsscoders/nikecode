@@ -48,7 +48,7 @@ const groupAccount = (v) => v.replace(/(.{4})/g, "$1 ").trim();
 
 /* ================= SMALL PARTS ================= */
 
-/* Centered alert — baaki pages jaisa (2s auto-hide) */
+/* Centered alert — same as the other pages (2s auto-hide) */
 function CenterAlert({ message }) {
   return (
     <div
@@ -66,7 +66,7 @@ function CenterAlert({ message }) {
   );
 }
 
-/* labeled field — screenshot jaisa (label upar, rose input box) */
+/* labeled field — like the screenshot (label on top, rose input box) */
 function Field({ label, Icon, children }) {
   return (
     <div>
@@ -296,7 +296,7 @@ export default function CardPage() {
         </p>
       </div>
 
-      {/* ===== BOTTOM NAV (koi active nahi) ===== */}
+      {/* ===== BOTTOM NAV (nothing active) ===== */}
       <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-line-rose bg-white/95 backdrop-blur">
         <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
           {NAV_ITEMS.map(({ label, Icon }, i) => (

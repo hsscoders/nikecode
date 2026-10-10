@@ -36,7 +36,7 @@ const NAV_ITEMS = [
 
 /* ================= SMALL PARTS ================= */
 
-/* Reference jaisa centered alert — copy feedback (2s auto-hide) */
+/* Centered alert like the reference — copy feedback (2s auto-hide) */
 function CenterAlert({ message }) {
   return (
     <div
@@ -102,15 +102,15 @@ export default function InvitePage() {
   const [alertMsg, setAlertMsg] = useState("");
   const alertTimer = useRef(null);
 
-  /* token guard — bina login /invite khali nahi khulega */
+  /* token guard — /invite stays locked without login */
   useEffect(() => {
     const token = localStorage.getItem("zapto_token");
     if (!token) {
       router.replace("/login");
       return;
     }
-    /* refId /api/wallet se — invite link me yahi code jata hai
-       (phone nahi, warna backend referral match nahi karta) */
+    /* refId comes from /api/wallet — the invite link carries this code
+       (not the phone, otherwise the backend referral match fails) */
     let cancel = false;
     (async () => {
       try {
@@ -142,7 +142,7 @@ export default function InvitePage() {
     });
   };
 
-  /* Clipboard + execCommand fallback (reference jaisa) */
+  /* Clipboard + execCommand fallback (reference style) */
   const copyText = async (text, msg) => {
     if (!text) {
       showAlert("Nothing to copy yet");
@@ -181,7 +181,7 @@ export default function InvitePage() {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:max-w-[430px] min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
-      {/* ===== HEADER (app shell — home jaisa) ===== */}
+      {/* ===== HEADER (app shell — same as home) ===== */}
       <header className="flex items-center justify-between bg-[linear-gradient(135deg,#6b1830_0%,#7c1d33_55%,#93293f_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
@@ -270,7 +270,7 @@ export default function InvitePage() {
             </div>
           ))}
 
-          {/* team link — commission levels ke neeche */}
+          {/* team link — below the commission levels */}
           <button
             type="button"
             onClick={() => router.push("/team")}

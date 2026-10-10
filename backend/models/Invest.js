@@ -13,6 +13,8 @@ const InvestSchema = new mongoose.Schema(
     cycle: { type: Number, required: true },
     total: { type: Number, required: true },
     status: { type: String, enum: ["Active", "Completed"], default: "Active" },
+    /* How many daily-income payouts have already been credited to the wallet */
+    paidDays: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

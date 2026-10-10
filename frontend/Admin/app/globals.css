@@ -210,3 +210,38 @@ body {
 .admin-table tbody tr:last-child td {
   border-bottom: 0;
 }
+
+/* ==========================================
+   MOBILE RESPONSIVE FIXES
+   — consistent, comfortable sizes on phones
+========================================== */
+@media (max-width: 640px) {
+  /* Inputs: 16px text stops iOS auto-zoom + bigger touch target */
+  .admin-input {
+    font-size: 16px;
+    padding: 11px 13px;
+  }
+
+  /* Buttons: full comfortable tap height */
+  .admin-btn {
+    padding: 11px 16px;
+    font-size: 14px;
+  }
+
+  /* Tables: slightly tighter cells so more fits on a small screen */
+  .admin-table {
+    font-size: 13px;
+  }
+  .admin-table thead th {
+    padding: 10px 12px;
+    font-size: 10px;
+  }
+  .admin-table tbody td {
+    padding: 11px 12px;
+  }
+
+  /* Cards: softer radius + lighter shadow on small screens */
+  .admin-card {
+    border-radius: 14px;
+  }
+}

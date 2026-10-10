@@ -48,7 +48,7 @@ const fmt = (n) =>
   "₹" +
   Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/* localStorage zapto_transactions me type-wise amount sum */
+/* type-wise amount sum from localStorage zapto_transactions */
 const sumByType = (type) => {
   try {
     return (JSON.parse(localStorage.getItem("zapto_transactions") || "[]"))
@@ -61,7 +61,7 @@ const sumByType = (type) => {
 
 /* ================= SMALL PARTS ================= */
 
-/* Centered alert — baaki pages jaisa (2s auto-hide) */
+/* Centered alert — same as the other pages (2s auto-hide) */
 function CenterAlert({ message }) {
   return (
     <div
@@ -115,7 +115,7 @@ export default function ProfilePage() {
   const [alertMsg, setAlertMsg] = useState("");
   const alertTimer = useRef(null);
 
-  /* token guard + user data load (wallet API — admin approve karne par real balance) */
+  /* token guard + user data load (wallet API — real balance after admin approval) */
   useEffect(() => {
     const token = localStorage.getItem("zapto_token");
     if (!token) {
@@ -124,7 +124,7 @@ export default function ProfilePage() {
     }
     setPhone(localStorage.getItem("zapto_phone") || "");
 
-    /* wallet — server se balance/recharge/income + userid (fail hone par localStorage fallback) */
+    /* wallet — balance/recharge/income + userid from the server (localStorage fallback on failure) */
     (async () => {
       try {
         const r = await fetch("/api/wallet", {
@@ -147,7 +147,7 @@ export default function ProfilePage() {
       setIncomeTotal(sumByType("income"));
     })();
 
-    /* unique user ID — server na de to localStorage wala use karo */
+    /* unique user ID — use the localStorage one if the server doesn't provide it */
     let id = localStorage.getItem("zapto_uid");
     if (!id) {
       id = "ZP" + Math.floor(100000 + Math.random() * 900000);
@@ -165,7 +165,7 @@ export default function ProfilePage() {
     });
   };
 
-  /* Clipboard + execCommand fallback — invite page jaisa */
+  /* Clipboard + execCommand fallback — same as the invite page */
   const copyText = async (text, msg) => {
     if (!text) return;
     try {
@@ -234,7 +234,7 @@ export default function ProfilePage() {
 
       {/* ===== CONTENT ===== */}
       <div className="flex-1 bg-[#faf6f7] px-3.5 pb-28 pt-3.5">
-        {/* --- PROFILE HERO (maroon gradient — team hero jaisa) --- */}
+        {/* --- PROFILE HERO (maroon gradient — like the team hero) --- */}
         <section className="rounded-[22px] bg-[linear-gradient(135deg,#6b1830_0%,#7c1d33_45%,#93293f_100%)] p-5 shadow-[0_12px_34px_rgba(66,9,26,0.3)]">
           <div className="absolute-pointer-events-none" />
           <div className="flex items-center gap-4">

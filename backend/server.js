@@ -14,11 +14,14 @@ const Admin = require("./models/Admin");
 const Setting = require("./models/Setting");
 const Plan = require("./models/Plan");
 const Banner = require("./models/Banner");
+const Invest = require("./models/Invest");
+const User = require("./models/User");
+const Transaction = require("./models/Transaction");
 
 const app = express();
 
-/* ImgBB upload — bade base64 payload ke liye route-specific parser
-   (global 100kb json limit se pehle mount, warna 413 aa jata) */
+/* ImgBB upload — route-specific parser for large base64 payloads
+   (mounted before the global 100kb json limit, otherwise 413) */
 app.use("/api/admin/upload", express.json({ limit: "36mb" }));
 
 app.use(cors());
@@ -56,7 +59,7 @@ if (!MONGO_URI) {
   process.exit(1);
 }
 
-/* ============ SEED (first run par default data) ============ */
+/* ============ SEED (default data on first run) ============ */
 async function seed() {
   try {
     if ((await Admin.countDocuments({})) === 0) {
@@ -88,8 +91,85 @@ async function seed() {
       ]);
       console.log("✅ Seed: default banners created");
     }
+
+    /* Migrations — make sure older documents get the new fields */
+    await Setting.updateOne(
+      { key: "global", income: { $exists: false } },
+      { $set: { income: { creditTime: "00:00", lastCreditDate: "" } } }
+    );
+    await Invest.updateMany(
+      { paidDays: { $exists: false } },
+      { $set: { paidDays: 0 } }
+    );
   } catch (e) {
     console.error("seed error:", e.message);
+  }
+}
+
+/* ============ DAILY PLAN INCOME AUTO-CREDIT (admin-set time, IST) ============
+   Every active plan pays its daily income once a day. The admin picks the
+   credit time (HH:MM IST) in Admin → Settings → Income Time.            */
+const istTime = () =>
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date()); // "HH:MM"
+
+const istToday = () =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()); // "YYYY-MM-DD"
+
+async function runIncomeCredit() {
+  const invests = await Invest.find({
+    status: "Active",
+    $expr: { $lt: [{ $ifNull: ["$paidDays", 0] }, "$cycle"] },
+  }).lean();
+
+  let paid = 0;
+  for (const inv of invests) {
+    /* atomic per-plan claim — the same day can never pay a plan twice */
+    const upd = await Invest.updateOne(
+      { _id: inv._id, status: "Active", $expr: { $lt: [{ $ifNull: ["$paidDays", 0] }, "$cycle"] } },
+      { $inc: { paidDays: 1 } }
+    );
+    if (!upd.modifiedCount) continue;
+
+    const dayNo = (Number(inv.paidDays) || 0) + 1;
+    await User.updateOne(
+      { _id: inv.user },
+      { $inc: { balance: inv.daily, totalIncome: inv.daily } }
+    );
+    await Transaction.create({
+      user: inv.user,
+      userid: inv.userid || "",
+      phone: inv.phone || "",
+      type: "income",
+      title: "Daily income — " + inv.planName + " (Day " + dayNo + "/" + inv.cycle + ")",
+      amount: inv.daily,
+      status: "Success",
+    });
+    if (dayNo >= Number(inv.cycle))
+      await Invest.updateOne({ _id: inv._id }, { status: "Completed" });
+    paid++;
+  }
+  console.log("✅ Income credit: " + paid + " plan(s) paid at " + istTime() + " IST");
+}
+
+async function incomeCronTick() {
+  try {
+    /* atomic claim — only the first tick inside the matching minute wins */
+    const claim = await Setting.updateOne(
+      {
+        key: "global",
+        "income.creditTime": istTime(),
+        "income.lastCreditDate": { $ne: istToday() },
+      },
+      { $set: { "income.lastCreditDate": istToday() } }
+    );
+    if (claim.modifiedCount === 1) await runIncomeCredit();
+  } catch (e) {
+    console.error("income cron error:", e.message);
   }
 }
 
@@ -98,6 +178,8 @@ mongoose
   .then(() => {
     console.log("✅ MongoDB connected (db: zapto)");
     seed();
+    /* daily income scheduler — checks every 15s against the admin-set time */
+    setInterval(incomeCronTick, 15 * 1000);
   })
   .catch((err) => {
     console.error("❌ MongoDB connection failed:", err.message);

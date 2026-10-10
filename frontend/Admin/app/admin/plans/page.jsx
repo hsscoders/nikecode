@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Crown, Gem, Search } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { Plus, Pencil, Trash2, Crown, Gem, Search, Upload } from "lucide-react";
 import AdminShell from "../../../components/AdminShell";
 import { api, fmt0 } from "../../../lib/api";
 import {
@@ -18,6 +19,7 @@ import {
 const EMPTY = {
   name: "",
   vip: false,
+  image: "",
   price: "",
   daily: "",
   cycle: "",
@@ -36,6 +38,8 @@ export default function PlansPage() {
   const [form, setForm] = useState(EMPTY);
   const [del, setDel] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
   const { toast, showToast, isError } = useToast();
 
   const load = async () => {
@@ -63,6 +67,7 @@ export default function PlansPage() {
     setForm({
       name: p.name,
       vip: p.vip,
+      image: p.image || "",
       price: p.price,
       daily: p.daily,
       cycle: p.cycle,
@@ -76,6 +81,39 @@ export default function PlansPage() {
   };
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  /* Plan image — ImgBB upload, auto-runs on file select */
+  const uploadImage = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/"))
+      return showToast("Only image files are allowed (JPG/PNG/WebP/GIF)", true);
+    if (file.size > 32 * 1024 * 1024) return showToast("Maximum image size is 32MB", true);
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const d = await api("/api/admin/upload", {
+          method: "POST",
+          body: JSON.stringify({
+            image: reader.result,
+            name: file.name.replace(/\.[^.]+$/, ""),
+          }),
+        });
+        set("image", d.url);
+        showToast("Plan image uploaded successfully");
+      } catch (e) {
+        showToast(e.message, true);
+      } finally {
+        setUploading(false);
+        if (fileRef.current) fileRef.current.value = "";
+      }
+    };
+    reader.onerror = () => {
+      setUploading(false);
+      showToast("File read failed — please try again", true);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const save = async () => {
     if (!form.name.trim()) return showToast("Enter plan name", true);
@@ -184,11 +222,24 @@ export default function PlansPage() {
                     <td>
                       <div className="flex items-center gap-3">
                         <div
-                          className={`grid h-[42px] w-[42px] shrink-0 place-items-center rounded-[13px] ${
+                          className={`grid h-[42px] w-[42px] shrink-0 place-items-center overflow-hidden rounded-[13px] ${
                             p.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[#f7e3e7] text-maroon-600"
                           }`}
                         >
-                          {p.vip ? <Crown size={20} /> : <Gem size={20} />}
+                          {p.image ? (
+                            <Image
+                              src={p.image}
+                              alt={p.name}
+                              width={42}
+                              height={42}
+                              unoptimized
+                              className="h-full w-full object-cover"
+                            />
+                          ) : p.vip ? (
+                            <Crown size={20} />
+                          ) : (
+                            <Gem size={20} />
+                          )}
                         </div>
                         <div>
                           <div className="font-bold text-ink">{p.name}</div>
@@ -277,6 +328,63 @@ export default function PlansPage() {
                 onChange={(e) => set("name", e.target.value)}
                 placeholder="e.g. Starter Plan"
               />
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
+            <Field
+              label="Plan Image"
+              hint="Uploaded to ImgBB — shown on the client home page plan card"
+            >
+              <div className="flex items-center gap-3">
+                {form.image ? (
+                  <div className="relative h-[76px] w-[76px] shrink-0 overflow-hidden rounded-xl border border-line-rose bg-white">
+                    <Image
+                      src={form.image}
+                      alt="Plan image"
+                      fill
+                      unoptimized
+                      sizes="76px"
+                      className="object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className={`grid h-[76px] w-[76px] shrink-0 place-items-center rounded-xl border border-dashed border-line-rose bg-[#fdf7f8] ${
+                      form.vip ? "text-[#a9791c]" : "text-maroon-600"
+                    }`}
+                  >
+                    {form.vip ? <Crown size={26} strokeWidth={1.6} /> : <Gem size={26} strokeWidth={1.6} />}
+                  </div>
+                )}
+                <div className="flex flex-1 flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current && fileRef.current.click()}
+                    disabled={uploading}
+                    className="admin-btn admin-btn-ghost"
+                  >
+                    <Upload size={15} />
+                    {uploading ? "Uploading..." : "Upload Image"}
+                  </button>
+                  {form.image && (
+                    <button
+                      type="button"
+                      onClick={() => set("image", "")}
+                      className="admin-btn admin-btn-danger"
+                    >
+                      <Trash2 size={15} />
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => uploadImage(e.target.files && e.target.files[0])}
+                />
+              </div>
             </Field>
           </div>
           <Field label="Price (₹)">

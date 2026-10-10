@@ -9,8 +9,9 @@ const Invest = require("../models/Invest");
 const Deposit = require("../models/Deposit");
 const Withdrawal = require("../models/Withdrawal");
 const Setting = require("../models/Setting");
+const Transaction = require("../models/Transaction");
 
-/* Sab admin routes protected */
+/* All admin routes protected */
 router.use(adminAuth);
 
 const escapeRx = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -19,6 +20,16 @@ const searchQuery = (raw, fields) => {
   if (!q) return {};
   const rx = new RegExp(escapeRx(q), "i");
   return { $or: fields.map((f) => ({ [f]: rx })) };
+};
+
+/* Popup bullet icon keys — the client renders lucide icons by these names */
+const VALID_BULLET_ICONS = ["trending", "users", "rupee", "card", "gift", "star", "zap", "check"];
+/* Recharge method icon keys — used for the client icon mapping */
+const VALID_METHOD_ICONS = ["smartphone", "landmark", "wallet", "credit-card", "rupee", "message"];
+
+const num = (v) => {
+  const n = Number(v);
+  return isNaN(n) ? 0 : Math.max(0, Math.round(n));
 };
 
 /* ==================================================
@@ -112,6 +123,7 @@ router.post("/plans", async (req, res) => {
     const plan = await Plan.create({
       name: String(b.name).trim(),
       vip: !!b.vip,
+      image: String(b.image || "").trim().slice(0, 500),
       price: Number(b.price),
       daily: Number(b.daily),
       cycle: Number(b.cycle),
@@ -134,6 +146,7 @@ router.put("/plans/:id", async (req, res) => {
     if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
     if (b.name !== undefined) plan.name = String(b.name).trim();
     if (b.vip !== undefined) plan.vip = !!b.vip;
+    if (b.image !== undefined) plan.image = String(b.image).trim().slice(0, 500);
     if (b.price !== undefined) plan.price = Number(b.price);
     if (b.daily !== undefined) plan.daily = Number(b.daily);
     if (b.cycle !== undefined) plan.cycle = Number(b.cycle);
@@ -161,8 +174,8 @@ router.delete("/plans/:id", async (req, res) => {
 
 /* ==================================================
    IMAGE UPLOAD (ImgBB API v1 proxy)
-   body: { image: <base64 ya data-URI>, name?: <filename> }
-   return: { url (i.ibb.co direct), thumb_url, delete_url, ... }
+   body: { image: <base64 or data-URI>, name?: <filename> }
+   return: { url (direct i.ibb.co), thumb_url, delete_url, ... }
 ================================================== */
 const IMGBB_KEY = process.env.IMGBB_KEY || "07110892de330f963840792606be2758";
 
@@ -172,7 +185,7 @@ router.post("/upload", async (req, res) => {
     if (!img)
       return res.status(400).json({ success: false, message: "Image required (base64 / data URI)" });
 
-    /* data URI prefix hata do (FileReader.readAsDataURL aata hai) */
+    /* Strip the data URI prefix (it comes from FileReader.readAsDataURL) */
     img = img.replace(/^data:[^;]+;base64,/, "");
     if (img.length > 45_000_000)
       return res.status(400).json({ success: false, message: "Image too large (max ~32MB)" });
@@ -206,7 +219,7 @@ router.post("/upload", async (req, res) => {
     });
   } catch (e) {
     console.error("imgbb upload error:", e.message);
-    res.status(500).json({ success: false, message: "Upload failed — ImgBB se connect nahi ho paye" });
+    res.status(500).json({ success: false, message: "Upload failed — could not connect to ImgBB" });
   }
 });
 
@@ -305,6 +318,67 @@ router.get("/users", async (req, res) => {
   }
 });
 
+/* Full user profile — bank, referral tree (L1/L2/L3), plans, recharges, withdrawals, ledger */
+router.get("/users/:id/details", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id)
+      .select("-password -withdrawPassword")
+      .lean();
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    const TEAM_PROJ =
+      "phone userid name refId refBy balance rechargeBalance totalIncome status createdAt";
+
+    /* Level 1 — direct referrals, then walk down to L2 and L3 */
+    const l1 = user.refId
+      ? await User.find({ refBy: user.refId }).select(TEAM_PROJ).sort({ createdAt: -1 }).lean()
+      : [];
+    const l1Ids = l1.map((u) => u.refId).filter(Boolean);
+    const l2 = l1Ids.length
+      ? await User.find({ refBy: { $in: l1Ids } }).select(TEAM_PROJ).sort({ createdAt: -1 }).lean()
+      : [];
+    const l2Ids = l2.map((u) => u.refId).filter(Boolean);
+    const l3 = l2Ids.length
+      ? await User.find({ refBy: { $in: l2Ids } }).select(TEAM_PROJ).sort({ createdAt: -1 }).lean()
+      : [];
+
+    const [invests, deposits, withdrawals, transactions] = await Promise.all([
+      Invest.find({ user: user._id }).sort({ createdAt: -1 }).limit(50).lean(),
+      Deposit.find({ user: user._id }).sort({ createdAt: -1 }).limit(50).lean(),
+      Withdrawal.find({ user: user._id }).sort({ createdAt: -1 }).limit(50).lean(),
+      Transaction.find({ user: user._id }).sort({ createdAt: -1 }).limit(50).lean(),
+    ]);
+
+    /* quick money stats */
+    const sum = (arr, f) => arr.reduce((s, x) => s + (Number(f(x)) || 0), 0);
+    const stats = {
+      totalDeposit: sum(deposits.filter((d) => d.status === "Success"), (d) => d.amount),
+      totalWithdraw: sum(
+        withdrawals.filter((w) => w.status !== "Rejected"),
+        (w) => w.amount
+      ),
+      totalInvest: sum(invests, (i) => i.price),
+      teamCount: l1.length + l2.length + l3.length,
+      activePlans: invests.filter((i) => i.status === "Active").length,
+    };
+
+    res.json({
+      success: true,
+      user,
+      bank: user.bank || { realName: "", bankName: "", account: "", ifsc: "" },
+      team: { l1, l2, l3 },
+      invests,
+      deposits,
+      withdrawals,
+      transactions,
+      stats,
+    });
+  } catch (e) {
+    console.error("user details error:", e.message);
+    res.status(500).json({ success: false, message: "Failed to load user details" });
+  }
+});
+
 /* Edit all details — profile + wallets + passwords */
 router.put("/users/:id", async (req, res) => {
   try {
@@ -363,7 +437,7 @@ router.patch("/users/:id/status", async (req, res) => {
   }
 });
 
-/* One-click login — user token generate karo */
+/* One-click login — generate a user token */
 router.post("/users/:id/onelogin", async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -429,13 +503,26 @@ router.post("/deposits", async (req, res) => {
     if (deposit.status === "Success")
       await User.updateOne({ _id: user._id }, { $inc: { rechargeBalance: amt } });
 
+    /* ledger entry */
+    await Transaction.create({
+      user: user._id,
+      userid: user.userid || "",
+      phone: user.phone,
+      type: "recharge",
+      title: "Recharge — " + deposit.method,
+      method: deposit.method,
+      amount: amt,
+      status: deposit.status,
+      refId: String(deposit._id),
+    });
+
     res.json({ success: true, message: "Deposit added", deposit });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to add deposit" });
   }
 });
 
-/* Status change — Success par recharge balance credit, revoke par debit */
+/* Status change — credit the recharge balance on Success, debit on revoke */
 router.put("/deposits/:id", async (req, res) => {
   try {
     const { status } = req.body || {};
@@ -454,6 +541,10 @@ router.put("/deposits/:id", async (req, res) => {
     deposit.status = status;
     deposit.processedAt = new Date();
     await deposit.save();
+
+    /* keep the ledger entry in sync */
+    await Transaction.updateMany({ refId: String(deposit._id) }, { status });
+
     res.json({ success: true, message: "Deposit " + status.toLowerCase(), deposit });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to update deposit" });
@@ -475,7 +566,7 @@ router.get("/withdrawals", async (req, res) => {
   }
 });
 
-/* Status change — Reject par balance refund */
+/* Status change — refund the balance on Reject */
 router.put("/withdrawals/:id", async (req, res) => {
   try {
     const { status, note } = req.body || {};
@@ -486,10 +577,10 @@ router.put("/withdrawals/:id", async (req, res) => {
     if (wd.status === status)
       return res.json({ success: true, message: "No change", withdrawal: wd });
 
-    /* Reject → user ka balance wapas (hold se refund) */
+    /* Reject → return the user's balance (refund from hold) */
     if (status === "Rejected" && wd.status !== "Rejected")
       await User.updateOne({ _id: wd.user }, { $inc: { balance: wd.amount } });
-    /* Rejected tha aur wapas Processing/Success kiya → refund revoke */
+    /* Was Rejected and moved back to Processing/Success → revoke the refund */
     if (status !== "Rejected" && wd.status === "Rejected")
       await User.updateOne({ _id: wd.user }, { $inc: { balance: -wd.amount } });
 
@@ -497,6 +588,10 @@ router.put("/withdrawals/:id", async (req, res) => {
     if (note !== undefined) wd.note = String(note);
     wd.processedAt = new Date();
     await wd.save();
+
+    /* keep the ledger entry in sync */
+    await Transaction.updateMany({ refId: String(wd._id) }, { status });
+
     res.json({ success: true, message: "Withdrawal " + status.toLowerCase(), withdrawal: wd });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to update withdrawal" });
@@ -518,6 +613,7 @@ router.put("/settings", async (req, res) => {
   try {
     const b = req.body || {};
     const s = await Setting.findOne({ key: "global" });
+    if (!s) return res.status(404).json({ success: false, message: "Settings not found" });
     const siteFields = [
       "loginTitle",
       "loginSubtitle",
@@ -534,6 +630,76 @@ router.put("/settings", async (req, res) => {
       s.site.minRecharge = Math.max(0, Number(b.site.minRecharge) || 0);
     if (b.site && b.site.minWithdraw !== undefined)
       s.site.minWithdraw = Math.max(0, Number(b.site.minWithdraw) || 0);
+
+    /* Welcome popup (home page) — texts, bullets, enable/disable */
+    if (b.popup) {
+      const p = b.popup;
+      if (p.enabled !== undefined) s.popup.enabled = !!p.enabled;
+      if (p.title !== undefined) s.popup.title = String(p.title).trim().slice(0, 80);
+      if (p.subtitle !== undefined) s.popup.subtitle = String(p.subtitle).trim().slice(0, 120);
+      if (p.buttonText !== undefined) s.popup.buttonText = String(p.buttonText).trim().slice(0, 60);
+      if (p.buttonUrl !== undefined) s.popup.buttonUrl = String(p.buttonUrl).trim().slice(0, 500);
+      if (Array.isArray(p.bullets))
+        s.popup.bullets = p.bullets
+          .slice(0, 12)
+          .filter((x) => x && String(x.text || "").trim())
+          .map((x) => ({
+            text: String(x.text).trim().slice(0, 120),
+            icon: VALID_BULLET_ICONS.includes(x.icon) ? x.icon : "check",
+          }));
+    }
+
+    /* Recharge settings — limits, quick amounts, methods, manual payment page */
+    if (b.recharge) {
+      const r = b.recharge;
+      if (r.minAmount !== undefined) s.recharge.minAmount = num(r.minAmount);
+      if (r.maxAmount !== undefined) s.recharge.maxAmount = num(r.maxAmount);
+      if (Array.isArray(r.quickAmounts))
+        s.recharge.quickAmounts = r.quickAmounts
+          .map((q) => num(q))
+          .filter((q) => q > 0 && q <= 100000000)
+          .slice(0, 6);
+      if (Array.isArray(r.methods))
+        s.recharge.methods = r.methods
+          .slice(0, 6)
+          .filter((x) => x && String(x.name || "").trim())
+          .map((x) => ({
+            name: String(x.name).trim().slice(0, 30),
+            icon: VALID_METHOD_ICONS.includes(x.icon) ? x.icon : "wallet",
+            active: x.active === undefined ? true : !!x.active,
+          }));
+      if (r.manual) {
+        const m = r.manual;
+        if (m.enabled !== undefined) s.recharge.manual.enabled = !!m.enabled;
+        if (m.title !== undefined) s.recharge.manual.title = String(m.title).trim().slice(0, 60);
+        if (m.upiId !== undefined) s.recharge.manual.upiId = String(m.upiId).trim().slice(0, 120);
+        if (m.accountName !== undefined)
+          s.recharge.manual.accountName = String(m.accountName).trim().slice(0, 80);
+        if (m.qrImage !== undefined) s.recharge.manual.qrImage = String(m.qrImage).trim().slice(0, 500);
+        if (m.note !== undefined) s.recharge.manual.note = String(m.note).trim().slice(0, 300);
+      }
+    }
+
+    /* Withdrawal settings — limits + note */
+    if (b.withdraw) {
+      const w = b.withdraw;
+      if (w.minAmount !== undefined) s.withdraw.minAmount = num(w.minAmount);
+      if (w.maxAmount !== undefined) s.withdraw.maxAmount = num(w.maxAmount);
+      if (w.note !== undefined) s.withdraw.note = String(w.note).trim().slice(0, 300);
+    }
+
+    /* Income time — daily plan income auto-credit time (IST, HH:MM) */
+    if (b.income) {
+      if (b.income.creditTime !== undefined) {
+        const t = String(b.income.creditTime).trim();
+        if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(t))
+          return res
+            .status(400)
+            .json({ success: false, message: "Invalid time format — use HH:MM" });
+        s.income.creditTime = t;
+      }
+    }
+
     await s.save();
     res.json({ success: true, message: "Settings saved", settings: s });
   } catch (e) {

@@ -4,6 +4,8 @@ const PlanSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     vip: { type: Boolean, default: false },
+    /* Plan image (ImgBB URL) — shown on the client home page plan card */
+    image: { type: String, default: "" },
     price: { type: Number, required: true, min: 0 },
     daily: { type: Number, required: true, min: 0 },
     cycle: { type: Number, required: true, min: 1 },

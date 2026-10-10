@@ -16,6 +16,10 @@ import {
   X,
   LogOut,
   Crown,
+  Gift,
+  Star,
+  Zap,
+  CircleCheck,
 } from "lucide-react";
 import banner1 from "../../public/zapto-banner.png";
 import banner2 from "../../public/zapto-banner-2.png";
@@ -23,7 +27,7 @@ import planDaily from "../../public/plan-daily.png";
 import planVip from "../../public/plan-vip.png";
 import logo from "../../public/zapto-logo.png";
 
-/* ================= DEMO FALLBACK (admin panel se plans/banners aate hain) ================= */
+/* ================= DEMO FALLBACK (live plans/banners come from the admin panel) ================= */
 
 const FALLBACK_BANNERS = [banner1.src, banner2.src];
 
@@ -52,6 +56,34 @@ const NAV_ITEMS = [
   { label: "Records", Icon: ReceiptText },
   { label: "Account", Icon: User },
 ];
+
+/* ================= WELCOME POPUP (controlled from the admin panel) ================= */
+
+const POPUP_ICONS = {
+  trending: TrendingUp,
+  users: Users,
+  rupee: IndianRupee,
+  card: CreditCard,
+  gift: Gift,
+  star: Star,
+  zap: Zap,
+  check: CircleCheck,
+};
+
+/* Shown as the default when the API fails (the admin's saved config comes from /api/settings) */
+const DEFAULT_POPUP = {
+  enabled: true,
+  title: "Welcome to ZAPTO",
+  subtitle: "Earn daily withdraw daily",
+  buttonText: "Join Telegram Channel",
+  buttonUrl: "",
+  bullets: [
+    { text: "Daily income & daily withdrawals", icon: "trending" },
+    { text: "Team commission up to 30%", icon: "users" },
+    { text: "Minimum withdrawal ₹130", icon: "rupee" },
+    { text: "Minimum recharge ₹530", icon: "card" },
+  ],
+};
 
 /* ================= HELPERS ================= */
 
@@ -225,9 +257,11 @@ export default function HomePage() {
   const [banners, setBanners] = useState(FALLBACK_BANNERS);
   const [apiPlans, setApiPlans] = useState(null);
   const [wallet, setWallet] = useState({ balance: 0, rechargeBalance: 0, totalIncome: 0 });
+  const [popupCfg, setPopupCfg] = useState(DEFAULT_POPUP);
+  const [cfgReady, setCfgReady] = useState(false); // hold the notice until the popup config loads
   const toastTimer = useRef(null);
 
-  /* token guard — bina login /home khali nahi khulega */
+  /* token guard — /home stays locked without login */
   useEffect(() => {
     const token = localStorage.getItem("zapto_token");
     if (!token) {
@@ -236,8 +270,15 @@ export default function HomePage() {
     }
     setPhone(localStorage.getItem("zapto_phone") || "");
 
-    /* banners + plans + wallet — admin panel se live (fail hone par fallback) */
+    /* banners + plans + wallet + popup-settings — live from the admin panel (fallback on failure) */
     (async () => {
+      try {
+        const r = await fetch("/api/settings");
+        const d = await r.json();
+        if (d.success && d.settings && d.settings.popup)
+          setPopupCfg({ ...DEFAULT_POPUP, ...d.settings.popup });
+      } catch (e) {}
+      setCfgReady(true);
       try {
         const r = await fetch("/api/banners");
         const d = await r.json();
@@ -248,7 +289,14 @@ export default function HomePage() {
         const r = await fetch("/api/plans");
         const d = await r.json();
         if (d.success && d.plans && d.plans.length)
-          setApiPlans(d.plans.map((p) => ({ ...p, img: p.vip ? planVip : planDaily, used: 0 })));
+          setApiPlans(
+            d.plans.map((p) => ({
+              ...p,
+              /* admin-uploaded plan image (ImgBB) — default artwork as fallback */
+              img: p.image || (p.vip ? planVip : planDaily),
+              used: 0,
+            }))
+          );
       } catch (e) {}
       try {
         const r = await fetch("/api/wallet", {
@@ -260,13 +308,20 @@ export default function HomePage() {
     })();
   }, [router]);
 
-  /* welcome notice 800ms baad (reference jaisa) */
+  /* if the popup config never arrives (network fail) — fall back after 2.5s */
   useEffect(() => {
-    const t = setTimeout(() => setNotice(true), 800);
+    const t = setTimeout(() => setCfgReady(true), 2500);
     return () => clearTimeout(t);
   }, []);
 
-  /* modal/notice khule to background scroll lock */
+  /* welcome notice after 800ms — only while the popup is enabled (admin can disable it) */
+  useEffect(() => {
+    if (!cfgReady || !popupCfg.enabled) return;
+    const t = setTimeout(() => setNotice(true), 800);
+    return () => clearTimeout(t);
+  }, [cfgReady, popupCfg]);
+
+  /* lock background scroll while a modal/notice is open */
   useEffect(() => {
     document.body.style.overflow = selectedPlan || notice ? "hidden" : "";
     return () => {
@@ -290,7 +345,7 @@ export default function HomePage() {
     ? (apiPlans || DAILY_PLANS).filter((p) => !p.vip)
     : (apiPlans || VIP_PLANS).filter((p) => p.vip);
 
-  /* order save — localStorage (records page isi se dikhati hai) */
+  /* order save — localStorage (the records page reads from here) */
   const saveOrderLocal = (o) => {
     try {
       const orders = JSON.parse(localStorage.getItem("zapto_orders") || "[]");
@@ -299,7 +354,7 @@ export default function HomePage() {
     } catch (e) {}
   };
 
-  /* Buy flow — server invest API (balance check + commission), fail hone par local */
+  /* Buy flow — server invest API (balance check + commission), local fallback on failure */
   const buyPlan = async (p) => {
     if (p._id) {
       try {
@@ -327,7 +382,7 @@ export default function HomePage() {
         return;
       }
     }
-    /* fallback demo plan (API plans load nahi hue) */
+    /* fallback demo plan (API plans failed to load) */
     saveOrderLocal({
       id: "ZP" + String(Date.now()).slice(-8),
       name: p.name,
@@ -530,34 +585,39 @@ export default function HomePage() {
               <div className="relative mx-auto mb-3 h-[60px] w-[60px] overflow-hidden rounded-2xl ring-2 ring-gold/50">
                 <Image src={logo} alt="ZAPTO" fill sizes="60px" className="object-cover" />
               </div>
-              <div className="font-display text-[20px] font-bold text-white">Welcome to ZAPTO</div>
-              <div className="mt-1 text-[13px] text-white/65">Earn daily withdraw daily</div>
+              <div className="font-display text-[20px] font-bold text-white">
+                {popupCfg.title || "Welcome"}
+              </div>
+              <div className="mt-1 text-[13px] text-white/65">{popupCfg.subtitle}</div>
             </div>
-            <div className="px-4 pt-4">
-              <ul className="flex flex-col gap-2">
-                {[
-                  { Icon: TrendingUp, text: "Daily income & daily withdrawals" },
-                  { Icon: Users, text: "Team commission up to 30%" },
-                  { Icon: IndianRupee, text: "Minimum withdrawal ₹130" },
-                  { Icon: CreditCard, text: "Minimum recharge ₹530" },
-                ].map(({ Icon, text }) => (
-                  <li
-                    key={text}
-                    className="flex items-center gap-2.5 rounded-xl border border-line-rose bg-[#fbf1f3] px-3.5 py-2.5 text-[13px] font-medium text-ink"
-                  >
-                    <Icon size={17} className="shrink-0 text-maroon-600" />
-                    {text}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {popupCfg.bullets.length > 0 && (
+              <div className="px-4 pt-4">
+                <ul className="flex flex-col gap-2">
+                  {popupCfg.bullets.map((b, i) => {
+                    const Ico = POPUP_ICONS[b.icon] || CircleCheck;
+                    return (
+                      <li
+                        key={b.text + "-" + i}
+                        className="flex items-center gap-2.5 rounded-xl border border-line-rose bg-[#fbf1f3] px-3.5 py-2.5 text-[13px] font-medium text-ink"
+                      >
+                        <Ico size={17} className="shrink-0 text-maroon-600" />
+                        {b.text}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
             <div className="p-4">
               <button
                 type="button"
-                onClick={() => showToast("Telegram channel link coming soon")}
+                onClick={() => {
+                  if (popupCfg.buttonUrl) window.open(popupCfg.buttonUrl, "_blank");
+                  else showToast("Telegram channel link coming soon");
+                }}
                 className={`block w-full cursor-pointer rounded-[14px] py-3 text-center text-[14px] font-extrabold text-white ${gradientBtn}`}
               >
-                Join Telegram Channel
+                {popupCfg.buttonText || "Join Telegram Channel"}
               </button>
             </div>
           </div>

@@ -8,7 +8,7 @@ import { Phone, Lock, Eye, EyeOff, Clock } from "lucide-react";
 import banner from "../../public/zapto-banner.png";
 import logo from "../../public/zapto-logo.png";
 
-/* ===== Shared Tailwind blocks — dono pages consistent ===== */
+/* ===== Shared Tailwind blocks — consistent across both pages ===== */
 
 const inputGroup =
   "mb-4 flex w-full items-center rounded-xl border-[1.5px] border-line-rose bg-white px-3.5 py-3 transition-all duration-150 focus-within:border-maroon-500 focus-within:ring-[3.5px] focus-within:ring-maroon-600/10 max-[360px]:px-3 max-[360px]:py-2.5";
@@ -66,7 +66,7 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [titles, setTitles] = useState({ login: "Login", register: "Register" });
 
-  /* site settings — admin panel se titles (fail hone par default) */
+  /* site settings — titles from the admin panel (defaults on failure) */
   useEffect(() => {
     (async () => {
       try {
@@ -86,12 +86,12 @@ export default function LoginPage() {
     document.title = titles.login || "Login";
   }, [titles]);
 
-  /* JWT session expired flag — interceptor se wapas aaya? */
+  /* JWT session expired flag — did the interceptor send us back? */
   useEffect(() => {
     if (window.location.search.includes("expired=1")) setExpired(true);
   }, []);
 
-  /* JWT fix — valid token already hai to seedha /home, invalid ho to clear */
+  /* JWT fix — a valid token goes straight to /home, an invalid one gets cleared */
   useEffect(() => {
     const t = localStorage.getItem("zapto_token");
     if (!t) return;
@@ -123,7 +123,7 @@ export default function LoginPage() {
     const fd = new FormData(e.currentTarget);
     const password = String(fd.get("password") || "");
 
-    /* client-side validation — server se pehle clear feedback */
+    /* client-side validation — clear feedback before hitting the server */
     if (!/^[6-9]\d{9}$/.test(phone))
       return setError("Enter a valid 10-digit Indian mobile number");
     if (!password)

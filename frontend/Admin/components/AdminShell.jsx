@@ -14,10 +14,14 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   Settings,
+  SlidersHorizontal,
+  Bell,
+  Clock3,
   LogOut,
   Menu,
   X,
   ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import logo from "../public/admin-logo.png";
 
@@ -45,7 +49,19 @@ const NAV = [
   },
   {
     section: "System",
-    items: [{ label: "Site Settings", href: "/admin/settings", Icon: Settings }],
+    items: [
+      {
+        label: "Settings",
+        Icon: Settings,
+        children: [
+          { label: "Site Settings", href: "/admin/settings", Icon: SlidersHorizontal },
+          { label: "Popup", href: "/admin/settings/popup", Icon: Bell },
+          { label: "Recharge Setting", href: "/admin/settings/recharge", Icon: ArrowDownToLine },
+          { label: "Withdrawal Setting", href: "/admin/settings/withdraw", Icon: ArrowUpFromLine },
+          { label: "Income Time", href: "/admin/settings/income-time", Icon: Clock3 },
+        ],
+      },
+    ],
   },
 ];
 
@@ -54,6 +70,18 @@ export default function AdminShell({ title, sub, children }) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   const [ready, setReady] = useState(false);
+  const [openMenus, setOpenMenus] = useState({});
+
+  /* Auto-open the drop-down when a child route is active (refresh / direct link too) */
+  useEffect(() => {
+    NAV.forEach((g) =>
+      g.items.forEach((item) => {
+        if (item.children && item.children.some((c) => pathname === c.href)) {
+          setOpenMenus((m) => (m[item.label] ? m : { ...m, [item.label]: true }));
+        }
+      })
+    );
+  }, [pathname]);
 
   /* token guard — admin panel will not open without login */
   useEffect(() => {
@@ -94,7 +122,73 @@ export default function AdminShell({ title, sub, children }) {
             <div className="mb-1.5 px-3 text-[9.5px] font-extrabold uppercase tracking-[1.4px] text-white/30">
               {group.section}
             </div>
-            {group.items.map(({ label, href, Icon, exact }) => {
+            {group.items.map((item) => {
+              /* ===== DROPDOWN ITEM (has children) ===== */
+              if (item.children) {
+                const isOpen = !!openMenus[item.label];
+                const groupActive = item.children.some(
+                  (c) => pathname === c.href || pathname.startsWith(c.href + "/")
+                );
+                return (
+                  <div key={item.label} className="mb-0.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenMenus((m) => ({ ...m, [item.label]: !m[item.label] }))
+                      }
+                      className={`group relative flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] font-semibold transition-all duration-150 ${
+                        groupActive
+                          ? "bg-white/12 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                          : "text-white/55 hover:bg-white/[0.07] hover:text-white/85"
+                      }`}
+                    >
+                      {groupActive && (
+                        <span className="absolute left-0 top-1/2 h-[20px] w-[3px] -translate-y-1/2 rounded-r-full bg-gold" />
+                      )}
+                      <item.Icon
+                        size={18}
+                        strokeWidth={groupActive ? 2.3 : 2}
+                        className={groupActive ? "text-gold" : "text-white/45 group-hover:text-white/70"}
+                      />
+                      <span className="flex-1 text-left">{item.label}</span>
+                      <ChevronDown
+                        size={15}
+                        className={`transition-transform duration-200 ${
+                          isOpen ? "rotate-180 text-gold" : "text-white/45"
+                        }`}
+                      />
+                    </button>
+                    {isOpen && (
+                      <div className="mb-1 ml-[26px] mt-0.5 flex flex-col gap-0.5 border-l border-white/12 pl-2.5">
+                        {item.children.map(({ label, href, Icon: CIcon }) => {
+                          const active = pathname === href;
+                          return (
+                            <Link
+                              key={href}
+                              href={href}
+                              onClick={() => setDrawer(false)}
+                              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] font-semibold transition-all duration-150 ${
+                                active
+                                  ? "bg-white/12 text-white"
+                                  : "text-white/50 hover:bg-white/[0.07] hover:text-white/85"
+                              }`}
+                            >
+                              <CIcon
+                                size={15}
+                                strokeWidth={active ? 2.3 : 2}
+                                className={active ? "text-gold" : "text-white/40"}
+                              />
+                              {label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              /* ===== PLAIN LINK ITEM ===== */
+              const { label, href, Icon, exact } = item;
               const active = exact ? pathname === href : pathname.startsWith(href);
               return (
                 <Link
@@ -150,7 +244,7 @@ export default function AdminShell({ title, sub, children }) {
           onClick={() => setDrawer(false)}
         >
           <div
-            className="absolute inset-y-0 left-0 w-[262px] animate-[slide-left_0.2s_ease] shadow-2xl"
+            className="absolute inset-y-0 left-0 w-[280px] max-w-[86vw] animate-[slide-left_0.2s_ease] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {SidebarBody}
@@ -161,20 +255,20 @@ export default function AdminShell({ title, sub, children }) {
       {/* ===== MAIN ===== */}
       <div className="flex min-h-dvh flex-col lg:pl-[248px]">
         {/* TOPBAR */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line-rose bg-white/90 px-4 py-3.5 backdrop-blur lg:px-7">
+        <header className="sticky top-0 z-30 flex items-center gap-2.5 border-b border-line-rose bg-white/90 px-3 py-3 backdrop-blur sm:gap-3 sm:px-4 sm:py-3.5 lg:px-7">
           <button
             type="button"
             aria-label="Open menu"
             onClick={() => setDrawer(true)}
-            className="grid h-9 w-9 cursor-pointer place-items-center rounded-xl border border-line-rose text-maroon-700 lg:hidden"
+            className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-xl border border-line-rose text-maroon-700 lg:hidden"
           >
-            <Menu size={18} />
+            <Menu size={19} />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-[19px] font-bold leading-tight text-ink">
+            <h1 className="truncate font-display text-[17px] font-bold leading-tight text-ink sm:text-[19px]">
               {title}
             </h1>
-            {sub && <p className="truncate text-[12px] font-medium text-muted-rose">{sub}</p>}
+            {sub && <p className="mt-0.5 truncate text-[11px] font-medium text-muted-rose sm:text-[12px] sm:mt-0">{sub}</p>}
           </div>
           <div className="hidden items-center gap-2 rounded-full border border-line-rose bg-white px-2 py-1.5 pr-3.5 sm:flex">
             <span className="grid h-7 w-7 place-items-center rounded-full bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-[12px] font-extrabold text-white">
@@ -186,14 +280,14 @@ export default function AdminShell({ title, sub, children }) {
             type="button"
             aria-label="Logout"
             onClick={logout}
-            className="grid h-9 w-9 cursor-pointer place-items-center rounded-xl border border-line-rose bg-white text-[#b27583] transition-colors hover:bg-[#fdecec] hover:text-[#dc2626]"
+            className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-xl border border-line-rose bg-white text-[#b27583] transition-colors hover:bg-[#fdecec] hover:text-[#dc2626] sm:h-9 sm:w-9"
           >
             <LogOut size={16} />
           </button>
         </header>
 
         {/* CONTENT */}
-        <main className="flex-1 px-4 py-5 lg:px-7 lg:py-6">{ready ? children : null}</main>
+        <main className="flex-1 px-3 py-4 sm:px-4 sm:py-5 lg:px-7 lg:py-6">{ready ? children : null}</main>
 
         {/* FOOTER */}
         <footer className="px-4 pb-5 pt-2 text-center text-[11.5px] font-medium text-[#b9a5aa] lg:px-7">
