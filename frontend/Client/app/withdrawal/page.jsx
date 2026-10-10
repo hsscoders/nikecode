@@ -120,10 +120,17 @@ export default function WithdrawalPage() {
       router.replace("/login");
       return;
     }
+    /* bank card guard — no bound card → straight to /card until the bank is added */
+    let saved = null;
     try {
-      setBankCard(JSON.parse(localStorage.getItem("zapto_bank_card") || "null"));
+      saved = JSON.parse(localStorage.getItem("zapto_bank_card") || "null");
     } catch {
-      setBankCard(null);
+      saved = null;
+    }
+    setBankCard(saved);
+    if (!saved || !saved.ifsc || !saved.account) {
+      router.replace("/card");
+      return;
     }
     (async () => {
       try {

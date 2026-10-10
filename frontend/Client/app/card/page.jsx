@@ -16,6 +16,9 @@ import {
   Hash,
   Building2,
   Wifi,
+  Loader2,
+  CircleAlert,
+  ShieldCheck,
 } from "lucide-react";
 import logo from "../../public/zapto-logo.png";
 import BottomNav from "../components/BottomNav";
@@ -90,6 +93,9 @@ export default function CardPage() {
   const [ifsc, setIfsc] = useState("");
   const [account, setAccount] = useState("");
   const [bankName, setBankName] = useState("");
+  /* live IFSC verification — idle | checking | ok | wrong | netfail */
+  const [ifscCheck, setIfscCheck] = useState({ status: "idle", bank: null, branch: null });
+  const ifscTimer = useRef(null);
   const [alertMsg, setAlertMsg] = useState("");
   const alertTimer = useRef(null);
 
@@ -120,18 +126,57 @@ export default function CardPage() {
     });
   };
 
+  /* real IFSC lookup — server proxies the public IFSC API (cached there) */
+  const verifyIfsc = async (code) => {
+    setIfscCheck({ status: "checking", bank: null, branch: null });
+    try {
+      const r = await fetch("/api/ifsc/" + code);
+      const d = await r.json();
+      if (d && d.success && d.bank) {
+        setIfscCheck({ status: "ok", bank: d.bank.bank || "", branch: d.bank.branch || "" });
+        /* auto-fill the bank name once from the verified IFSC (user can still edit) */
+        setBankName((b) => b || d.bank.bank || "");
+        return "ok";
+      }
+      if (d && d.network) {
+        setIfscCheck({ status: "netfail", bank: null, branch: null });
+        return "netfail";
+      }
+      setIfscCheck({ status: "wrong", bank: null, branch: null });
+      return "wrong";
+    } catch (e) {
+      setIfscCheck({ status: "netfail", bank: null, branch: null });
+      return "netfail";
+    }
+  };
+
+  /* live verify — debounced, as soon as the code is complete + valid-format */
+  useEffect(() => {
+    clearTimeout(ifscTimer.current);
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
+      setIfscCheck({ status: "idle", bank: null, branch: null });
+      return;
+    }
+    ifscTimer.current = setTimeout(() => verifyIfsc(ifsc), 450);
+    return () => clearTimeout(ifscTimer.current);
+  }, [ifsc]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const logout = () => {
     localStorage.removeItem("zapto_token");
     localStorage.removeItem("zapto_phone");
     router.replace("/login");
   };
 
-  const confirm = () => {
+  const confirm = async () => {
     const name = realName.trim();
     if (!name) return showAlert("Enter your real name");
     if (name.length < 3) return showAlert("Name looks too short");
     if (!ifsc) return showAlert("Enter IFSC code");
     if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) return showAlert("Enter a valid IFSC code");
+    /* wrong IFSC blocks the save — real lookup result decides */
+    let st = ifscCheck.status;
+    if (st !== "ok" && st !== "wrong") st = await verifyIfsc(ifsc);
+    if (st === "wrong") return showAlert("IFSC code wrong");
     if (!account) return showAlert("Enter bank account number");
     if (account.length < 9) return showAlert("Account number looks too short");
     if (!bankName.trim()) return showAlert("Enter bank name");
@@ -239,6 +284,33 @@ export default function CardPage() {
               aria-label="IFSC"
             />
           </Field>
+
+          {/* live IFSC verification feedback */}
+          {ifscCheck.status === "checking" && (
+            <div className="-mt-2 flex items-center gap-1.5 text-[12px] font-semibold text-[#a9791c]">
+              <Loader2 size={13} className="animate-spin" />
+              Verifying IFSC…
+            </div>
+          )}
+          {ifscCheck.status === "wrong" && (
+            <div className="-mt-2 flex items-center gap-1.5 text-[12px] font-bold text-red-600">
+              <CircleAlert size={13} />
+              IFSC code wrong
+            </div>
+          )}
+          {ifscCheck.status === "ok" && (
+            <div className="-mt-2 flex items-center gap-1.5 text-[12px] font-bold text-[#16a34a]">
+              <ShieldCheck size={13} />
+              Verified{ifscCheck.bank ? " — " + ifscCheck.bank : ""}
+              {ifscCheck.branch ? ", " + ifscCheck.branch : ""}
+            </div>
+          )}
+          {ifscCheck.status === "netfail" && (
+            <div className="-mt-2 flex items-center gap-1.5 text-[12px] font-semibold text-muted-rose">
+              <CircleAlert size={13} />
+              Could not verify IFSC right now — format checked
+            </div>
+          )}
           <Field label="Bank Account Number" Icon={Hash}>
             <input
               className={inputCls}

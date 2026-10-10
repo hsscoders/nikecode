@@ -63,4 +63,43 @@ router.get("/settings", async (req, res) => {
   }
 });
 
+/* ============ IFSC VERIFY (bank validation for /card) ============
+   Real IFSC lookup via the public Razorpay IFSC API.
+   - Wrong/unknown code  → { success:false, message:"IFSC code wrong" }
+   - Valid code          → { success:true, bank:{bank, branch, city, state, ifsc} }
+   - API unreachable     → { success:false, network:true } (client falls back to format check) */
+const ifscCache = new Map(); /* code → lookup result (24h TTL) */
+
+router.get("/ifsc/:code", async (req, res) => {
+  const code = String(req.params.code || "").toUpperCase().trim();
+  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(code))
+    return res.json({ success: false, message: "IFSC code wrong" });
+
+  const cached = ifscCache.get(code);
+  if (cached && Date.now() - cached.at < 864e5)
+    return res.json({ success: true, bank: cached.data });
+
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    const r = await fetch("https://ifsc.razorpay.com/" + code, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!r.ok)
+      return res.json({ success: false, message: "IFSC code wrong" }); /* 404 = not a real IFSC */
+    const d = await r.json();
+    const bank = {
+      bank: d.BANK || "",
+      branch: d.BRANCH || "",
+      city: d.CITY || "",
+      state: d.STATE || "",
+      ifsc: d.IFSC || code,
+    };
+    ifscCache.set(code, { at: Date.now(), data: bank });
+    res.json({ success: true, bank });
+  } catch (e) {
+    console.error("ifsc verify error:", e.message);
+    res.json({ success: false, network: true, message: "IFSC service unavailable" });
+  }
+});
+
 module.exports = router;

@@ -228,6 +228,8 @@ router.post("/withdraw", userAuth, async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "Bind your bank card first" });
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(String(bank.ifsc || "").toUpperCase()))
+      return res.status(400).json({ success: false, message: "IFSC code wrong" });
     if (!withdraw_password)
       return res
         .status(400)
