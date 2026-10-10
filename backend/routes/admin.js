@@ -11,6 +11,23 @@ const Withdrawal = require("../models/Withdrawal");
 const Setting = require("../models/Setting");
 const Transaction = require("../models/Transaction");
 const { emitToUser, emitAdmin, emitAll } = require("../live");
+const {
+  isRemote,
+  queueBannerCache,
+  backfillBanners,
+  BANNER_DIR,
+} = require("../services/bannerCache");
+const { isLocalUpload, deleteUpload, saveDataUrl } = require("../services/fileStore");
+const fs = require("fs");
+const path = require("path");
+
+/* remove every local copy of a banner's own cached file (bnr-<id>.<ext>) */
+const clearBannerFiles = (id) => {
+  try {
+    for (const f of fs.readdirSync(BANNER_DIR))
+      if (f.startsWith("bnr-" + id + ".")) fs.unlinkSync(path.join(BANNER_DIR, f));
+  } catch (e) {}
+};
 
 /* All admin routes protected */
 router.use(adminAuth);
@@ -38,6 +55,12 @@ const num = (v) => {
 ================================================== */
 router.get("/dashboard", async (req, res) => {
   try {
+    /* IST day boundaries — "today" always means today in India */
+    const todayIst = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+    }).format(new Date());
+    const dayStart = new Date(todayIst + "T00:00:00+05:30");
+
     const [totalUsers, totalPurchases, investAgg, wdAgg, dpAgg, recentInvests, recentWithdrawals, newUsers] =
       await Promise.all([
         User.countDocuments({}),
@@ -75,9 +98,98 @@ router.get("/dashboard", async (req, res) => {
       });
     }
 
+    /* ===== ADVANCED ANALYTICS =====
+       - today: today's business (IST) — recharge in, withdrawals out, new
+         users, daily income paid, charge earned
+       - wallets: total money sitting in user wallets
+       - liability: daily payout the active plans owe every day
+       - chargeEarned: charge collected from successful withdrawals (all time)
+       - flow: 7-day money flow (successful deposits vs successful withdrawals)
+       - topUsers: biggest investors by total plan value */
+    const [todayRechargeAgg, todayWdAgg, todayUsers, todayIncomeAgg, walletAgg, activeAgg, chargeAgg, dpFlowAgg, wdFlowAgg, investTopAgg] =
+      await Promise.all([
+        Deposit.aggregate([
+          { $match: { status: "Success", createdAt: { $gte: dayStart } } },
+          { $group: { _id: null, amount: { $sum: "$amount" } } },
+        ]),
+        Withdrawal.aggregate([
+          { $match: { createdAt: { $gte: dayStart } } },
+          { $group: { _id: null, amount: { $sum: "$amount" }, charge: { $sum: "$charge" } } },
+        ]),
+        User.countDocuments({ createdAt: { $gte: dayStart } }),
+        Transaction.aggregate([
+          { $match: { type: "income", createdAt: { $gte: dayStart } } },
+          { $group: { _id: null, amount: { $sum: "$amount" } } },
+        ]),
+        User.aggregate([
+          {
+            $group: {
+              _id: null,
+              balance: { $sum: "$balance" },
+              recharge: { $sum: "$rechargeBalance" },
+              income: { $sum: "$totalIncome" },
+            },
+          },
+        ]),
+        Invest.aggregate([
+          { $match: { status: "Active" } },
+          { $group: { _id: null, daily: { $sum: "$daily" }, count: { $sum: 1 } } },
+        ]),
+        Withdrawal.aggregate([
+          { $match: { status: "Success" } },
+          { $group: { _id: null, charge: { $sum: "$charge" } } },
+        ]),
+        Deposit.aggregate([
+          { $match: { status: "Success", createdAt: { $gte: since } } },
+          { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, amount: { $sum: "$amount" } } },
+        ]),
+        Withdrawal.aggregate([
+          { $match: { status: "Success", createdAt: { $gte: since } } },
+          { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, amount: { $sum: "$amount" } } },
+        ]),
+        Invest.aggregate([
+          { $group: { _id: "$phone", userid: { $first: "$userid" }, invested: { $sum: "$price" }, plans: { $sum: 1 } } },
+          { $sort: { invested: -1 } },
+          { $limit: 5 },
+        ]),
+      ]);
+
+    /* 7-day money-flow chart — aligned with the registrations chart days */
+    const dpMap = Object.fromEntries(dpFlowAgg.map((r) => [r._id, r.amount]));
+    const wdMap = Object.fromEntries(wdFlowAgg.map((r) => [r._id, r.amount]));
+    const flow = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      flow.push({
+        day: d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }),
+        deposit: dpMap[key] || 0,
+        withdraw: wdMap[key] || 0,
+      });
+    }
+
+    /* attach names to the top investors */
+    const topPhones = investTopAgg.map((t) => t._id);
+    const topUsersDocs = topPhones.length
+      ? await User.find({ phone: { $in: topPhones } })
+          .select("phone name userid")
+          .lean()
+      : [];
+    const nameByPhone = Object.fromEntries(topUsersDocs.map((u) => [u.phone, u.name || ""]));
+    const topUsers = investTopAgg.map((t) => ({
+      phone: t._id,
+      userid: t.userid || "",
+      name: nameByPhone[t._id] || "",
+      invested: t.invested,
+      plans: t.plans,
+    }));
+
     const byStatus = (agg) =>
       Object.fromEntries(agg.map((a) => [a._id, { count: a.count, amount: a.amount }]));
     const zero = { count: 0, amount: 0 };
+    const w = walletAgg[0] || {};
 
     res.json({
       success: true,
@@ -97,8 +209,28 @@ router.get("/dashboard", async (req, res) => {
           Success: byStatus(dpAgg).Success || zero,
           Rejected: byStatus(dpAgg).Rejected || zero,
         },
+        /* advanced */
+        today: {
+          recharge: todayRechargeAgg[0] ? todayRechargeAgg[0].amount : 0,
+          withdrawals: todayWdAgg[0] ? todayWdAgg[0].amount : 0,
+          charge: todayWdAgg[0] ? todayWdAgg[0].charge || 0 : 0,
+          users: todayUsers,
+          income: todayIncomeAgg[0] ? todayIncomeAgg[0].amount : 0,
+        },
+        wallets: {
+          balance: w.balance || 0,
+          recharge: w.recharge || 0,
+          income: w.income || 0,
+        },
+        liability: {
+          daily: activeAgg[0] ? activeAgg[0].daily : 0,
+          activePlans: activeAgg[0] ? activeAgg[0].count : 0,
+        },
+        chargeEarned: chargeAgg[0] ? chargeAgg[0].charge || 0 : 0,
       },
       chart,
+      flow,
+      topUsers,
       recentInvests,
       recentWithdrawals,
     });
@@ -134,6 +266,7 @@ router.post("/plans", async (req, res) => {
       active: b.active === undefined ? true : !!b.active,
       sort: Number(b.sort) || 0,
     });
+    emitAll("plans:update", { action: "create" });
     res.json({ success: true, message: "Plan created", plan });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to create plan" });
@@ -145,9 +278,14 @@ router.put("/plans/:id", async (req, res) => {
     const b = req.body || {};
     const plan = await Plan.findById(req.params.id);
     if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
+    if (b.image !== undefined) {
+      const next = String(b.image).trim().slice(0, 500);
+      /* image changed — delete the old local file (delete-sync) */
+      if (next !== plan.image && isLocalUpload(plan.image)) deleteUpload(plan.image);
+      plan.image = next;
+    }
     if (b.name !== undefined) plan.name = String(b.name).trim();
     if (b.vip !== undefined) plan.vip = !!b.vip;
-    if (b.image !== undefined) plan.image = String(b.image).trim().slice(0, 500);
     if (b.price !== undefined) plan.price = Number(b.price);
     if (b.daily !== undefined) plan.daily = Number(b.daily);
     if (b.cycle !== undefined) plan.cycle = Number(b.cycle);
@@ -157,6 +295,7 @@ router.put("/plans/:id", async (req, res) => {
     if (b.active !== undefined) plan.active = !!b.active;
     if (b.sort !== undefined) plan.sort = Number(b.sort) || 0;
     await plan.save();
+    emitAll("plans:update", { action: "update" });
     res.json({ success: true, message: "Plan updated", plan });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to update plan" });
@@ -167,60 +306,44 @@ router.delete("/plans/:id", async (req, res) => {
   try {
     const plan = await Plan.findByIdAndDelete(req.params.id);
     if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
-    res.json({ success: true, message: "Plan deleted" });
+    /* delete-sync — remove the plan image file from the server too */
+    deleteUpload(plan.image);
+    emitAll("plans:update", { action: "delete" });
+    res.json({ success: true, message: "Plan deleted", image: plan.image });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to delete plan" });
   }
 });
 
 /* ==================================================
-   IMAGE UPLOAD (ImgBB API v1 proxy)
+   IMAGE UPLOAD — LOCAL STORAGE (ImgBB removed)
    body: { image: <base64 or data-URI>, name?: <filename> }
-   return: { url (direct i.ibb.co), thumb_url, delete_url, ... }
+   return: { url: /uploads/<file> } — served by this backend,
+   both Next apps reach it through the /uploads/* rewrite proxy.
+   Deleting the banner/plan/QR that uses it removes the file too.
 ================================================== */
-const IMGBB_KEY = process.env.IMGBB_KEY || "07110892de330f963840792606be2758";
-
 router.post("/upload", async (req, res) => {
   try {
-    let img = String((req.body && req.body.image) || "").trim();
+    const img = String((req.body && req.body.image) || "").trim();
     if (!img)
       return res.status(400).json({ success: false, message: "Image required (base64 / data URI)" });
-
-    /* Strip the data URI prefix (it comes from FileReader.readAsDataURL) */
-    img = img.replace(/^data:[^;]+;base64,/, "");
     if (img.length > 45_000_000)
       return res.status(400).json({ success: false, message: "Image too large (max ~32MB)" });
 
-    const form = new FormData();
-    form.append("image", img);
-    if (req.body.name) form.append("name", String(req.body.name).slice(0, 100));
-
-    const r = await fetch("https://api.imgbb.com/1/upload?key=" + IMGBB_KEY, {
-      method: "POST",
-      body: form,
-      signal: AbortSignal.timeout(90000),
-    });
-    const j = await r.json();
-
-    if (!j || !j.success || !j.data) {
-      const msg = (j && j.error && j.error.message) || "ImgBB upload failed";
-      return res.status(502).json({ success: false, message: msg });
-    }
-
+    const saved = saveDataUrl(img, req.body && req.body.name);
     res.json({
       success: true,
       message: "Image uploaded",
-      url: (j.data.image && j.data.image.url) || j.data.url,
-      display_url: j.data.display_url || "",
-      thumb_url: (j.data.thumb && j.data.thumb.url) || "",
-      delete_url: j.data.delete_url || "",
-      width: Number(j.data.width) || null,
-      height: Number(j.data.height) || null,
-      size: Number(j.data.size) || null,
+      url: saved.url,
+      size: saved.size,
+      local: true,
     });
   } catch (e) {
-    console.error("imgbb upload error:", e.message);
-    res.status(500).json({ success: false, message: "Upload failed — could not connect to ImgBB" });
+    console.error("upload error:", e.message);
+    const msg = /too large/i.test(e.message)
+      ? "Image too large (max 32MB)"
+      : "Upload failed — invalid image data";
+    res.status(500).json({ success: false, message: msg });
   }
 });
 
@@ -229,6 +352,8 @@ router.post("/upload", async (req, res) => {
 ================================================== */
 router.get("/banners", async (req, res) => {
   const banners = await Banner.find({}).sort({ sort: 1 }).lean();
+  /* self-heal — localize banners still pointing at a remote host */
+  backfillBanners(banners);
   res.json({ success: true, banners });
 });
 
@@ -243,6 +368,10 @@ router.post("/banners", async (req, res) => {
       active: b.active === undefined ? true : !!b.active,
       sort: Number(b.sort) || 0,
     });
+    /* permanent fix — download remote images to local storage so the
+       client never depends on a slow host (optimizer 504s otherwise) */
+    queueBannerCache(banner);
+    emitAll("banners:update", { action: "create" });
     res.json({ success: true, message: "Banner created", banner });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to create banner" });
@@ -255,11 +384,25 @@ router.put("/banners/:id", async (req, res) => {
     const banner = await Banner.findById(req.params.id);
     if (!banner) return res.status(404).json({ success: false, message: "Banner not found" });
     if (b.title !== undefined) banner.title = String(b.title).trim();
-    if (b.image !== undefined) banner.image = String(b.image).trim();
+    if (b.image !== undefined) {
+      const next = String(b.image).trim();
+      const prev = banner.image;
+      if (next !== prev) {
+        /* image changed — the old file must not orphan on the disk */
+        if (isLocalUpload(prev)) deleteUpload(prev);
+        else clearBannerFiles(banner._id); /* previous bnr-<id> cached copy */
+      }
+      /* a brand-new remote URL → drop the old cache record so the
+         downloader picks it up again */
+      if (isRemote(next) && next !== banner.originUrl) banner.originUrl = "";
+      banner.image = next;
+    }
     if (b.link !== undefined) banner.link = String(b.link).trim();
     if (b.active !== undefined) banner.active = !!b.active;
     if (b.sort !== undefined) banner.sort = Number(b.sort) || 0;
     await banner.save();
+    queueBannerCache(banner);
+    emitAll("banners:update", { action: "update" });
     res.json({ success: true, message: "Banner updated", banner });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to update banner" });
@@ -270,7 +413,12 @@ router.delete("/banners/:id", async (req, res) => {
   try {
     const banner = await Banner.findByIdAndDelete(req.params.id);
     if (!banner) return res.status(404).json({ success: false, message: "Banner not found" });
-    res.json({ success: true, message: "Banner deleted" });
+    /* delete-sync — remove the file from the server too (cached copy
+       and/or the admin-uploaded /uploads file) */
+    clearBannerFiles(banner._id);
+    deleteUpload(banner.image);
+    emitAll("banners:update", { action: "delete" });
+    res.json({ success: true, message: "Banner deleted", image: banner.image });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to delete banner" });
   }
@@ -551,6 +699,8 @@ router.put("/deposits/:id", async (req, res) => {
 
     /* realtime — the user's open tabs pick up the new recharge balance */
     emitToUser(deposit.phone, "wallet:refresh", { reason: "deposit", status });
+    /* pages push — /records, /transaction, /card reload their lists live */
+    emitToUser(deposit.phone, "activity:update", { type: "recharge", status });
 
     res.json({ success: true, message: "Deposit " + status.toLowerCase(), deposit });
   } catch (e) {
@@ -601,6 +751,8 @@ router.put("/withdrawals/:id", async (req, res) => {
 
     /* realtime — the user's open tabs pick up the refund / debit */
     emitToUser(wd.phone, "wallet:refresh", { reason: "withdraw", status });
+    /* pages push — /records, /transaction, /withdrawal reload live */
+    emitToUser(wd.phone, "activity:update", { type: "withdraw", status });
 
     res.json({ success: true, message: "Withdrawal " + status.toLowerCase(), withdrawal: wd });
   } catch (e) {
@@ -685,16 +837,31 @@ router.put("/settings", async (req, res) => {
         if (m.upiId !== undefined) s.recharge.manual.upiId = String(m.upiId).trim().slice(0, 120);
         if (m.accountName !== undefined)
           s.recharge.manual.accountName = String(m.accountName).trim().slice(0, 80);
-        if (m.qrImage !== undefined) s.recharge.manual.qrImage = String(m.qrImage).trim().slice(0, 500);
+        if (m.qrImage !== undefined) {
+          const nextQr = String(m.qrImage).trim().slice(0, 500);
+          /* QR changed — delete the old local file (delete-sync) */
+          if (nextQr !== s.recharge.manual.qrImage && isLocalUpload(s.recharge.manual.qrImage))
+            deleteUpload(s.recharge.manual.qrImage);
+          s.recharge.manual.qrImage = nextQr;
+        }
         if (m.note !== undefined) s.recharge.manual.note = String(m.note).trim().slice(0, 300);
       }
     }
 
-    /* Withdrawal settings — limits + note */
+    /* Withdrawal settings — limits + charge % + availability + note */
     if (b.withdraw) {
       const w = b.withdraw;
       if (w.minAmount !== undefined) s.withdraw.minAmount = num(w.minAmount);
       if (w.maxAmount !== undefined) s.withdraw.maxAmount = num(w.maxAmount);
+      if (w.chargePercent !== undefined)
+        s.withdraw.chargePercent = Math.min(100, Math.max(0, num(w.chargePercent)));
+      if (w.dailyLimit !== undefined)
+        s.withdraw.dailyLimit = Math.min(99, Math.max(0, num(w.dailyLimit)));
+      if (w.startTime !== undefined && /^\d{2}:\d{2}$/.test(String(w.startTime)))
+        s.withdraw.startTime = String(w.startTime);
+      if (w.endTime !== undefined && /^\d{2}:\d{2}$/.test(String(w.endTime)))
+        s.withdraw.endTime = String(w.endTime);
+      if (w.enabled !== undefined) s.withdraw.enabled = !!w.enabled;
       if (w.note !== undefined) s.withdraw.note = String(w.note).trim().slice(0, 300);
     }
 
@@ -758,6 +925,9 @@ router.put("/settings", async (req, res) => {
     await s.save();
     /* Push the new look to every open client page instantly (no reload) */
     if (appearanceChanged) emitAll("appearance:changed", s.appearance);
+    /* every settings save → client pages refetch (recharge UPI/QR, withdraw
+       limits, popup text…) live without a manual refresh */
+    emitAll("settings:update", { sections: Object.keys(b || {}) });
     res.json({ success: true, message: "Settings saved", settings: s });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to save settings" });

@@ -166,7 +166,7 @@ export default function PopupSettingsPage() {
               <TextInput
                 value={cfg.title}
                 onChange={(e) => set("title", e.target.value)}
-                placeholder="Welcome to ZAPTO"
+                placeholder="Welcome to SAUDI ARAMCO"
                 maxLength={80}
               />
             </Field>

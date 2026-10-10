@@ -23,6 +23,7 @@ import {
   X,
   ChevronRight,
   ChevronDown,
+  Globe,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import logo from "../public/admin-logo.png";
@@ -127,6 +128,24 @@ export default function AdminShell({ title, sub, children }) {
   const logout = () => {
     localStorage.removeItem("admin_token");
     router.replace("/admin/login");
+  };
+
+  /* Go to Website — opens the client site.
+     1) NEXT_PUBLIC_CLIENT_URL (.env) always wins — set your server domain there
+        (e.g. https://yourdomain.com) and rebuild once; no port needed.
+     2) Fallback auto-detect: admin reached through the client's /admin proxy
+        (same origin, no port) → that origin's root IS the client site;
+        direct :3001 access falls back to the same hostname on port 3000. */
+  const goSite = () => {
+    const envUrl = (process.env.NEXT_PUBLIC_CLIENT_URL || "").trim();
+    if (envUrl) return window.open(envUrl, "_blank", "noopener");
+    const loc = window.location;
+    const viaProxy = !loc.port && loc.pathname.startsWith("/admin");
+    const url =
+      viaProxy || loc.port === "3000"
+        ? loc.origin
+        : loc.protocol + "//" + loc.hostname + ":3000";
+    window.open(url, "_blank", "noopener");
   };
 
   const SidebarBody = (
@@ -307,6 +326,16 @@ export default function AdminShell({ title, sub, children }) {
             </span>
             <span className="text-[12.5px] font-bold text-ink">Super Admin</span>
           </div>
+          <button
+            type="button"
+            aria-label="Go to Website"
+            title="Open the client website"
+            onClick={goSite}
+            className="flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-maroon-700/25 bg-white px-2.5 text-[12.5px] font-bold text-maroon-700 transition-colors hover:bg-[#fbf1f3] sm:h-9 sm:px-3.5"
+          >
+            <Globe size={15} strokeWidth={2.2} />
+            <span className="hidden md:inline">Go to Website</span>
+          </button>
           <button
             type="button"
             aria-label="Logout"

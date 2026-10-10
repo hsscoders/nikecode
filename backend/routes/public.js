@@ -2,6 +2,7 @@ const router = require("express").Router();
 const Plan = require("../models/Plan");
 const Banner = require("../models/Banner");
 const Setting = require("../models/Setting");
+const { backfillBanners } = require("../services/bannerCache");
 
 /* Make banner image URLs work from both client and admin origins */
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:3030";
@@ -21,6 +22,9 @@ router.get("/plans", async (req, res) => {
 router.get("/banners", async (req, res) => {
   try {
     const banners = await Banner.find({ active: true }).sort({ sort: 1 }).lean();
+    /* self-heal — localize any banner still pointing at a remote host
+       (permanent fix: slow hosts made the optimizer 504 → blank slides) */
+    backfillBanners(banners);
     res.json({
       success: true,
       banners: banners.map((b) => ({
@@ -100,6 +104,37 @@ router.get("/ifsc/:code", async (req, res) => {
     console.error("ifsc verify error:", e.message);
     res.json({ success: false, network: true, message: "IFSC service unavailable" });
   }
+});
+
+/* ============ LOCAL QR GENERATOR (/invite) ============
+   Invite QR ab apne server par banta hai — external api.qrserver.com
+   dependency/pause/slow-network ka risk khatam. Same-origin = instant,
+   browser 1 din cache karta hai (same link = same QR). */
+const QR_SVG_CACHE = new Map(); /* payload → svg (50 entry LRU-ish cap) */
+
+router.get("/qr", async (req, res) => {
+  const data = String(req.query.d || "").slice(0, 512);
+  if (!data) return res.status(400).send("missing d");
+
+  let svg = QR_SVG_CACHE.get(data);
+  if (!svg) {
+    try {
+      const QRCode = require("qrcode");
+      svg = await QRCode.toString(data, {
+        type: "svg",
+        margin: 0,
+        errorCorrectionLevel: "M",
+        color: { dark: "#3d2229", light: "#ffffff" },
+      });
+      if (QR_SVG_CACHE.size > 50) QR_SVG_CACHE.clear();
+      QR_SVG_CACHE.set(data, svg);
+    } catch (e) {
+      return res.status(500).send("qr failed");
+    }
+  }
+  res.setHeader("Content-Type", "image/svg+xml");
+  res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+  res.send(svg);
 });
 
 module.exports = router;

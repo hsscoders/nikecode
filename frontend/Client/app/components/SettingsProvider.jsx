@@ -19,15 +19,24 @@ export default function SettingsProvider({ initial, children }) {
 
   useEffect(() => {
     let alive = true;
-    (async () => {
+    const load = async () => {
       try {
         const r = await fetch("/api/settings");
         const d = await r.json();
         if (alive && d.success && d.settings) setSettings(d.settings);
       } catch (e) {}
-    })();
+    };
+    load();
+    /* live — admin saves any setting (recharge UPI/QR, withdraw limits,
+       popup text…) → every open page refetches instantly, no reload */
+    const onLive = (e) => {
+      const d = e.detail || {};
+      if (d.event === "settings:update" || d.event === "appearance:changed") load();
+    };
+    window.addEventListener("zapto:live", onLive);
     return () => {
       alive = false;
+      window.removeEventListener("zapto:live", onLive);
     };
   }, []);
 

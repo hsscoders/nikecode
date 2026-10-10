@@ -60,7 +60,7 @@ export default function BannersPage() {
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  /* ImgBB upload — auto-uploads on file select, fills the URL into the form */
+  /* Image upload — stored on the server, auto-runs on file select */
   const uploadImage = (file) => {
     if (!file) return;
     if (!file.type.startsWith("image/"))
@@ -272,7 +272,7 @@ export default function BannersPage() {
               {uploading ? (
                 <>
                   <span className="h-5 w-5 animate-spin rounded-full border-2 border-maroon-600 border-t-transparent" />
-                  Uploading to ImgBB...
+                  Uploading...
                 </>
               ) : (
                 <>
@@ -284,7 +284,7 @@ export default function BannersPage() {
             <TextInput
               value={form.image}
               onChange={(e) => set("image", e.target.value)}
-              placeholder="https://i.ibb.co/... or any image URL"
+              placeholder="/uploads/... (upload) or any image URL"
               className="mt-2"
             />
           </Field>

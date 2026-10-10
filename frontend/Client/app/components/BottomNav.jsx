@@ -1,12 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Home, IndianRupee, Users, ReceiptText, User } from "lucide-react";
+import { Home, Users, UserPlus, ReceiptText, User } from "lucide-react";
 
 const ITEMS = [
   { label: "Home", Icon: Home, to: "/home" },
-  { label: "Recharge", Icon: IndianRupee, to: "/recharge" },
-  { label: "Invite", Icon: Users, to: "/invite" },
+  { label: "Team", Icon: Users, to: "/team" },
+  { label: "Invite", Icon: UserPlus, to: "/invite" },
   { label: "Records", Icon: ReceiptText, to: "/records" },
   { label: "Account", Icon: User, to: "/profile" },
 ];

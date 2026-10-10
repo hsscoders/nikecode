@@ -81,6 +81,8 @@ router.post("/deposit", userAuth, async (req, res) => {
       amount,
       message: "New recharge request — \u20B9" + amount + " from " + req.user.phone,
     });
+    /* pages push — /records, /transaction, /card show the request live */
+    emitToUser(req.user.phone, "activity:update", { type: "recharge", status: "Pending" });
 
     res.json({
       success: true,
@@ -174,6 +176,8 @@ router.post("/invest", userAuth, async (req, res) => {
 
     /* realtime — push the new recharge balance to the buyer's other tabs */
     emitToUser(req.user.phone, "wallet:refresh", { reason: "invest" });
+    /* pages push — /records shows the new plan instantly */
+    emitToUser(req.user.phone, "activity:update", { type: "invest" });
 
     res.json({
       success: true,
@@ -211,6 +215,57 @@ router.post("/withdraw", userAuth, async (req, res) => {
     const wdCfg = (s && s.withdraw) || {};
     const minW = Number(wdCfg.minAmount) || (s && s.site && s.site.minWithdraw) || 130;
     const maxW = Number(wdCfg.maxAmount) || 0;
+    /* withdrawal charge % — set from the admin panel, deducted from the request
+       (?? 10 keeps the model default for pre-existing Setting docs without the field) */
+    const chargePct = Math.min(100, Math.max(0, Number(wdCfg.chargePercent ?? 10)));
+    const charge = Math.round(amount * chargePct) / 100;
+    const netAmount = +(amount - charge).toFixed(2);
+
+    /* master switch — one click in the admin panel stops ALL withdrawals */
+    if (wdCfg.enabled === false)
+      return res
+        .status(403)
+        .json({ success: false, message: "Withdrawals are temporarily stopped by the admin" });
+
+    /* IST time window — requests allowed only between start & end time (overnight-safe) */
+    const nowIst = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date()); // "HH:MM"
+    const winStart = String(wdCfg.startTime || "00:00");
+    const winEnd = String(wdCfg.endTime || "23:59");
+    if (winStart !== winEnd) {
+      const inWindow =
+        winStart <= winEnd
+          ? nowIst >= winStart && nowIst <= winEnd
+          : nowIst >= winStart || nowIst <= winEnd;
+      if (!inWindow)
+        return res.status(403).json({
+          success: false,
+          message:
+            "Withdrawals are open between " + winStart + " and " + winEnd + " (IST) only",
+        });
+    }
+
+    /* daily limit — max withdrawal requests per user per day (IST calendar day) */
+    const dailyLimit = Math.min(99, Math.max(0, Number(wdCfg.dailyLimit) || 0));
+    if (dailyLimit > 0) {
+      const todayIst = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+      }).format(new Date()); // "YYYY-MM-DD"
+      const dayStartUtc = new Date(todayIst + "T00:00:00+05:30");
+      const doneToday = await Withdrawal.countDocuments({
+        user: req.user._id,
+        createdAt: { $gte: dayStartUtc },
+      });
+      if (doneToday >= dailyLimit)
+        return res.status(403).json({
+          success: false,
+          message: "Daily withdrawal limit reached (" + dailyLimit + " per day)",
+        });
+    }
 
     if (!amount || amount <= 0)
       return res
@@ -260,6 +315,9 @@ router.post("/withdraw", userAuth, async (req, res) => {
       userid: req.user.userid || "",
       phone: req.user.phone,
       amount,
+      chargePercent: chargePct,
+      charge,
+      netAmount,
       realName: bank.realName,
       bankName: bank.bankName,
       account: bank.account,
@@ -297,14 +355,26 @@ router.post("/withdraw", userAuth, async (req, res) => {
       type: "withdraw",
       phone: req.user.phone,
       amount,
-      message: "New withdrawal request — \u20B9" + amount + " from " + req.user.phone,
+      netAmount,
+      charge,
+      message:
+        "New withdrawal request — \u20B9" + amount + " (receive \u20B9" + netAmount + ") from " + req.user.phone,
     });
     emitToUser(req.user.phone, "wallet:refresh", { reason: "withdraw" });
+    /* pages push — /records, /transaction, /withdrawal add the request live */
+    emitToUser(req.user.phone, "activity:update", { type: "withdraw", status: "Pending" });
 
     res.json({
       success: true,
       message: "Withdrawal request submitted!",
-      withdrawal: { id: wd._id, amount: wd.amount, status: wd.status },
+      withdrawal: {
+        id: wd._id,
+        amount: wd.amount,
+        chargePercent: chargePct,
+        charge,
+        netAmount,
+        status: wd.status,
+      },
       wallet: {
         balance: +(req.user.balance - amount).toFixed(2),
         rechargeBalance: req.user.rechargeBalance,

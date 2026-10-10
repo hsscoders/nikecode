@@ -633,7 +633,7 @@ function Preview({ pal, headCss, bodyCss }) {
           </span>
           <div>
             <div className="text-[13px] font-bold leading-none text-white" style={{ fontFamily: headCss }}>
-              ZAPTO
+              SAUDI ARAMCO
             </div>
             <div className="mt-0.5 text-[7px] font-medium leading-none" style={{ color: v.accent }}>
               Earn daily, withdraw daily

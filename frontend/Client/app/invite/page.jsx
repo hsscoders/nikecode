@@ -14,8 +14,9 @@ import {
   Copy,
   CircleCheck,
 } from "lucide-react";
-import logo from "../../public/zapto-logo.png";
+import logo from "../../public/aramco-logo.png";
 import BottomNav from "../components/BottomNav";
+import { readCache, writeCache } from "../components/liveCache";
 
 /* ================= HELPERS ================= */
 
@@ -95,6 +96,17 @@ export default function InvitePage() {
   const [alertMsg, setAlertMsg] = useState("");
   const alertTimer = useRef(null);
 
+  /* INSTANT PAINT — pichhli baar ka invite code localStorage se turant:
+     refresh par "Generating your invite code..." ka lamba flash nahi.
+     Network phir bhi background me verify/fresh karta hai. */
+  useEffect(() => {
+    const cached = readCache("ref");
+    if (cached && cached.refId) {
+      setRefId(cached.refId);
+      setLink(window.location.origin + "/register?inviteCode=" + cached.refId);
+    }
+  }, []);
+
   /* token guard — /invite stays locked without login */
   useEffect(() => {
     const token = localStorage.getItem("zapto_token");
@@ -117,6 +129,7 @@ export default function InvitePage() {
           setLink(
             window.location.origin + "/register?inviteCode=" + d.wallet.refId
           );
+          writeCache("ref", { refId: d.wallet.refId }); /* next refresh: instant */
         }
       } catch (e) {}
     })();
@@ -167,9 +180,10 @@ export default function InvitePage() {
     router.replace("/login");
   };
 
+  /* QR — SAME-ORIGIN local generator (backend /api/qr, 1-day browser
+     cache). External qrserver.com hataya — wo slow/timeout deta tha. */
   const qrSrc = link
-    ? "https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=0&data=" +
-      encodeURIComponent(link)
+    ? "/api/qr?d=" + encodeURIComponent(link)
     : "";
 
   return (
@@ -178,11 +192,11 @@ export default function InvitePage() {
       <header className="flex items-center justify-between bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
-            <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
+            <Image src={logo} alt="Saudi Aramco logo" fill sizes="34px" className="object-cover" />
           </div>
           <div>
-            <div className="font-display text-lg font-bold leading-none tracking-[0.5px] text-white">
-              ZAPTO
+            <div className="font-display text-[17px] font-bold leading-none tracking-[0.5px] text-white">
+              SAUDI ARAMCO
             </div>
             <div className="mt-0.5 text-[10px] font-medium leading-none text-gold">
               Earn daily, withdraw daily

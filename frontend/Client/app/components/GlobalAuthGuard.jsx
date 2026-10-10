@@ -23,20 +23,36 @@ export default function GlobalAuthGuard() {
           reconnectionDelayMax: 10000,
         });
         window.__zaptoSocket = sock;
+
+        /* EVERY server event → window CustomEvent fan-out ("zapto:live").
+           Pages subscribe with useLive() — records/transaction/withdrawal/
+           card/home all refresh instantly, no manual reload anywhere. */
+        const LIVE_EVENTS = [
+          "wallet:refresh",
+          "activity:update",
+          "plans:update",
+          "banners:update",
+          "settings:update",
+          "appearance:changed",
+        ];
+        LIVE_EVENTS.forEach((ev) => {
+          sock.on(ev, (payload) => {
+            window.dispatchEvent(
+              new CustomEvent("zapto:live", { detail: { event: ev, detail: payload || {} } })
+            );
+          });
+        });
+
         /* server pushed a wallet change (recharge approved, income,
-           commission...) — refetch once and fan out via CustomEvent */
+           commission...) — refetch once and fan out via CustomEvent
+           (interceptor bhi cache + fan-out karta hai) */
         sock.on("wallet:refresh", async () => {
           try {
             const t = localStorage.getItem("zapto_token");
             if (!t) return;
-            const r = await window.fetch("/api/wallet", {
+            await window.fetch("/api/wallet", {
               headers: { Authorization: "Bearer " + t },
             });
-            const d = await r.json();
-            if (d.success && d.wallet)
-              window.dispatchEvent(
-                new CustomEvent("zapto:wallet", { detail: d.wallet })
-              );
           } catch (e) {}
         });
         /* admin saved a new theme — fan out to AppearanceProvider */
@@ -51,12 +67,36 @@ export default function GlobalAuthGuard() {
     if (window.__zaptoAuthHooked) return;
     window.__zaptoAuthHooked = true;
 
+    /* ---- wallet response interceptor ----
+       HAR successful /api/wallet response (kisi bhi page se) →
+       localStorage cache + "zapto:wallet" fan-out. Isse agle refresh par
+       har page ka balance localStorage se TURANT dikhta hai (₹0 flash
+       khatam) — network ke baad fresh value aati hai. */
     const orig = window.fetch.bind(window);
     window.fetch = async (...args) => {
       const res = await orig(...args);
       try {
         const url =
           typeof args[0] === "string" ? args[0] : (args[0] && args[0].url) || "";
+        if (res && res.ok && /\/api\/wallet(\?|#|$)/.test(url)) {
+          res
+            .clone()
+            .json()
+            .then((d) => {
+              if (d && d.success && d.wallet) {
+                try {
+                  localStorage.setItem(
+                    "zapto_cache_wallet",
+                    JSON.stringify({ ts: Date.now(), data: d.wallet })
+                  );
+                } catch (e) {}
+                window.dispatchEvent(
+                  new CustomEvent("zapto:wallet", { detail: d.wallet })
+                );
+              }
+            })
+            .catch(() => {});
+        }
         const onAuthPage = /^\/(login|register|auto-login)(\/|\?|#|$)/.test(
           window.location.pathname
         );

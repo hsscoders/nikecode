@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Home,
@@ -18,9 +18,12 @@ import {
   CreditCard,
   Link2,
   Clock,
+  Timer,
+  Ban,
 } from "lucide-react";
-import logo from "../../public/zapto-logo.png";
+import logo from "../../public/aramco-logo.png";
 import useLiveWallet from "../components/useLiveWallet";
+import useLive from "../components/useLive";
 import BottomNav from "../components/BottomNav";
 import { useSettings } from "../components/SettingsProvider";
 
@@ -28,8 +31,26 @@ import { useSettings } from "../components/SettingsProvider";
 const DEFAULT_WITHDRAW = {
   minAmount: 130,
   maxAmount: 50000,
+  chargePercent: 10,
+  dailyLimit: 0,
+  startTime: "00:00",
+  endTime: "23:59",
+  enabled: true,
   note: "Withdrawals are processed within 24 hours",
 };
+
+/* current IST clock as "HH:MM" (24h) — matches the admin panel's IST window */
+const istClock = () =>
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date());
+
+/* today's IST date as "YYYY-MM-DD" */
+const istToday = () =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
 
 /* ================= HELPERS ================= */
 
@@ -107,6 +128,7 @@ export default function WithdrawalPage() {
   const [ready, setReady] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
   const [wallet, setWallet] = useState({ balance: 0 });
+  const [doneToday, setDoneToday] = useState(0); /* withdrawals already requested today */
   useLiveWallet(setWallet); /* realtime — withdrawal approval / refund lands here instantly */
   const [cfg, setCfg] = useState(() =>
     gs && gs.withdraw ? { ...DEFAULT_WITHDRAW, ...gs.withdraw } : DEFAULT_WITHDRAW
@@ -114,6 +136,47 @@ export default function WithdrawalPage() {
   const alertTimer = useRef(null);
 
   /* token guard + bound card load + wallet balance */
+  /* wallet + today-count refresh — initial load AND live pushes dono ke liye */
+  const refreshData = useCallback(async () => {
+    const token = localStorage.getItem("zapto_token");
+    if (!token) return;
+    (async () => {
+      try {
+        const r = await fetch("/api/wallet", {
+          headers: { Authorization: "Bearer " + token },
+        });
+        const d = await r.json();
+        if (d.success && d.wallet) setWallet(d.wallet);
+      } catch (e) {}
+      /* withdrawal settings — admin panel live (limits + charge + switch + window) */
+      try {
+        const r = await fetch("/api/settings");
+        const d = await r.json();
+        if (d.success && d.settings && d.settings.withdraw)
+          setCfg({ ...DEFAULT_WITHDRAW, ...d.settings.withdraw });
+      } catch (e) {}
+      /* how many withdrawals has this user already requested today (IST)? */
+      try {
+        const r2 = await fetch("/api/transactions", {
+          headers: { Authorization: "Bearer " + token },
+        });
+        const d2 = await r2.json();
+        if (d2.success && Array.isArray(d2.txns)) {
+          const today = istToday();
+          const n = d2.txns.filter(
+            (t) =>
+              t.type === "withdraw" &&
+              t.createdAt &&
+              new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(
+                new Date(t.createdAt)
+              ) === today
+          ).length;
+          setDoneToday(n);
+        }
+      } catch (e) {}
+    })();
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem("zapto_token");
     if (!token) {
@@ -132,24 +195,16 @@ export default function WithdrawalPage() {
       router.replace("/card");
       return;
     }
-    (async () => {
-      try {
-        const r = await fetch("/api/wallet", {
-          headers: { Authorization: "Bearer " + token },
-        });
-        const d = await r.json();
-        if (d.success && d.wallet) setWallet(d.wallet);
-      } catch (e) {}
-      /* withdrawal settings — admin panel live (limits + note) */
-      try {
-        const r = await fetch("/api/settings");
-        const d = await r.json();
-        if (d.success && d.settings && d.settings.withdraw)
-          setCfg({ ...DEFAULT_WITHDRAW, ...d.settings.withdraw });
-      } catch (e) {}
-    })();
+    refreshData();
     setReady(true);
-  }, [router]);
+  }, [router, refreshData]);
+
+  /* LIVE — withdrawal approved/rejected/refunded → wallet + done-today update instantly */
+  useLive("activity:update", (p) => {
+    if (!p || p.type === "withdraw") refreshData();
+  });
+  /* LIVE — admin changed withdraw settings (switch/window/limits/charge) → re-read */
+  useLive("settings:update", refreshData);
 
   const showAlert = (msg) => {
     clearTimeout(alertTimer.current);
@@ -160,6 +215,31 @@ export default function WithdrawalPage() {
     });
   };
 
+  /* withdrawal charge breakdown — admin-controlled %, live as the user types */
+  const amtNum = Number(amount) || 0;
+  const chgPct = Math.min(100, Math.max(0, Number(cfg.chargePercent) || 0));
+  const chgAmt = Math.round(amtNum * chgPct) / 100;
+  const netAmt = +(amtNum - chgAmt).toFixed(2);
+
+  /* availability — master switch + IST window + daily limit (mirrors the server checks) */
+  const wdEnabled = cfg.enabled !== false;
+  const winStart = String(cfg.startTime || "00:00");
+  const winEnd = String(cfg.endTime || "23:59");
+  const nowIst = istClock();
+  const inWindow =
+    winStart === winEnd ||
+    (winStart <= winEnd
+      ? nowIst >= winStart && nowIst <= winEnd
+      : nowIst >= winStart || nowIst <= winEnd);
+  const dailyLimit = Math.min(99, Math.max(0, Number(cfg.dailyLimit) || 0));
+  const limitOver = dailyLimit > 0 && doneToday >= dailyLimit;
+  const wdBlocked = !wdEnabled || !inWindow || limitOver;
+  const blockReason = !wdEnabled
+    ? "Withdrawals are temporarily stopped by the admin"
+    : !inWindow
+    ? "Withdrawals are open between " + winStart + " and " + winEnd + " (IST) only"
+    : "Daily withdrawal limit reached (" + dailyLimit + " per day)";
+
   const logout = () => {
     localStorage.removeItem("zapto_token");
     localStorage.removeItem("zapto_phone");
@@ -169,6 +249,7 @@ export default function WithdrawalPage() {
   const withdraw = async () => {
     const minW = Number(cfg.minAmount) || 0;
     const maxW = Number(cfg.maxAmount) || 0;
+    if (wdBlocked) return showAlert(blockReason);
     if (!bankCard) return showAlert("Bind your bank card first");
     if (!amount || Number(amount) <= 0) return showAlert("Enter the withdrawal amount");
     if (minW && Number(amount) < minW) return showAlert("Minimum withdrawal is ₹" + minW);
@@ -213,6 +294,7 @@ export default function WithdrawalPage() {
     showAlert("Withdrawal request submitted!");
     setAmount("");
     setWpass("");
+    setDoneToday((n) => n + 1); /* daily-limit counter stays honest after the request */
   };
 
   return (
@@ -221,11 +303,11 @@ export default function WithdrawalPage() {
       <header className="flex items-center justify-between bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
-            <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
+            <Image src={logo} alt="Saudi Aramco logo" fill sizes="34px" className="object-cover" />
           </div>
           <div>
-            <div className="font-display text-lg font-bold leading-none tracking-[0.5px] text-white">
-              ZAPTO
+            <div className="font-display text-[17px] font-bold leading-none tracking-[0.5px] text-white">
+              SAUDI ARAMCO
             </div>
             <div className="mt-0.5 text-[10px] font-medium leading-none text-gold">
               Earn daily, withdraw daily
@@ -243,6 +325,16 @@ export default function WithdrawalPage() {
             Min ₹{(Number(cfg.minAmount) || 0).toLocaleString("en-IN")}
           </span>
         </div>
+
+        {/* --- BLOCKED BANNER — switch off / out of window / daily limit --- */}
+        {wdBlocked && (
+          <div className="mt-3 flex items-center gap-2.5 rounded-[14px] border border-[#f3c4c4] bg-[#fdf1f1] px-3.5 py-3">
+            <Ban size={16} strokeWidth={2.4} className="shrink-0 text-[#dc2626]" />
+            <div className="text-[12.5px] font-bold leading-snug text-[#b91c1c]">
+              {blockReason}
+            </div>
+          </div>
+        )}
 
         {/* --- AMOUNT + PASSWORD --- */}
         <div className={`${card} mt-3 p-4`}>
@@ -265,6 +357,50 @@ export default function WithdrawalPage() {
             <span className="font-bold text-ink">{fmt(wallet.balance)}</span>
           </div>
 
+          {/* --- WITHDRAWAL CHARGE BREAKDOWN — admin-controlled % --- */}
+          <div className="mt-2.5 rounded-[14px] border border-line-rose/80 bg-[var(--c-tint2)] px-3.5 py-3">
+            {amtNum > 0 ? (
+              <div className="flex flex-col gap-[7px]">
+                <div className="flex items-center justify-between text-[12.5px] font-semibold text-muted-rose">
+                  <span>Withdraw Amount</span>
+                  <span className="font-bold text-ink">{fmt(amtNum)}</span>
+                </div>
+                <div className="flex items-center justify-between text-[12.5px] font-semibold text-muted-rose">
+                  <span>Charge ({chgPct}%)</span>
+                  <span className="font-bold text-[#b3372f]">− {fmt(chgAmt)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-dashed border-line-rose pt-[7px] text-[13px] font-extrabold text-ink">
+                  <span>You&apos;ll Receive</span>
+                  <span className="text-[15.5px] font-bold text-maroon-700">
+                    {fmt(netAmt)}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-[12.5px] font-semibold text-muted-rose">
+                <span>Withdrawal Charge</span>
+                <span className="font-bold text-ink">{chgPct}%</span>
+              </div>
+            )}
+          </div>
+
+          {/* --- schedule info — window + daily limit (only when set) --- */}
+          {!wdBlocked && (winStart !== "00:00" || winEnd !== "23:59" || dailyLimit > 0) && (
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] font-semibold text-muted-rose">
+              {winStart !== winEnd && (
+                <span className="flex items-center gap-1">
+                  <Timer size={12} /> Open {winStart}–{winEnd} IST
+                </span>
+              )}
+              {dailyLimit > 0 && (
+                <span className="flex items-center gap-1">
+                  <Clock size={12} /> Max {dailyLimit}/day
+                  {doneToday > 0 ? ` • ${doneToday} done` : ""}
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="mt-3.5">
             <label className="mb-1.5 block text-[12.5px] font-bold text-ink">
               Withdrawal Password
@@ -280,9 +416,14 @@ export default function WithdrawalPage() {
           <button
             type="button"
             onClick={withdraw}
-            className={`mt-4 w-full cursor-pointer rounded-xl py-[14px] text-center font-display text-[16.5px] font-bold tracking-[0.4px] text-white transition-all duration-150 active:scale-[0.98] ${gradientBtn} max-[360px]:py-[13px]`}
+            disabled={wdBlocked}
+            className={`mt-4 w-full rounded-xl py-[14px] text-center font-display text-[16.5px] font-bold tracking-[0.4px] text-white transition-all duration-150 max-[360px]:py-[13px] ${
+              wdBlocked
+                ? "cursor-not-allowed bg-[#c9b8bd] shadow-none"
+                : `cursor-pointer active:scale-[0.98] ${gradientBtn}`
+            }`}
           >
-            Withdraw
+            {wdBlocked ? "Withdrawals Stopped" : "Withdraw"}
           </button>
 
           <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] font-medium text-muted-rose">

@@ -21,7 +21,7 @@ import {
   Download,
   Smartphone,
 } from "lucide-react";
-import logo from "../../public/zapto-logo.png";
+import logo from "../../public/aramco-logo.png";
 import BottomNav from "../components/BottomNav";
 
 /* menu — Plan Record / Bank Settings / Txn History / Team / Invite / Support / Download / Logout */
@@ -212,11 +212,11 @@ export default function ProfilePage() {
       <header className="flex items-center justify-between bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
-            <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
+            <Image src={logo} alt="Saudi Aramco logo" fill sizes="34px" className="object-cover" />
           </div>
           <div>
-            <div className="font-display text-lg font-bold leading-none tracking-[0.5px] text-white">
-              ZAPTO
+            <div className="font-display text-[17px] font-bold leading-none tracking-[0.5px] text-white">
+              SAUDI ARAMCO
             </div>
             <div className="mt-0.5 text-[10px] font-medium leading-none text-gold">
               Earn daily, withdraw daily
@@ -239,7 +239,7 @@ export default function ProfilePage() {
                 {phone ? "+91 " + phone : "User"}
               </div>
               <div className="mt-1 text-[11px] font-medium text-white/70">
-                Welcome back to ZAPTO
+                Welcome back to SAUDI ARAMCO
               </div>
             </div>
           </div>
@@ -304,7 +304,7 @@ export default function ProfilePage() {
         {/* --- APP VERSION --- */}
         <div className="mt-4 flex items-center justify-center gap-2 text-[11px] font-medium text-muted-rose">
           <Smartphone size={12} />
-          ZAPTO v1.0.0
+          SAUDI ARAMCO v1.0.0
         </div>
       </div>
 

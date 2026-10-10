@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ==========================================
-   ZAPTO — Maroon Light Theme (Tailwind v4)
+   SAUDI ARAMCO — Maroon Light Theme (Tailwind v4)
    Design tokens -> Tailwind utilities
 
    THEMING: every theme-able token points at a runtime CSS
@@ -102,6 +102,16 @@ body {
   to {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+/* banner skeleton loading sweep */
+@keyframes shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
   }
 }
 

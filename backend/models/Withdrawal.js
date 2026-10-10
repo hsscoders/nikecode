@@ -6,6 +6,10 @@ const WithdrawalSchema = new mongoose.Schema(
     userid: { type: String, default: "" },
     phone: { type: String, default: "", index: true },
     amount: { type: Number, required: true, min: 0 },
+    /* charge snapshot taken at request time (charge % from settings) */
+    chargePercent: { type: Number, default: 0 },
+    charge: { type: Number, default: 0 }, /* ₹ deducted as charge */
+    netAmount: { type: Number, default: 0 }, /* ₹ actually payable to the bank a/c */
     realName: { type: String, default: "" },
     bankName: { type: String, default: "" },
     account: { type: String, default: "" },

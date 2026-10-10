@@ -14,8 +14,8 @@ import {
   EyeOff,
   BadgeCheck,
 } from "lucide-react";
-import banner from "../../public/zapto-banner.png";
-import logo from "../../public/zapto-logo.png";
+import banner from "../../public/aramco-vip-banner.png";
+import logo from "../../public/aramco-badge.png";
 import { useSettings } from "../components/SettingsProvider";
 
 /* ===== Shared Tailwind blocks — consistent across both pages ===== */
@@ -76,7 +76,7 @@ function SuccessOverlay() {
       <div className="relative h-[86px] w-[86px] overflow-hidden rounded-full border-[3px] border-gold/70 shadow-[0_16px_44px_rgba(0,0,0,0.55)]">
         <Image
           src={logo}
-          alt="ZAPTO"
+          alt="Saudi Aramco"
           fill
           sizes="86px"
           className="object-cover"
@@ -218,29 +218,30 @@ function RegisterInner() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full min-[520px]:max-w-[430px] flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:mb-10 min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
-      {/* TOP BANNER */}
-      <div className="relative overflow-hidden">
+    <div className="mx-auto flex min-h-dvh w-full min-[520px]:max-w-[430px] flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:mb-10 min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/70">
+      {/* TOP BANNER — natural aspect, image's own alpha fade blends into page bg */}
+      <div className="relative">
         <Image
           src={banner}
-          alt="ZAPTO"
+          alt="Saudi Aramco VIP"
           priority
-          className="banner-fade h-[clamp(118px,36vw,156px)] w-full object-cover max-[360px]:h-[112px]"
+          sizes="(max-width: 520px) 100vw, 430px"
+          className="h-auto w-full"
         />
       </div>
 
-      {/* LOGO */}
-      <div className="relative z-20 -mt-[38px] flex h-[76px] w-[76px] shrink-0 items-center justify-center self-center overflow-hidden rounded-full border-[3px] border-white bg-[#fdf7f2] shadow-[0_10px_24px_rgba(87,18,36,0.22),0_0_0_1px_rgba(212,169,79,0.55)] max-[360px]:-mt-[33px] max-[360px]:h-[66px] max-[360px]:w-[66px]">
+      {/* LOGO — starburst badge floats over the banner fade */}
+      <div className="relative z-20 -mt-[44px] flex h-[78px] w-[78px] shrink-0 items-center justify-center self-center overflow-hidden rounded-full border-[3px] border-white bg-white shadow-[0_10px_24px_rgba(87,18,36,0.18),0_0_0_1px_rgba(212,169,79,0.5)] max-[360px]:-mt-[38px] max-[360px]:h-[68px] max-[360px]:w-[68px]">
         <Image
           src={logo}
-          alt="ZAPTO logo"
+          alt="Saudi Aramco logo"
           priority
           className="h-full w-full object-cover"
         />
       </div>
 
-      {/* CARD */}
-      <div className="mt-3.5 flex-1 rounded-t-[26px] bg-white px-5 pb-[30px] pt-6 shadow-[0_-6px_24px_rgba(87,18,36,0.06)] max-[360px]:rounded-t-[22px] max-[360px]:px-3.5 max-[360px]:pb-[26px] max-[360px]:pt-5">
+      {/* FORM AREA — transparent, flows straight out of the banner fade */}
+      <div className="mt-1 flex-1 px-5 pb-[30px] pt-5 max-[360px]:px-3.5 max-[360px]:pb-[26px] max-[360px]:pt-4">
         {/* TABS */}
         <div className="mb-6 flex items-baseline justify-between">
           <Link href="/login" className={`${tabBase} ${tabInactive}`}>

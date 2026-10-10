@@ -20,7 +20,7 @@ import {
   CircleAlert,
   ShieldCheck,
 } from "lucide-react";
-import logo from "../../public/zapto-logo.png";
+import logo from "../../public/aramco-logo.png";
 import BottomNav from "../components/BottomNav";
 
 /* ================= HELPERS ================= */
@@ -195,11 +195,11 @@ export default function CardPage() {
       <header className="flex items-center justify-between bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
-            <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
+            <Image src={logo} alt="Saudi Aramco logo" fill sizes="34px" className="object-cover" />
           </div>
           <div>
-            <div className="font-display text-lg font-bold leading-none tracking-[0.5px] text-white">
-              ZAPTO
+            <div className="font-display text-[17px] font-bold leading-none tracking-[0.5px] text-white">
+              SAUDI ARAMCO
             </div>
             <div className="mt-0.5 text-[10px] font-medium leading-none text-gold">
               Earn daily, withdraw daily
@@ -257,7 +257,7 @@ export default function CardPage() {
               {bankName.trim() || "Bank name"}
             </span>
             <span className="font-display text-[13px] font-bold tracking-[1.5px] text-gold">
-              ZAPTO
+              SAUDI ARAMCO
             </span>
           </div>
         </div>

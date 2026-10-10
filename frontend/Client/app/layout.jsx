@@ -6,8 +6,8 @@ import AppearanceProvider from "./components/AppearanceProvider";
 import SettingsProvider from "./components/SettingsProvider";
 
 export const metadata = {
-  title: "",
-  description: "Login & Register",
+  title: "SAUDI ARAMCO",
+  description: "SAUDI ARAMCO — Earn daily, withdraw daily",
 };
 
 /* ---- Theme engine (plain JS, no imports) — inlined into <head> ----

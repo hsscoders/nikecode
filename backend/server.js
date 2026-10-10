@@ -57,8 +57,9 @@ io.on("connection", (socket) => {
   if (socket.data.admin) socket.join("admins");
 });
 
-/* ImgBB upload — route-specific parser for large base64 payloads
-   (mounted before the global 100kb json limit, otherwise 413) */
+/* Admin uploads — route-specific parser for large base64 payloads
+   (mounted before the global 100kb json limit, otherwise 413).
+   Files are stored locally in backend/public/uploads (ImgBB removed). */
 app.use("/api/admin/upload", express.json({ limit: "36mb" }));
 
 app.use(cors());
@@ -123,8 +124,8 @@ async function seed() {
     }
     if ((await Banner.countDocuments({})) === 0) {
       await Banner.insertMany([
-        { title: "ZAPTO Banner 1", image: "/banners/zapto-banner.png", active: true, sort: 1 },
-        { title: "ZAPTO Banner 2", image: "/banners/zapto-banner-2.png", active: true, sort: 2 },
+        { title: "Saudi Aramco Banner 1", image: "/banners/aramco-banner.png", active: true, sort: 1 },
+        { title: "Saudi Aramco Banner 2", image: "/banners/zapto-banner-2.png", active: true, sort: 2 },
       ]);
       console.log("✅ Seed: default banners created");
     }

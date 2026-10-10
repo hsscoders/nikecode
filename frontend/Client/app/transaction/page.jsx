@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Home,
@@ -15,8 +15,9 @@ import {
   ArrowUpRight,
   Clock3,
 } from "lucide-react";
-import logo from "../../public/zapto-logo.png";
+import logo from "../../public/aramco-logo.png";
 import BottomNav from "../components/BottomNav";
+import useLive from "../components/useLive";
 
 const TABS = ["ALL", "Recharge", "Withdraw", "Earnings"];
 
@@ -145,43 +146,50 @@ export default function TransactionPage() {
   const [ready, setReady] = useState(false);
 
   /* token guard + transactions from the server ledger (localStorage fallback) */
+  const loadTxns = useCallback(async () => {
+    const token = localStorage.getItem("zapto_token");
+    if (!token) return;
+    try {
+      const r = await fetch("/api/transactions", {
+        headers: { Authorization: "Bearer " + token },
+      });
+      const d = await r.json();
+      if (d.success && Array.isArray(d.txns)) {
+        setTxns(
+          d.txns.map((t) => ({
+            id: t._id,
+            type: t.type,
+            title: t.title,
+            method: t.method || "",
+            amount: t.amount,
+            status: t.status,
+            at: t.createdAt,
+          }))
+        );
+        setReady(true);
+        return;
+      }
+    } catch (e) {}
+    /* fallback — offline/local records */
+    try {
+      setTxns(JSON.parse(localStorage.getItem("zapto_transactions") || "[]"));
+    } catch {
+      setTxns([]);
+    }
+    setReady(true);
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem("zapto_token");
     if (!token) {
       router.replace("/login");
       return;
     }
-    (async () => {
-      try {
-        const r = await fetch("/api/transactions", {
-          headers: { Authorization: "Bearer " + token },
-        });
-        const d = await r.json();
-        if (d.success && Array.isArray(d.txns)) {
-          setTxns(
-            d.txns.map((t) => ({
-              id: t._id,
-              type: t.type,
-              title: t.title,
-              method: t.method || "",
-              amount: t.amount,
-              status: t.status,
-              at: t.createdAt,
-            }))
-          );
-          setReady(true);
-          return;
-        }
-      } catch (e) {}
-      /* fallback — offline/local records */
-      try {
-        setTxns(JSON.parse(localStorage.getItem("zapto_transactions") || "[]"));
-      } catch {
-        setTxns([]);
-      }
-      setReady(true);
-    })();
-  }, [router]);
+    loadTxns();
+  }, [router, loadTxns]);
+
+  /* LIVE — recharge/withdraw approved or new request → list refreshes itself */
+  useLive("activity:update", loadTxns);
 
   const filtered = txns.filter((t) => {
     if (tab === 0) return true;
@@ -196,11 +204,11 @@ export default function TransactionPage() {
       <header className="flex items-center justify-between bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="relative h-[34px] w-[34px] overflow-hidden rounded-full ring-2 ring-gold/60">
-            <Image src={logo} alt="ZAPTO logo" fill sizes="34px" className="object-cover" />
+            <Image src={logo} alt="Saudi Aramco logo" fill sizes="34px" className="object-cover" />
           </div>
           <div>
-            <div className="font-display text-lg font-bold leading-none tracking-[0.5px] text-white">
-              ZAPTO
+            <div className="font-display text-[17px] font-bold leading-none tracking-[0.5px] text-white">
+              SAUDI ARAMCO
             </div>
             <div className="mt-0.5 text-[10px] font-medium leading-none text-gold">
               Earn daily, withdraw daily

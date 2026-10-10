@@ -62,6 +62,13 @@ const SettingSchema = new mongoose.Schema(
     withdraw: {
       minAmount: { type: Number, default: 130 },
       maxAmount: { type: Number, default: 50000 },
+      /* withdrawal charge % — deducted from the requested amount, admin sets 0–100 */
+      chargePercent: { type: Number, default: 10 },
+      /* availability control — daily request limit, IST time window, master switch */
+      dailyLimit: { type: Number, default: 0 }, // requests per user per day (0 = unlimited)
+      startTime: { type: String, default: "00:00" }, // window start (IST, HH:MM)
+      endTime: { type: String, default: "23:59" }, // window end (IST, HH:MM)
+      enabled: { type: Boolean, default: true }, // master switch — false stops ALL withdrawals
       note: { type: String, default: "Withdrawals are processed within 24 hours" },
     },
     /* Daily plan income auto-credit — admin sets the time (IST, HH:MM) */

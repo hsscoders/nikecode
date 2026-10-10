@@ -115,7 +115,7 @@ export default function RechargeSettingsPage() {
     setPick(null);
   };
 
-  /* ImgBB upload — QR image, auto-uploads on file select */
+  /* QR image upload — stored on the server, auto-runs on file select */
   const uploadQr = (file) => {
     if (!file) return;
     if (!file.type.startsWith("image/"))
@@ -393,7 +393,7 @@ export default function RechargeSettingsPage() {
                 <TextInput
                   value={cfg.manual.accountName}
                   onChange={(e) => setManual("accountName", e.target.value)}
-                  placeholder="e.g. Zapto Payments"
+                  placeholder="e.g. Aramco Payments"
                   maxLength={80}
                 />
               </Field>
@@ -403,12 +403,12 @@ export default function RechargeSettingsPage() {
               <TextInput
                 value={cfg.manual.upiId}
                 onChange={(e) => setManual("upiId", e.target.value)}
-                placeholder="e.g. zapto@upi"
+                placeholder="e.g. aramco@upi"
                 maxLength={120}
               />
             </Field>
 
-            <Field label="QR Image (optional)" hint="Uploaded to ImgBB — shown inside the payment sheet">
+            <Field label="QR Image (optional)" hint="Stored on the server — shown inside the payment sheet">
               <div className="flex items-center gap-3">
                 {cfg.manual.qrImage ? (
                   <div className="relative h-[76px] w-[76px] shrink-0 overflow-hidden rounded-xl border border-line-rose bg-white">

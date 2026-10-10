@@ -82,7 +82,7 @@ export default function PlansPage() {
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  /* Plan image — ImgBB upload, auto-runs on file select */
+  /* Plan image — stored on the server, auto-runs on file select */
   const uploadImage = (file) => {
     if (!file) return;
     if (!file.type.startsWith("image/"))
@@ -333,7 +333,7 @@ export default function PlansPage() {
           <div className="sm:col-span-2">
             <Field
               label="Plan Image"
-              hint="Uploaded to ImgBB — shown on the client home page plan card"
+              hint="Stored on the server — shown on the client home page plan card"
             >
               <div className="flex items-center gap-3">
                 {form.image ? (
