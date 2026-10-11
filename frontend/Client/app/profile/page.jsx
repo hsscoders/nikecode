@@ -289,13 +289,13 @@ export default function ProfilePage() {
             </button>
           </div>
 
-          {/* stats — Withdrawal Balance (wallet balance, withdrawable) /
-              Recharge Balance (deducts on every plan purchase) / Total Income */}
+          {/* stats — Withdrawal (wallet balance, withdrawable) /
+              Recharge (deducts on every plan purchase) / Income */}
           <div className="mt-3.5 grid grid-cols-3 gap-2 max-[360px]:gap-1.5">
             {[
-              { lbl: "Withdrawal Balance", val: fmt(balance) },
-              { lbl: "Recharge Balance", val: fmt(rechargeBalance) },
-              { lbl: "Total Income", val: fmt(incomeTotal) },
+              { lbl: "Withdrawal", val: fmt(balance) },
+              { lbl: "Recharge", val: fmt(rechargeBalance) },
+              { lbl: "Income", val: fmt(incomeTotal) },
             ].map(({ lbl, val }) => (
               <div
                 key={lbl}
