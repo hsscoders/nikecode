@@ -376,7 +376,10 @@ router.post("/okpay/notify", async (req, res) => {
 
 /* ============ PAYOUT SETTLEMENT (shared by every gateway's webhook) ========== */
 async function settlePayoutSuccess(wd, { gatewayOrderId = "", utr = "", label = "Gateway" }) {
-  await Withdrawal.updateOne(
+  /* atomic claim — only ONE settlement path (webhook / admin query / manual)
+     can flip a Pending/Processing withdrawal to Success; the loser of the
+     race must not touch the ledger or push duplicate alerts */
+  const upd = await Withdrawal.updateOne(
     { _id: wd._id, status: { $in: ["Pending", "Processing"] } },
     {
       $set: {
@@ -388,6 +391,7 @@ async function settlePayoutSuccess(wd, { gatewayOrderId = "", utr = "", label = 
       },
     }
   );
+  if (upd.modifiedCount === 0) return false; /* already settled elsewhere */
   await Transaction.updateMany(
     { refId: String(wd._id), status: { $ne: "Success" } },
     { $set: { status: "Success" } }
@@ -405,10 +409,15 @@ async function settlePayoutSuccess(wd, { gatewayOrderId = "", utr = "", label = 
   });
   emitToUser(wd.phone, "wallet:refresh", { reason: "withdraw", status: "Success" });
   emitToUser(wd.phone, "activity:update", { type: "withdraw", status: "Success" });
+  return true;
 }
 
 async function settlePayoutFailed(wd, { gatewayOrderId = "", note = "", label = "Gateway" }) {
-  await Withdrawal.updateOne(
+  /* atomic claim — the refund below runs ONLY when THIS call won the claim.
+     Without this guard a late "failed" webhook refunds the user a second
+     time after the admin already rejected the request manually (free money
+     out of the merchant balance). */
+  const upd = await Withdrawal.updateOne(
     { _id: wd._id, status: { $in: ["Pending", "Processing"] } },
     {
       $set: {
@@ -420,6 +429,7 @@ async function settlePayoutFailed(wd, { gatewayOrderId = "", note = "", label = 
       },
     }
   );
+  if (upd.modifiedCount === 0) return false; /* settled elsewhere — NEVER refund again */
   /* refund the user's hold — same as the manual reject path in admin.js */
   await User.updateOne({ _id: wd.user }, { $inc: { balance: wd.amount } });
   await Transaction.updateMany(
@@ -438,6 +448,7 @@ async function settlePayoutFailed(wd, { gatewayOrderId = "", note = "", label = 
   });
   emitToUser(wd.phone, "wallet:refresh", { reason: "withdraw", status: "Rejected" });
   emitToUser(wd.phone, "activity:update", { type: "withdraw", status: "Rejected" });
+  return true;
 }
 
 /* ============ QWACKPAY PAYOUT WEBHOOK (server-to-server, PUBLIC) ============

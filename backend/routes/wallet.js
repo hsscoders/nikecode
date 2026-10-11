@@ -145,19 +145,30 @@ router.post("/invest", userAuth, async (req, res) => {
         message: "Insufficient recharge balance. Please recharge first.",
       });
 
-    const invest = await Invest.create({
-      user: req.user._id,
-      userid: req.user.userid || "",
-      phone: req.user.phone,
-      planId: plan._id,
-      planName: plan.name,
-      vip: plan.vip,
-      price: plan.price,
-      daily: plan.daily,
-      cycle: plan.cycle,
-      total: plan.total,
-      status: "Active",
-    });
+    /* money-safety — if the invest record fails AFTER the deduction, the
+       balance is refunded immediately; the user never loses money to a DB hiccup */
+    let invest;
+    try {
+      invest = await Invest.create({
+        user: req.user._id,
+        userid: req.user.userid || "",
+        phone: req.user.phone,
+        planId: plan._id,
+        planName: plan.name,
+        vip: plan.vip,
+        price: plan.price,
+        daily: plan.daily,
+        cycle: plan.cycle,
+        total: plan.total,
+        status: "Active",
+      });
+    } catch (createErr) {
+      await User.updateOne(
+        { _id: req.user._id },
+        { $inc: { rechargeBalance: plan.price } }
+      );
+      throw createErr;
+    }
 
     /* invite commission — L1/L2/L3 on the plan price (refBy = the referrer's refId) */
     try {
@@ -341,49 +352,58 @@ router.post("/withdraw", userAuth, async (req, res) => {
         .status(400)
         .json({ success: false, message: "Insufficient balance" });
 
-    const wd = await Withdrawal.create({
-      user: req.user._id,
-      userid: req.user.userid || "",
-      phone: req.user.phone,
-      amount,
-      chargePercent: chargePct,
-      charge,
-      netAmount,
-      realName: bank.realName,
-      bankName: bank.bankName,
-      account: bank.account,
-      ifsc: bank.ifsc,
-      status: "Pending",
-    });
+    /* money-safety — if the withdrawal record / ledger fails AFTER the
+       deduction, the balance is refunded immediately; the hold never silently
+       eats the user's money on a DB hiccup */
+    let wd;
+    try {
+      wd = await Withdrawal.create({
+        user: req.user._id,
+        userid: req.user.userid || "",
+        phone: req.user.phone,
+        amount,
+        chargePercent: chargePct,
+        charge,
+        netAmount,
+        realName: bank.realName,
+        bankName: bank.bankName,
+        account: bank.account,
+        ifsc: bank.ifsc,
+        status: "Pending",
+      });
 
-    /* save the bank card on the user (admin can view it in Manage Users) */
-    await User.updateOne(
-      { _id: req.user._id },
-      {
-        bank: {
-          realName: String(bank.realName || ""),
-          bankName: String(bank.bankName || ""),
-          account: String(bank.account || ""),
-          ifsc: String(bank.ifsc || ""),
-        },
-      }
-    );
+      /* save the bank card on the user (admin can view it in Manage Users) */
+      await User.updateOne(
+        { _id: req.user._id },
+        {
+          bank: {
+            realName: String(bank.realName || ""),
+            bankName: String(bank.bankName || ""),
+            account: String(bank.account || ""),
+            ifsc: String(bank.ifsc || ""),
+          },
+        }
+      );
 
-    /* ledger entry — amount is the NET the user receives (after the charge),
-       so /transaction shows ₹180 for a ₹200 request with a 10% fee */
-    await Transaction.create({
-      user: req.user._id,
-      userid: req.user.userid || "",
-      phone: req.user.phone,
-      type: "withdraw",
-      title: "Withdrawal",
-      amount: netAmount,
-      chargePercent: chargePct,
-      charge,
-      netAmount,
-      status: "Pending",
-      refId: String(wd._id),
-    });
+      /* ledger entry — amount is the NET the user receives (after the charge),
+         so /transaction shows ₹180 for a ₹200 request with a 10% fee */
+      await Transaction.create({
+        user: req.user._id,
+        userid: req.user.userid || "",
+        phone: req.user.phone,
+        type: "withdraw",
+        title: "Withdrawal",
+        amount: netAmount,
+        chargePercent: chargePct,
+        charge,
+        netAmount,
+        status: "Pending",
+        refId: String(wd._id),
+      });
+    } catch (createErr) {
+      await User.updateOne({ _id: req.user._id }, { $inc: { balance: amount } });
+      throw createErr;
+    }
 
     /* realtime — alert the admin panel + sync the user's other tabs */
     emitAdmin("txns:new", {

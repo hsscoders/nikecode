@@ -40,6 +40,10 @@ body {
   min-height: 100dvh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  /* Crisp, evenly-spaced digits everywhere — amounts never look squashed
+     or misaligned (₹1,000 vs ₹950 line up perfectly) */
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
 }
 
 ::selection {
@@ -50,8 +54,8 @@ body {
    rendering paths, making "0" paint tiny (₹0 looked like ₹o). Force lining
    numerals everywhere the display font is used. */
 .font-display {
-  font-variant-numeric: lining-nums;
-  font-feature-settings: "lnum" 1;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
 }
 
 /* Consistent, accessible keyboard focus ring */
@@ -246,32 +250,36 @@ a,
    — consistent, comfortable sizes on phones
 ========================================== */
 @media (max-width: 640px) {
-  /* Inputs: 16px text stops iOS auto-zoom + bigger touch target */
+  /* Inputs: 16px text stops iOS auto-zoom; padding tightened so fields
+     look compact, not oversized, on a 360-430px screen */
   .admin-input {
     font-size: 16px;
-    padding: 11px 13px;
+    padding: 9px 12px;
+    border-radius: 10px;
   }
 
-  /* Buttons: full comfortable tap height */
+  /* Buttons: full comfortable tap height, slightly trimmed */
   .admin-btn {
-    padding: 11px 16px;
-    font-size: 14px;
+    padding: 10px 14px;
+    font-size: 13.5px;
+    border-radius: 10px;
   }
 
-  /* Tables: slightly tighter cells so more fits on a small screen */
+  /* Tables: tighter cells so more fits on a small screen */
   .admin-table {
-    font-size: 13px;
+    font-size: 12.5px;
   }
   .admin-table thead th {
-    padding: 10px 12px;
-    font-size: 10px;
+    padding: 9px 10px;
+    font-size: 9.5px;
   }
   .admin-table tbody td {
-    padding: 11px 12px;
+    padding: 10px 10px;
   }
 
   /* Cards: softer radius + lighter shadow on small screens */
   .admin-card {
-    border-radius: 14px;
+    border-radius: 13px;
+    box-shadow: 0 2px 14px rgba(87, 18, 36, 0.06);
   }
 }

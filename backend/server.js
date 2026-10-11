@@ -190,16 +190,33 @@ async function runIncomeCredit() {
     $expr: { $lt: [{ $ifNull: ["$paidDays", 0] }, "$cycle"] },
   }).lean();
 
+  /* self-heal — plans whose paidDays already reached the cycle but whose
+     status never flipped (a legacy edge of the old claim logic) are closed
+     here so they stop counting towards the daily liability stats */
+  await Invest.updateMany(
+    { status: "Active", $expr: { $gte: [{ $ifNull: ["$paidDays", 0] }, "$cycle"] } },
+    { $set: { status: "Completed" } }
+  );
+
   let paid = 0;
   for (const inv of invests) {
-    /* atomic per-plan claim — the same day can never pay a plan twice */
-    const upd = await Invest.updateOne(
-      { _id: inv._id, status: "Active", $expr: { $lt: [{ $ifNull: ["$paidDays", 0] }, "$cycle"] } },
-      { $inc: { paidDays: 1 } }
+    const prevPaid = Number(inv.paidDays) || 0;
+    /* atomic claim on the EXACT previous paidDays value — the filter only
+       matches while paidDays is still prevPaid, so two overlapping runs can
+       never both win. The winner's returned doc carries the new value, which
+       makes dayNo unique: the ledger can never repeat "Day N" for a plan. */
+    const upd = await Invest.findOneAndUpdate(
+      {
+        _id: inv._id,
+        status: "Active",
+        $expr: { $eq: [{ $ifNull: ["$paidDays", 0] }, prevPaid] },
+      },
+      { $inc: { paidDays: 1 } },
+      { new: true }
     );
-    if (!upd.modifiedCount) continue;
+    if (!upd) continue;
 
-    const dayNo = (Number(inv.paidDays) || 0) + 1;
+    const dayNo = prevPaid + 1;
     await User.updateOne(
       { _id: inv.user },
       { $inc: { balance: inv.daily, totalIncome: inv.daily } }

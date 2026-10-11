@@ -19,6 +19,7 @@ import {
   Palette,
   Gift,
   CreditCard,
+  FileText,
   LogOut,
   Menu,
   X,
@@ -58,6 +59,7 @@ const NAV = [
         label: "Settings",
         Icon: Settings,
         children: [
+          { label: "Website Texts", href: "/admin/settings/website", Icon: FileText },
           { label: "Register Bonus", href: "/admin/settings/register", Icon: Gift },
           { label: "Popup", href: "/admin/settings/popup", Icon: Bell },
           { label: "Font & Color", href: "/admin/settings/appearance", Icon: Palette },

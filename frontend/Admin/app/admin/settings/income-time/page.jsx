@@ -61,17 +61,17 @@ export default function IncomeTimePage() {
       {!cfg ? (
         <Loader />
       ) : (
-        <div className="mx-auto flex max-w-[720px] flex-col gap-5">
+        <div className="mx-auto flex max-w-[720px] flex-col gap-3.5 sm:gap-5">
           {/* ===== TIME SETTING ===== */}
-          <div className="admin-card flex flex-col gap-4 p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
               <Clock3 size={17} className="text-maroon-700" />
-              <div className="font-display text-[16px] font-bold text-ink">
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Daily Income Credit Time
               </div>
             </div>
 
-            <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-4 py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
+            <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
               <Info size={16} className="mt-0.5 shrink-0 text-maroon-600" />
               <span>
                 Buy-plan daily income is credited automatically to every user&apos;s
@@ -98,7 +98,7 @@ export default function IncomeTimePage() {
               </Field>
             </div>
 
-            <div className="flex items-center gap-2 rounded-xl border border-line-rose bg-[#fdf6e4]/60 px-4 py-3 text-[12.5px] font-semibold text-[#8a6a1c]">
+            <div className="flex items-center gap-2 rounded-xl border border-line-rose bg-[#fdf6e4]/60 px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-semibold text-[#8a6a1c]">
               <Zap size={15} className="shrink-0" />
               Current schedule: every day at {cfg.creditTime} IST
               {cfg.lastCreditDate ? " — last run " + cfg.lastCreditDate : ""}
@@ -106,10 +106,10 @@ export default function IncomeTimePage() {
           </div>
 
           {/* ===== SAVE ===== */}
-          <div className="sticky bottom-4 flex justify-end">
+          <div className="sticky bottom-3 flex justify-end sm:bottom-4">
             <button
               type="button"
-              className="admin-btn admin-btn-primary px-8 shadow-[0_10px_26px_rgba(124,29,51,0.35)]"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >

@@ -10,7 +10,6 @@ import {
   Search,
   Zap,
   Radar,
-  Landmark,
   CheckCircle2,
 } from "lucide-react";
 import AdminShell from "../../../components/AdminShell";
@@ -195,7 +194,7 @@ export default function WithdrawalsPage() {
         <div className="flex min-w-[200px] flex-1 items-center gap-2.5 rounded-xl border border-line-rose bg-white px-3.5 py-2.5 sm:max-w-[320px]">
           <Search size={16} className="shrink-0 text-icon-rose" />
           <input
-            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13.5px] font-medium text-ink outline-none placeholder:text-[#c4a9b0]"
+            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[16px] font-medium text-ink outline-none placeholder:text-[#c4a9b0] sm:text-[13.5px]"
             placeholder="Search phone / userid..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -220,63 +219,14 @@ export default function WithdrawalsPage() {
         </button>
       </div>
 
-      {/* ===== PAYOUT VIA GATEWAY — clickable chips, one per ready gateway ===== */}
-      {autoOn && (
-        <div className="mb-4 rounded-2xl border border-line-rose bg-white p-4">
-          <div className="mb-2.5 flex flex-wrap items-center gap-2">
-            <Landmark size={15} className="text-maroon-700" />
-            <span className="text-[11px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">
-              Payout via Gateway
-            </span>
-            <span className="text-[11.5px] font-medium text-muted-rose">
-              — Auto Pay sends the money through the gateway you select here · Approve / Reject stay manual
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {readyGws.map((g) => {
-              const active = selGw === g.id;
-              return (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => setSelGw(g.id)}
-                  className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-4 py-2.5 text-[13px] font-extrabold transition-all duration-150 ${
-                    active
-                      ? "border-maroon-700 bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white shadow-[0_6px_16px_rgba(124,29,51,0.3)]"
-                      : "border-line-rose bg-white text-ink hover:border-maroon-700/40"
-                  }`}
-                >
-                  {active ? <CheckCircle2 size={15} /> : <Zap size={14} className="text-maroon-600" />}
-                  {g.label}
-                  {g.balance ? (
-                    <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${active ? "bg-white/20 text-white" : "bg-[#eafaf0] text-[#16a34a]"}`}>
-                      {money(g.balance.available)} avail.
-                    </span>
-                  ) : (
-                    <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${active ? "bg-white/20 text-white" : "bg-[#f3eef0] text-[#9a8b90]"}`}>
-                      balance —
-                    </span>
-                  )}
-                  {g.isDefault && (
-                    <span className={`rounded-full px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide ${active ? "bg-white/20 text-white" : "bg-[#f7e3e7] text-maroon-700"}`}>
-                      default
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Status tabs */}
-      <div className="mb-4 flex flex-wrap gap-2">
+      {/* Status tabs — single-line, swipeable on mobile */}
+      <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:pb-0">
         {TABS.map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`cursor-pointer rounded-full px-4 py-2 text-[12.5px] font-extrabold transition-all duration-150 ${
+            className={`flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[12.5px] font-extrabold transition-all duration-150 ${
               tab === t
                 ? "bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white shadow-[0_6px_16px_rgba(124,29,51,0.3)]"
                 : "border border-line-rose bg-white text-[#7d6a6e] hover:bg-[#fbf1f3]"
@@ -284,7 +234,7 @@ export default function WithdrawalsPage() {
           >
             {t}
             <span
-              className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] ${
+              className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold ${
                 tab === t ? "bg-white/20 text-white" : "bg-[#f7e3e7] text-maroon-700"
               }`}
             >
@@ -297,7 +247,95 @@ export default function WithdrawalsPage() {
       {!wds ? (
         <Loader />
       ) : (
-        <div className="admin-card overflow-hidden">
+        <>
+        {/* MOBILE — compact card list (table hidden below sm) */}
+        <div className="flex flex-col gap-2.5 sm:hidden">
+          {filtered.map((w) => {
+            const acts = actionsFor(w);
+            const canCheck = w.autoPayout && w.status === "Processing";
+            return (
+              <div key={w._id} className="admin-card p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate text-[13.5px] font-extrabold text-ink">
+                    +91 {w.phone}
+                  </span>
+                  <Pill value={w.status} />
+                </div>
+                <div className="mt-2 flex items-end justify-between gap-2">
+                  <div className="font-display text-[17px] font-extrabold leading-none text-maroon-700">
+                    {fmt0(w.netAmount ?? w.amount)}
+                  </div>
+                  <div className="shrink-0 text-[10.5px] font-medium text-muted-rose">
+                    {fmtD(w.createdAt)}
+                  </div>
+                </div>
+                <div className="mt-1.5 text-[11.5px] font-semibold text-[#7d6a6e]">
+                  {w.userid || "—"}
+                  {w.charge ? " · Req " + fmt0(w.amount) + " · Fee " + fmt0(w.charge) : ""}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setView(w)}
+                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line-rose bg-white px-2.5 py-1.5 text-[11.5px] font-bold text-maroon-700 transition-colors hover:bg-[#fbf1f3]"
+                  >
+                    <Eye size={12} />
+                    {w.bankName || "View"}
+                  </button>
+                  {w.autoPayout && (
+                    <span className="inline-flex items-center gap-0.5 rounded-full bg-[#fdf6e4] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-[#8a6a1c]">
+                      <Zap size={9} /> Auto · {gwLabel(w.gateway)}
+                    </span>
+                  )}
+                  {w.autoPayout && w.utr && (
+                    <span className="text-[9.5px] font-bold text-muted-rose">
+                      UTR {String(w.utr).slice(0, 10)}
+                    </span>
+                  )}
+                </div>
+                {acts || canCheck ? (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-line-rose/60 pt-2.5">
+                    {acts &&
+                      acts.map(({ key, label, cls, Icon }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => onAction(w, key)}
+                          className={`flex basis-[calc(50%-3px)] cursor-pointer items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-[12px] font-extrabold transition-colors ${cls}`}
+                        >
+                          <Icon size={13} />
+                          {label}
+                        </button>
+                      ))}
+                    {canCheck && (
+                      <button
+                        type="button"
+                        onClick={() => checkStatus(w)}
+                        disabled={busyId === w._id}
+                        className="flex basis-[calc(50%-3px)] cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-[#e8f0fe] px-2.5 py-2 text-[12px] font-extrabold text-[#2563eb] transition-colors hover:bg-[#dbe8fd] disabled:opacity-60"
+                      >
+                        <Radar size={13} className={busyId === w._id ? "animate-spin" : ""} />
+                        {busyId === w._id ? "Checking..." : "Check Status"}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-2.5 border-t border-line-rose/60 pt-2 text-[11.5px] font-semibold text-muted-rose">
+                    {w.processedAt ? "Processed " + fmtD(w.processedAt) : "—"}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="admin-card py-8 text-center text-[13px] font-medium text-muted-rose">
+              No withdrawals found
+            </div>
+          )}
+        </div>
+
+        {/* DESKTOP — full table */}
+        <div className="admin-card hidden overflow-hidden sm:block">
           <div className="overflow-x-auto">
             <table className="admin-table min-w-[1080px]">
               <thead>
@@ -396,6 +434,7 @@ export default function WithdrawalsPage() {
             </table>
           </div>
         </div>
+        </>
       )}
 
       {/* ===== BANK DETAILS VIEW ===== */}
@@ -447,7 +486,7 @@ export default function WithdrawalsPage() {
         {payDlg && (
           <div className="flex flex-col gap-4">
             {/* beneficiary summary */}
-            <div className="rounded-xl bg-[var(--c-tint)] px-4 py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
+            <div className="rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
               <div className="flex items-center justify-between gap-3">
                 <span className="font-bold text-ink">{payDlg.wd.realName || "Beneficiary"}</span>
                 <span className="font-display text-[15px] font-extrabold text-maroon-700">
@@ -474,7 +513,7 @@ export default function WithdrawalsPage() {
                       key={g.id}
                       type="button"
                       onClick={() => setPayGw(g.id)}
-                      className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-4 py-2.5 text-[13px] font-extrabold transition-all duration-150 ${
+                      className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-3 py-2 text-[12.5px] font-extrabold sm:px-4 sm:py-2.5 sm:text-[13px] transition-all duration-150 ${
                         active
                           ? "border-maroon-700 bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white shadow-[0_6px_16px_rgba(124,29,51,0.3)]"
                           : "border-line-rose bg-white text-ink hover:border-maroon-700/40"
@@ -503,7 +542,7 @@ export default function WithdrawalsPage() {
               const net = Number(payDlg.wd.netAmount ?? payDlg.wd.amount) || 0;
               if (info && info.balance && Number(info.balance.available) < net)
                 return (
-                  <div className="flex items-start gap-2.5 rounded-xl border border-[#f3c8c8] bg-[#fdecec] px-4 py-3 text-[12.5px] font-semibold text-[#b91c1c]">
+                  <div className="flex items-start gap-2.5 rounded-xl border border-[#f3c8c8] bg-[#fdecec] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-semibold text-[#b91c1c]">
                     <XCircle size={15} className="mt-0.5 shrink-0" />
                     {info.label} balance ({money(info.balance.available)}) is lower than the payout amount — fund the gateway wallet first or pay manually.
                   </div>

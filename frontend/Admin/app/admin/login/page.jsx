@@ -126,7 +126,7 @@ export default function AdminLoginPage() {
 
             {/* ERROR */}
             {error && (
-              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] leading-relaxed text-red-700">
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 sm:px-4 sm:py-3 text-[13px] leading-relaxed text-red-700">
                 {error}
               </div>
             )}

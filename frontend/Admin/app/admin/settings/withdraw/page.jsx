@@ -120,12 +120,12 @@ export default function WithdrawSettingsPage() {
       {!cfg ? (
         <Loader />
       ) : (
-        <div className="mx-auto flex max-w-[860px] flex-col gap-5">
+        <div className="mx-auto flex max-w-[860px] flex-col gap-3.5 sm:gap-5">
           {/* ===== LIMITS ===== */}
-          <div className="admin-card flex flex-col gap-4 p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
               <Percent size={17} className="text-maroon-700" />
-              <div className="font-display text-[16px] font-bold text-ink">
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Withdrawal Limits
               </div>
             </div>
@@ -147,17 +147,17 @@ export default function WithdrawSettingsPage() {
                 />
               </Field>
             </div>
-            <div className="rounded-xl border border-line-rose bg-[#fbf1f3] px-4 py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
+            <div className="rounded-xl border border-line-rose bg-[#fbf1f3] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
               These limits are enforced server-side in the withdraw API — the client only
               receives them for display, so they stay manipulation-safe.
             </div>
           </div>
 
           {/* ===== CHARGE ===== */}
-          <div className="admin-card flex flex-col gap-4 p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
               <BadgePercent size={17} className="text-maroon-700" />
-              <div className="font-display text-[16px] font-bold text-ink">
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Withdrawal Charge
               </div>
             </div>
@@ -171,7 +171,7 @@ export default function WithdrawSettingsPage() {
                   onChange={(e) => set("chargePercent", e.target.value)}
                 />
               </Field>
-              <div className="flex flex-col justify-center rounded-xl border border-line-rose bg-[#fbf1f3] px-4 py-3">
+              <div className="flex flex-col justify-center rounded-xl border border-line-rose bg-[#fbf1f3] px-3 py-2.5 sm:px-4 sm:py-3">
                 <div className="text-[10.5px] font-extrabold uppercase tracking-[0.6px] text-[#a98f95]">
                   Live preview — user withdraws ₹500
                 </div>
@@ -191,7 +191,7 @@ export default function WithdrawSettingsPage() {
                 </div>
               </div>
             </div>
-            <div className="rounded-xl border border-line-rose bg-[#fbf1f3] px-4 py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
+            <div className="rounded-xl border border-line-rose bg-[#fbf1f3] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
               The charge is calculated server-side on every withdraw request and stored on
               the withdrawal record — rejecting a request refunds the user&apos;s full
               amount, the charge only applies on successful payouts.
@@ -199,17 +199,17 @@ export default function WithdrawSettingsPage() {
           </div>
 
           {/* ===== AVAILABILITY — switch + daily limit + time window ===== */}
-          <div className="admin-card flex flex-col gap-4 p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
               <Timer size={17} className="text-maroon-700" />
-              <div className="font-display text-[16px] font-bold text-ink">
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Withdrawal Availability
               </div>
             </div>
 
             {/* master switch — one click stops ALL withdrawals, saves instantly */}
             <div
-              className={`flex items-center justify-between rounded-xl border px-4 py-3.5 ${
+              className={`flex items-center justify-between rounded-xl border px-3 py-3 sm:px-4 sm:py-3.5 ${
                 cfg.enabled !== false
                   ? "border-[#bfe3cd] bg-[#f0faf3]"
                   : "border-[#f3c4c4] bg-[#fdf1f1]"
@@ -286,7 +286,7 @@ export default function WithdrawSettingsPage() {
               </Field>
             </div>
 
-            <div className="rounded-xl border border-line-rose bg-[#fbf1f3] px-4 py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
+            <div className="rounded-xl border border-line-rose bg-[#fbf1f3] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
               Times are IST. Overnight windows work too (e.g. 22:00 → 06:00). The switch
               is instant — enforced server-side on every request, and the client page
               shows a stopped banner with a disabled button.
@@ -294,10 +294,10 @@ export default function WithdrawSettingsPage() {
           </div>
 
           {/* ===== NOTE ===== */}
-          <div className="admin-card flex flex-col gap-4 p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
               <Clock size={17} className="text-maroon-700" />
-              <div className="font-display text-[16px] font-bold text-ink">
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Processing Note
               </div>
             </div>
@@ -315,10 +315,10 @@ export default function WithdrawSettingsPage() {
           </div>
 
           {/* ===== SAVE ===== */}
-          <div className="sticky bottom-4 flex justify-end">
+          <div className="sticky bottom-3 flex justify-end sm:bottom-4">
             <button
               type="button"
-              className="admin-btn admin-btn-primary px-8 shadow-[0_10px_26px_rgba(124,29,51,0.35)]"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >

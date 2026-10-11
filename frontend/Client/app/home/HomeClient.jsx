@@ -20,6 +20,7 @@ import {
   Star,
   Zap,
   CircleCheck,
+  Megaphone,
 } from "lucide-react";
 import planDaily from "../../public/product-starter.png";
 import planVip from "../../public/product-platinum.png";
@@ -310,6 +311,12 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
   const vipTab = ht.vipTab || "Premium VIP";
   const dailyBtn = ht.dailyBtn || "Buy Now";
   const vipBtn = ht.vipBtn || "Buy Now";
+  /* site texts — header subtitle + announcement marquee + channel link
+     (admin-editable from /admin/settings/website, live via settings context) */
+  const site = (gs && gs.site) || {};
+  const homeSubtitle = site.homeSubtitle || "Earn daily, withdraw daily";
+  const announcement = String(site.announcement || "").trim();
+  const telegramUrl = String(site.telegramUrl || "").trim();
   const [popupCfg, setPopupCfg] = useState(() =>
     gs && gs.popup ? { ...DEFAULT_POPUP, ...gs.popup } : DEFAULT_POPUP
   );
@@ -506,7 +513,7 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
   };
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:max-w-[430px] min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/90 min-[520px]:bg-white min-[520px]:shadow-[0_40px_90px_rgba(87,18,36,0.2),0_8px_24px_rgba(87,18,36,0.1)]">
+    <div className="mx-auto flex min-h-dvh w-full flex-col">
       {/* ===== HEADER ===== */}
       <header className="flex items-center justify-between bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-4 py-3">
         <div className="flex items-center gap-2.5">
@@ -518,11 +525,28 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
               SAUDI ARAMCO
             </div>
             <div className="mt-0.5 text-[10px] font-medium leading-none text-gold">
-              Earn daily, withdraw daily
+              {homeSubtitle}
             </div>
           </div>
         </div>
       </header>
+
+      {/* ===== ANNOUNCEMENT MARQUEE (admin-editable, empty = hidden) ===== */}
+      {announcement && (
+        <div className="relative overflow-hidden bg-[linear-gradient(90deg,var(--c-deep2)_0%,var(--c-deep)_100%)] py-[7px]">
+          <div className="flex w-max animate-[marquee_18s_linear_infinite] items-center">
+            {[0, 1].map((k) => (
+              <span
+                key={k}
+                className="flex items-center gap-2 whitespace-nowrap px-5 text-[11.5px] font-semibold text-gold"
+              >
+                <Megaphone size={13} className="shrink-0" />
+                {announcement}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ===== BANNER CAROUSEL (admin banners only — skeleton while loading) ===== */}
       {banners === null ? (
@@ -534,7 +558,7 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
       )}
 
       {/* ===== QUICK MENU ===== */}
-      <div className="mx-3.5 mt-3.5 rounded-[20px] border border-maroon-900 bg-maroon-950 px-2.5 py-4 shadow-[0_8px_24px_var(--s-alert)]">
+      <div className="mx-3.5 mt-3.5 rounded-[20px] border border-white/10 bg-[linear-gradient(135deg,var(--c-deep)_0%,var(--c-primary)_55%,var(--c-primary2)_100%)] px-2.5 py-4 shadow-[0_8px_24px_var(--s-btn)]">
         <div className="grid grid-cols-4 gap-1">
           {QUICK_ITEMS.map(({ label, Icon }) => (
             <button
@@ -545,7 +569,10 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
                 if (label === "Recharge") router.push("/recharge");
                 else if (label === "Withdraw") router.push("/withdrawal");
                 else if (label === "Records") router.push("/records");
-                else showToast(label + " coming soon");
+                else if (label === "Channel") {
+                  if (telegramUrl) window.open(telegramUrl, "_blank", "noopener");
+                  else showToast(label + " coming soon");
+                } else showToast(label + " coming soon");
               }}
             >
               <div className={`grid h-[52px] w-[52px] place-items-center rounded-2xl bg-white/12 text-gold ring-1 ring-white/15 max-[360px]:h-[46px] max-[360px]:w-[46px]`}>

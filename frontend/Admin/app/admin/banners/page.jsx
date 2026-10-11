@@ -165,7 +165,7 @@ export default function BannersPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
           {banners.map((b) => (
             <div key={b._id} className="admin-card overflow-hidden">
               {/* PREVIEW */}
@@ -192,7 +192,7 @@ export default function BannersPage() {
               </div>
 
               {/* INFO */}
-              <div className="p-4">
+              <div className="p-3.5 sm:p-4">
                 <div className="truncate text-[14px] font-bold text-ink">
                   {b.title || "Untitled banner"}
                 </div>
@@ -308,7 +308,7 @@ export default function BannersPage() {
             <Field label="Sort Order">
               <TextInput type="number" value={form.sort} onChange={(e) => set("sort", e.target.value)} placeholder="1" />
             </Field>
-            <div className="flex items-center justify-between rounded-xl border border-line-rose bg-[#fdfafa] px-4 py-3">
+            <div className="flex items-center justify-between rounded-xl border border-line-rose bg-[#fdfafa] px-3 py-2.5 sm:px-4 sm:py-3">
               <div className="text-[13.5px] font-bold text-ink">Active</div>
               <Switch checked={form.active} onChange={(v) => set("active", v)} />
             </div>

@@ -85,9 +85,9 @@ const emptyCfg = (m) => ({
 
 /* top-level tabs — the page is broken into clear parts */
 const TABS = [
-  { id: "gateways", label: "Gateways", Icon: Layers },
-  { id: "urls", label: "Server & Webhooks", Icon: Globe },
-  { id: "query", label: "Order Query", Icon: Radar },
+  { id: "gateways", label: "Gateways", short: "Gateways", Icon: Layers },
+  { id: "urls", label: "Server & Webhooks", short: "Webhooks", Icon: Globe },
+  { id: "query", label: "Order Query", short: "Query", Icon: Radar },
 ];
 
 /* gateway order status → pill (order query result) */
@@ -130,11 +130,11 @@ function StepHead({ n, Icon, title, right }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex items-center gap-3">
-        <span className="font-display grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-[14px] font-extrabold text-white shadow-[0_4px_10px_rgba(124,29,51,0.3)]">
+        <span className="font-display grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-[13px] font-extrabold text-white shadow-[0_4px_10px_rgba(124,29,51,0.3)] sm:h-8 sm:w-8 sm:text-[14px]">
           {n}
         </span>
-        <Icon size={17} className="text-maroon-700" />
-        <div className="font-display text-[16px] font-bold text-ink">{title}</div>
+        <Icon size={17} className="h-4 w-4 text-maroon-700 sm:h-[17px] sm:w-[17px]" />
+        <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">{title}</div>
       </div>
       {right}
     </div>
@@ -370,22 +370,23 @@ export default function PaymentGatewayPage() {
       {!cfgs ? (
         <Loader />
       ) : (
-        <div className="mx-auto flex max-w-[880px] flex-col gap-5">
+        <div className="mx-auto flex max-w-[880px] flex-col gap-3.5 sm:gap-5">
           {/* ===== TOP TABS — the parts of this console ===== */}
-          <div className="flex flex-wrap gap-2">
-            {TABS.map(({ id, label, Icon }) => (
+          <div className="grid w-full grid-cols-3 gap-1.5 sm:flex sm:w-auto sm:gap-2">
+            {TABS.map(({ id, label, short, Icon }) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setTab(id)}
-                className={`flex cursor-pointer items-center gap-2 rounded-xl px-5 py-3 text-[13.5px] font-extrabold transition-all duration-150 ${
+                className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11.5px] font-extrabold transition-all duration-150 sm:justify-start sm:gap-2 sm:px-5 sm:py-3 sm:text-[13.5px] ${
                   tab === id
                     ? "bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white shadow-[0_6px_16px_rgba(124,29,51,0.3)]"
                     : "border border-line-rose bg-white text-[#7d6a6e] hover:bg-[#fbf1f3]"
                 }`}
               >
-                <Icon size={16} />
-                {label}
+                <Icon size={16} className="h-[14px] w-[14px] sm:h-4 sm:w-4" />
+                <span className="sm:hidden">{short}</span>
+                <span className="hidden sm:inline">{label}</span>
               </button>
             ))}
           </div>
@@ -396,11 +397,11 @@ export default function PaymentGatewayPage() {
           {tab === "gateways" && (
             <>
               {/* gateway selector — click a button to open its setup */}
-              <div className="admin-card flex flex-col gap-4 p-6">
+              <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Layers size={17} className="text-maroon-700" />
-                    <div className="font-display text-[16px] font-bold text-ink">
+                    <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                       Choose a Gateway
                     </div>
                   </div>
@@ -425,19 +426,19 @@ export default function PaymentGatewayPage() {
                         key={meta.id}
                         type="button"
                         onClick={() => setSelGw(meta.id)}
-                        className={`flex cursor-pointer flex-col gap-3 rounded-2xl border-2 p-4 text-left transition-all duration-150 ${
+                        className={`flex cursor-pointer flex-col gap-2.5 rounded-xl border-2 p-3 text-left transition-all duration-150 sm:gap-3 sm:rounded-2xl sm:p-4 ${
                           active
                             ? "border-maroon-700 bg-[#fbf1f3] shadow-[0_8px_20px_rgba(124,29,51,0.15)]"
                             : "border-line-rose bg-white hover:border-maroon-700/40"
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${active ? "bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white" : "bg-[#f7e3e7] text-maroon-700"}`}>
-                            <CreditCard size={20} />
+                          <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl sm:h-11 sm:w-11 ${active ? "bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white" : "bg-[#f7e3e7] text-maroon-700"}`}>
+                            <CreditCard size={20} className="h-[18px] w-[18px] sm:h-5 sm:w-5" />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[15px] font-extrabold text-ink">{meta.label}</span>
+                              <span className="text-[13.5px] font-extrabold text-ink sm:text-[15px]">{meta.label}</span>
                               {active && <CheckCircle2 size={15} className="text-maroon-700" />}
                             </div>
                             <div className="truncate text-[11px] font-semibold text-[#9a8b90]">{meta.tag}</div>
@@ -460,7 +461,7 @@ export default function PaymentGatewayPage() {
                   })}
                 </div>
 
-                <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-4 py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
+                <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
                   <Info size={15} className="mt-0.5 shrink-0 text-maroon-600" />
                   <span>
                     Every gateway is set up the same 3-step way: connect the
@@ -480,7 +481,7 @@ export default function PaymentGatewayPage() {
                 return (
                   <div key={meta.id} className="flex flex-col gap-5">
                     {/* — STEP 1 · CONNECT — */}
-                    <div className="admin-card flex flex-col gap-4 p-6">
+                    <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
                       <StepHead
                         n={1}
                         Icon={KeyRound}
@@ -491,14 +492,14 @@ export default function PaymentGatewayPage() {
                           </span>
                         }
                       />
-                      <div className="text-[12.5px] font-medium leading-relaxed text-muted-rose">
+                      <div className="text-[12px] font-medium leading-relaxed text-muted-rose sm:text-[12.5px]">
                         Paste the merchant ID and the key from the {meta.label}{" "}
                         merchant dashboard, then press{" "}
                         <span className="font-bold text-maroon-700">Test Connection</span> — it
                         talks to the live gateway and loads your merchant balance.
                       </div>
 
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                         <Field label={meta.idLabel} hint={meta.idHint}>
                           <TextInput
                             value={c.merchantId}
@@ -559,41 +560,41 @@ export default function PaymentGatewayPage() {
                       )}
 
                       {bal ? (
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                          <div className="rounded-xl bg-[#eafaf0] px-4 py-3.5">
-                            <div className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-wide text-[#16a34a]">
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                          <div className="rounded-xl bg-[#eafaf0] px-2.5 py-2.5 sm:px-4 sm:py-3.5">
+                            <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#16a34a] sm:gap-1.5 sm:text-[11.5px]">
                               <Wallet size={13} /> Available
                             </div>
-                            <div className="font-display mt-1 text-[20px] font-extrabold text-[#15803d]">
+                            <div className="font-display mt-0.5 truncate text-[14px] font-extrabold text-[#15803d] sm:mt-1 sm:text-[20px]" title={money(bal.available)}>
                               {money(bal.available)}
                             </div>
                           </div>
-                          <div className="rounded-xl bg-[#e8f0fe] px-4 py-3.5">
-                            <div className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-wide text-[#2563eb]">
+                          <div className="rounded-xl bg-[#e8f0fe] px-2.5 py-2.5 sm:px-4 sm:py-3.5">
+                            <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#2563eb] sm:gap-1.5 sm:text-[11.5px]">
                               <Snowflake size={13} /> Frozen
                             </div>
-                            <div className="font-display mt-1 text-[20px] font-extrabold text-[#1d4ed8]">
+                            <div className="font-display mt-0.5 truncate text-[14px] font-extrabold text-[#1d4ed8] sm:mt-1 sm:text-[20px]" title={money(bal.frozen)}>
                               {money(bal.frozen)}
                             </div>
                           </div>
-                          <div className="rounded-xl bg-[#f7e3e7] px-4 py-3.5">
-                            <div className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-wide text-maroon-700">
+                          <div className="rounded-xl bg-[#f7e3e7] px-2.5 py-2.5 sm:px-4 sm:py-3.5">
+                            <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-maroon-700 sm:gap-1.5 sm:text-[11.5px]">
                               <Ban size={13} /> Total
                             </div>
-                            <div className="font-display mt-1 text-[20px] font-extrabold text-maroon-700">
+                            <div className="font-display mt-0.5 truncate text-[14px] font-extrabold text-maroon-700 sm:mt-1 sm:text-[20px]" title={money(bal.total)}>
                               {money(bal.total)}
                             </div>
                           </div>
                         </div>
                       ) : (
                         !busy && (
-                          <div className="rounded-xl bg-[#fbf3f4] px-4 py-3 text-center text-[12px] font-medium text-muted-rose">
+                          <div className="rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-center text-[12px] font-medium text-muted-rose">
                             Balance appears here after a successful Test Connection.
                           </div>
                         )
                       )}
 
-                      <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-4 py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
+                      <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
                         <ShieldCheck size={15} className="mt-0.5 shrink-0 text-maroon-600" />
                         <span>
                           The key is stored server-side only — it never reaches the browser
@@ -604,19 +605,19 @@ export default function PaymentGatewayPage() {
                     </div>
 
                     {/* — STEP 2 · RECHARGE COLLECTION — */}
-                    <div className="admin-card flex flex-col gap-4 p-6">
+                    <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
                       <StepHead
                         n={2}
                         Icon={CreditCard}
                         title="Recharge Collection"
                         right={<Chip on={c.enabled} onText="ON" offText="OFF" />}
                       />
-                      <div className="flex items-center justify-between gap-4 rounded-xl border border-line-rose bg-white p-4">
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-line-rose bg-white p-3.5 sm:gap-4 sm:p-4">
                         <div className="min-w-0">
-                          <div className="text-[14px] font-bold text-ink">
+                          <div className="text-[13.5px] font-bold text-ink sm:text-[14px]">
                             Enable {meta.label} collection
                           </div>
-                          <div className="mt-1 text-[12.5px] font-medium leading-relaxed text-muted-rose">
+                          <div className="mt-1 text-[12px] font-medium leading-relaxed text-muted-rose sm:text-[12.5px]">
                             When ON, a payment method with an AUTO badge appears on the
                             client /recharge page under the display name below. Users pay on
                             the hosted UPI checkout and the wallet is credited automatically
@@ -640,7 +641,7 @@ export default function PaymentGatewayPage() {
                         />
                       </Field>
                       {!effBackend && (
-                        <div className="flex items-start gap-2.5 rounded-xl border border-[#f0d9a8] bg-[#fdf6e4] px-4 py-3 text-[12.5px] font-semibold text-[#8a6a1c]">
+                        <div className="flex items-start gap-2.5 rounded-xl border border-[#f0d9a8] bg-[#fdf6e4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-semibold text-[#8a6a1c]">
                           <CircleAlert size={15} className="mt-0.5 shrink-0" />
                           Collection also needs the public server URL — open the{" "}
                           <button type="button" className="cursor-pointer font-extrabold underline" onClick={() => setTab("urls")}>
@@ -652,19 +653,19 @@ export default function PaymentGatewayPage() {
                     </div>
 
                     {/* — STEP 3 · AUTOMATIC PAYOUT — */}
-                    <div className="admin-card flex flex-col gap-4 p-6">
+                    <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
                       <StepHead
                         n={3}
                         Icon={Landmark}
                         title="Automatic Payout"
                         right={<Chip on={c.autoPayout} onText="ON" offText="OFF" tone="blue" />}
                       />
-                      <div className="flex items-center justify-between gap-4 rounded-xl border border-line-rose bg-white p-4">
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-line-rose bg-white p-3.5 sm:gap-4 sm:p-4">
                         <div className="min-w-0">
-                          <div className="text-[14px] font-bold text-ink">
+                          <div className="text-[13.5px] font-bold text-ink sm:text-[14px]">
                             Enable {meta.label} payouts
                           </div>
-                          <div className="mt-1 text-[12.5px] font-medium leading-relaxed text-muted-rose">
+                          <div className="mt-1 text-[12px] font-medium leading-relaxed text-muted-rose sm:text-[12.5px]">
                             When ON, <span className="font-bold text-maroon-700">Auto Pay</span>{" "}
                             becomes available on Admin → Withdrawals. One click sends the net
                             amount straight to the user&apos;s bank account — the signed
@@ -685,7 +686,7 @@ export default function PaymentGatewayPage() {
                           </span>
                         ))}
                       </div>
-                      <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-4 py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
+                      <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
                         <Wallet size={15} className="mt-0.5 shrink-0 text-maroon-600" />
                         <span>
                           Auto payouts spend the merchant balance loaded in Step 1 — keep it
@@ -700,14 +701,14 @@ export default function PaymentGatewayPage() {
               })}
 
               {/* — payout default (all gateways) — */}
-              <div className="admin-card flex flex-col gap-4 p-6">
+              <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
                 <div className="flex items-center gap-2">
                   <Landmark size={17} className="text-maroon-700" />
-                  <div className="font-display text-[16px] font-bold text-ink">
+                  <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                     Default Payout Gateway
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <Field
                     label="Preselected gateway on Withdrawals"
                     hint="Auto Pay opens with this gateway selected — changeable per payout"
@@ -726,7 +727,7 @@ export default function PaymentGatewayPage() {
                       )}
                     </Select>
                   </Field>
-                  <div className="rounded-xl bg-[#fbf3f4] px-4 py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
+                  <div className="rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
                     On the Withdrawals page the admin picks the gateway per payout — this
                     default just saves one tap. New gateways appear in that menu
                     automatically once their payout is enabled.
@@ -741,11 +742,11 @@ export default function PaymentGatewayPage() {
           ================================================================= */}
           {tab === "urls" && (
             <>
-              <div className="admin-card flex flex-col gap-4 p-6">
+              <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Globe size={17} className="text-maroon-700" />
-                    <div className="font-display text-[16px] font-bold text-ink">
+                    <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                       Public URLs
                     </div>
                   </div>
@@ -764,7 +765,7 @@ export default function PaymentGatewayPage() {
                   </button>
                 </div>
 
-                <div className="text-[12.5px] font-medium leading-relaxed text-muted-rose">
+                <div className="text-[12px] font-medium leading-relaxed text-muted-rose sm:text-[12.5px]">
                   These two URLs are <span className="font-bold text-maroon-700">picked up
                   automatically from this server&apos;s domain</span> — no typing needed. They
                   are saved once and <span className="font-bold">every gateway reuses them</span>{" "}
@@ -772,7 +773,7 @@ export default function PaymentGatewayPage() {
                   custom domain that is different from the detected one.
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <Field
                     label="Backend Public URL"
                     hint="Where the gateways deliver payment + payout webhooks"
@@ -810,7 +811,7 @@ export default function PaymentGatewayPage() {
                 </div>
 
                 {detected.backendUrl ? (
-                  <div className="flex items-start gap-3 rounded-xl bg-[#eafaf0]/70 px-4 py-3 text-[12px] font-medium leading-relaxed text-[#15803d]">
+                  <div className="flex items-start gap-3 rounded-xl bg-[#eafaf0]/70 px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#15803d]">
                     <CheckCircle2 size={15} className="mt-0.5 shrink-0" />
                     <span>
                       Detected from the server domain — Backend{" "}
@@ -825,7 +826,7 @@ export default function PaymentGatewayPage() {
                     </span>
                   </div>
                 ) : (
-                  <div className="flex items-start gap-3 rounded-xl bg-[#fdf6e4] px-4 py-3 text-[12px] font-medium leading-relaxed text-[#8a6a1c]">
+                  <div className="flex items-start gap-3 rounded-xl bg-[#fdf6e4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#8a6a1c]">
                     <Info size={15} className="mt-0.5 shrink-0" />
                     <span>
                       The server could not detect the public domain from this request — type
@@ -837,14 +838,14 @@ export default function PaymentGatewayPage() {
               </div>
 
               {/* webhook endpoints — computed from the effective backend URL */}
-              <div className="admin-card flex flex-col gap-4 p-6">
+              <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
                 <div className="flex items-center gap-2">
                   <PlugZap size={17} className="text-maroon-700" />
-                  <div className="font-display text-[16px] font-bold text-ink">
+                  <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                     Webhook Endpoints
                   </div>
                 </div>
-                <div className="text-[12.5px] font-medium leading-relaxed text-muted-rose">
+                <div className="text-[12px] font-medium leading-relaxed text-muted-rose sm:text-[12.5px]">
                   If a gateway dashboard asks for a notify / webhook address, set the
                   matching endpoint below (collection = payments in, payout = withdrawals
                   out). Copy with one tap.
@@ -862,10 +863,10 @@ export default function PaymentGatewayPage() {
                       const full = effBackend + path;
                       return (
                         <div key={k} className="flex flex-wrap items-center justify-between gap-2 py-1">
-                          <span className="w-[80px] shrink-0 text-[11px] font-bold uppercase tracking-wide text-[#9a8b90]">
+                          <span className="w-[60px] shrink-0 text-[10.5px] font-bold uppercase tracking-wide text-[#9a8b90] sm:w-[80px] sm:text-[11px]">
                             {k}
                           </span>
-                          <span className="min-w-0 flex-1 truncate rounded-lg bg-[var(--c-tint)] px-3 py-1.5 text-[11.5px] font-bold text-[#7d6a6e]">
+                          <span className="min-w-0 flex-1 truncate rounded-lg bg-[#fbf3f4] px-3 py-1.5 text-[11px] font-bold text-[#7d6a6e] sm:text-[11.5px]">
                             {full || "— set the Backend Public URL above —"}
                           </span>
                           <button
@@ -885,10 +886,10 @@ export default function PaymentGatewayPage() {
               </div>
 
               {/* security — IP whitelist + key storage */}
-              <div className="admin-card flex flex-col gap-3 p-6">
+              <div className="admin-card flex flex-col gap-2.5 p-3.5 sm:gap-3 sm:p-6">
                 <div className="flex items-center gap-2">
                   <ShieldCheck size={17} className="text-maroon-700" />
-                  <div className="font-display text-[16px] font-bold text-ink">
+                  <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                     Security Checklist
                   </div>
                 </div>
@@ -897,7 +898,7 @@ export default function PaymentGatewayPage() {
                   "Both URLs must start with https:// and be reachable from the internet — the gateways call them to settle payments.",
                   "API keys are stored server-side only and never appear in any public response; signed webhooks are verified before a single rupee is credited.",
                 ].map((t) => (
-                  <div key={t} className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-4 py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
+                  <div key={t} className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
                     <ShieldCheck size={15} className="mt-0.5 shrink-0 text-maroon-600" />
                     <span>{t}</span>
                   </div>
@@ -910,11 +911,11 @@ export default function PaymentGatewayPage() {
               TAB 3 — ORDER QUERY (live gateway order/query console)
           ================================================================= */}
           {tab === "query" && (
-            <div className="admin-card flex flex-col gap-4 p-6">
+            <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Radar size={17} className="text-maroon-700" />
-                  <div className="font-display text-[16px] font-bold text-ink">
+                  <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                     Order Status Query
                   </div>
                 </div>
@@ -923,7 +924,7 @@ export default function PaymentGatewayPage() {
                 </span>
               </div>
 
-              <div className="text-[12.5px] font-medium leading-relaxed text-muted-rose">
+              <div className="text-[12px] font-medium leading-relaxed text-muted-rose sm:text-[12.5px]">
                 Ask the gateway directly for the live status of any order — recharge
                 order id, withdrawal id, payout order id (WD…) or the gateway&apos;s own
                 order id. If the gateway reports a final result, the local record is
@@ -945,7 +946,7 @@ export default function PaymentGatewayPage() {
                     </option>
                   ))}
                 </Select>
-                <div className="flex flex-1 items-center gap-2.5 rounded-xl bg-[var(--c-tint)] px-3.5 py-2.5 focus-within:ring-[3px] focus-within:ring-maroon-600/15">
+                <div className="flex flex-1 items-center gap-2.5 rounded-xl bg-[#fbf3f4] px-3 py-2 focus-within:ring-[3px] focus-within:ring-maroon-600/15 sm:px-3.5 sm:py-2.5">
                   <Search size={15} className="shrink-0 text-icon-rose" />
                   <input
                     className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13.5px] font-semibold text-ink outline-none placeholder:font-medium placeholder:text-[#bd9fa6]"
@@ -987,14 +988,14 @@ export default function PaymentGatewayPage() {
               )}
 
               {qError && (
-                <div className="flex items-start gap-2.5 rounded-xl border border-[#f3c8c8] bg-[#fdecec] px-4 py-3 text-[12.5px] font-semibold text-[#b91c1c]">
+                <div className="flex items-start gap-2.5 rounded-xl border border-[#f3c8c8] bg-[#fdecec] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-semibold text-[#b91c1c]">
                   <XCircle size={15} className="mt-0.5 shrink-0" />
                   {qError}
                 </div>
               )}
 
               {qResult && (
-                <div className="flex flex-col gap-3 rounded-xl border border-line-rose bg-[#fdfafb] p-4">
+                <div className="flex flex-col gap-3 rounded-xl border border-line-rose bg-[#fdfafb] p-3 sm:p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <OrderStatusPill status={qResult.order.status} />
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -1026,7 +1027,7 @@ export default function PaymentGatewayPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="break-all rounded-lg bg-[var(--c-tint)] px-3 py-2 text-[11.5px] font-bold text-[#7d6a6e]">
+                  <div className="break-all rounded-lg bg-[#fbf3f4] px-3 py-2 text-[11.5px] font-bold text-[#7d6a6e]">
                     merchant order id: {qResult.order.merchantOrderId}
                   </div>
                   <button
@@ -1051,14 +1052,14 @@ export default function PaymentGatewayPage() {
           )}
 
           {/* ===== STICKY SAVE — saves whichever tab you are on ===== */}
-          <div className="sticky bottom-4 flex flex-wrap items-center justify-end gap-3">
-            <div className="flex items-center gap-2 rounded-xl border border-line-rose bg-white/95 px-4 py-2.5 text-[12px] font-semibold text-muted-rose shadow-[0_8px_20px_rgba(124,29,51,0.08)] backdrop-blur">
+          <div className="sticky bottom-3 flex flex-wrap items-center justify-end gap-3 sm:bottom-4">
+            <div className="hidden items-center gap-2 rounded-xl border border-line-rose bg-white/95 px-4 py-2.5 text-[12px] font-semibold text-muted-rose shadow-[0_8px_20px_rgba(124,29,51,0.08)] backdrop-blur sm:flex">
               <Zap size={13} className="text-maroon-600" />
               Saves gateways, public URLs and the payout default together
             </div>
             <button
               type="button"
-              className="admin-btn admin-btn-primary px-8 shadow-[0_10px_26px_rgba(124,29,51,0.35)]"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >

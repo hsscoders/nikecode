@@ -86,25 +86,25 @@ export default function CommissionPage() {
       {!form ? (
         <Loader />
       ) : (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-3.5 sm:gap-5">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {LEVELS.map(({ key, label, desc, Icon, tile, example }) => (
-              <div key={key} className="admin-card p-5">
+              <div key={key} className="admin-card p-4 sm:p-5">
                 <div className="flex items-center gap-3">
-                  <div className={`grid h-[46px] w-[46px] place-items-center rounded-[14px] ${tile}`}>
+                  <div className={`grid h-10 w-10 place-items-center rounded-[12px] sm:h-[46px] sm:w-[46px] sm:rounded-[14px] ${tile}`}>
                     <Icon size={22} strokeWidth={2.1} />
                   </div>
-                  <div className="font-display text-[16px] font-bold text-ink">{label}</div>
+                  <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">{label}</div>
                 </div>
                 <p className="mt-3 min-h-[38px] text-[12.5px] font-medium leading-relaxed text-muted-rose">
                   {desc}
                 </p>
-                <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-line-rose bg-[#fdfafa] px-4 py-3 focus-within:border-maroon-500 focus-within:ring-[3px] focus-within:ring-maroon-600/10">
+                <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-line-rose bg-[#fdfafa] px-3 py-2.5 sm:px-4 sm:py-3 focus-within:border-maroon-500 focus-within:ring-[3px] focus-within:ring-maroon-600/10">
                   <input
                     type="number"
                     min="0"
                     max="100"
-                    className="min-w-0 flex-1 border-0 bg-transparent p-0 font-display text-[26px] font-bold text-maroon-700 outline-none"
+                    className="min-w-0 flex-1 border-0 bg-transparent p-0 font-display text-[22px] font-bold text-maroon-700 sm:text-[26px] outline-none"
                     value={form[key]}
                     onChange={(e) => set(key, e.target.value)}
                   />
@@ -119,8 +119,8 @@ export default function CommissionPage() {
           </div>
 
           {/* Example flow */}
-          <div className="admin-card p-5">
-            <div className="font-display text-[16px] font-bold text-ink">How it works</div>
+          <div className="admin-card p-4 sm:p-5">
+            <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">How it works</div>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
               {[
                 "User shares their own invite code in the app",

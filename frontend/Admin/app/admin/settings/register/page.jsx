@@ -77,21 +77,21 @@ export default function RegisterBonusPage() {
       {!rb ? (
         <Loader />
       ) : (
-        <div className="mx-auto flex max-w-[720px] flex-col gap-5">
+        <div className="mx-auto flex max-w-[720px] flex-col gap-3.5 sm:gap-5">
           {/* ===== REGISTER BONUS — switch + amount ===== */}
-          <div className="admin-card flex flex-col gap-4 p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2.5">
               <span className="grid h-9 w-9 place-items-center rounded-full bg-[#d4a94f]/12 text-[#b8860b]">
                 <Gift size={17} strokeWidth={2.4} />
               </span>
-              <div className="font-display text-[16px] font-bold text-ink">
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Register Bonus
               </div>
             </div>
 
             {/* master switch — instant save */}
             <div
-              className={`flex items-center justify-between rounded-xl border px-4 py-3.5 ${
+              className={`flex items-center justify-between rounded-xl border px-3 py-3 sm:px-4 sm:py-3.5 ${
                 rb.enabled
                   ? "border-[#bfe3cd] bg-[#f0faf3]"
                   : "border-[#f3c4c4] bg-[#fdf1f1]"
@@ -151,7 +151,7 @@ export default function RegisterBonusPage() {
                 placeholder="51"
               />
             </Field>
-            <div className="flex items-center gap-2 rounded-xl border border-line-rose bg-[#fdf6e4]/60 px-4 py-3 text-[12.5px] font-semibold text-[#8a6a1c]">
+            <div className="flex items-center gap-2 rounded-xl border border-line-rose bg-[#fdf6e4]/60 px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-semibold text-[#8a6a1c]">
               <Gift size={15} className="shrink-0" />
               The bonus is credited server-side inside the register API (manipulation-safe) —
               the user receives it in their Recharge Balance and a &quot;Register bonus&quot;
@@ -161,10 +161,10 @@ export default function RegisterBonusPage() {
           </div>
 
           {/* ===== SAVE ===== */}
-          <div className="sticky bottom-4 flex justify-end">
+          <div className="sticky bottom-3 flex justify-end sm:bottom-4">
             <button
               type="button"
-              className="admin-btn admin-btn-primary px-8 shadow-[0_10px_26px_rgba(124,29,51,0.35)]"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >

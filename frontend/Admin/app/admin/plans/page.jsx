@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Plus, Pencil, Trash2, Crown, Gem, Search, Upload, Type } from "lucide-react";
+import { Plus, Pencil, Trash2, Crown, Gem, Search, Upload, Type, Save } from "lucide-react";
 import AdminShell from "../../../components/AdminShell";
 import { api, fmt0 } from "../../../lib/api";
 import {
@@ -29,6 +29,23 @@ const EMPTY = {
   active: true,
   sort: 0,
 };
+
+/* Small labeled input for the compact Home Page Texts grid */
+function MiniField({ label, value, onChange, placeholder }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">
+        {label}
+      </span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-[10px] border border-line-rose bg-white px-2.5 py-2 text-[16px] font-semibold text-ink outline-none transition-colors placeholder:font-normal placeholder:text-[#c4a9b0] focus:border-maroon-500 sm:py-[7px] sm:text-[13px]"
+      />
+    </label>
+  );
+}
 
 export default function PlansPage() {
   const [plans, setPlans] = useState(null);
@@ -218,7 +235,7 @@ export default function PlansPage() {
         <div className="flex min-w-[220px] flex-1 items-center gap-2.5 rounded-xl border border-line-rose bg-white px-3.5 py-2.5 sm:max-w-[340px]">
           <Search size={16} className="shrink-0 text-icon-rose" />
           <input
-            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13.5px] font-medium text-ink outline-none placeholder:text-[#c4a9b0]"
+            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[16px] font-medium text-ink outline-none placeholder:text-[#c4a9b0] sm:text-[13.5px]"
             placeholder="Search plans by name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -230,73 +247,176 @@ export default function PlansPage() {
         </button>
       </div>
 
-      {/* Home Page Texts — plan tabs + buy buttons (client /home reads live) */}
-      <div className="admin-card mb-4 p-4">
-        <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Type size={16} className="text-maroon-600" />
-            <div className="font-display text-[15px] font-bold text-ink">Home Page Texts</div>
-          </div>
-          <div className="text-[12px] text-muted-rose">
-            Tab labels &amp; buy button text on /home — empty = default
-          </div>
-        </div>
-        {!texts ? (
-          <Loader />
-        ) : (
-          <>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Daily Tab Label" hint="First tab on /home (default: Daily Plans)">
-                <TextInput
-                  value={texts.dailyTab}
-                  onChange={(e) => setText("dailyTab", e.target.value)}
-                  placeholder="Daily Plans"
-                />
-              </Field>
-              <Field label="VIP Tab Label" hint="Second tab on /home (default: Premium VIP)">
-                <TextInput
-                  value={texts.vipTab}
-                  onChange={(e) => setText("vipTab", e.target.value)}
-                  placeholder="Premium VIP"
-                />
-              </Field>
-              <Field label="Daily Plan Buy Button" hint="Button on daily plans (default: Buy Now)">
-                <TextInput
-                  value={texts.dailyBtn}
-                  onChange={(e) => setText("dailyBtn", e.target.value)}
-                  placeholder="Buy Now"
-                />
-              </Field>
-              <Field label="VIP Plan Buy Button" hint="Button on VIP plans (default: Buy Now)">
-                <TextInput
-                  value={texts.vipBtn}
-                  onChange={(e) => setText("vipBtn", e.target.value)}
-                  placeholder="Buy Now"
-                />
-              </Field>
+      {/* Home Page Texts — compact editor for /home tab labels & buy buttons */}
+      <div className="admin-card mb-4 p-3 sm:p-4">
+        <div className="mb-2.5 flex items-center justify-between gap-3 sm:mb-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#f7e3e7]">
+              <Type size={14} className="text-maroon-700" />
             </div>
+            <div className="min-w-0">
+              <div className="font-display text-[14px] font-bold leading-tight text-ink">
+                Home Page Texts
+              </div>
+              <div className="truncate text-[10.5px] font-medium text-muted-rose">
+                Tab labels &amp; buy buttons on /home
+                <span className="hidden sm:inline"> — empty = default</span>
+              </div>
+            </div>
+          </div>
+          {texts && (
             <button
               type="button"
-              className="admin-btn admin-btn-primary mt-4"
               onClick={saveTexts}
               disabled={savingTexts}
+              className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-[#7c1d33] to-[#93293f] px-3.5 py-2 text-[12.5px] font-bold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-55 sm:py-[7px]"
             >
-              <Type size={16} />
-              {savingTexts ? "Saving..." : "Save Home Texts"}
+              <Save size={13} />
+              {savingTexts ? "Saving..." : "Save"}
             </button>
-          </>
+          )}
+        </div>
+        {!texts ? (
+          <div className="py-1 text-[11.5px] font-medium text-muted-rose">Loading…</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
+            <MiniField
+              label="Daily Tab"
+              value={texts.dailyTab}
+              onChange={(v) => setText("dailyTab", v)}
+              placeholder="Daily Plans"
+            />
+            <MiniField
+              label="VIP Tab"
+              value={texts.vipTab}
+              onChange={(v) => setText("vipTab", v)}
+              placeholder="Premium VIP"
+            />
+            <MiniField
+              label="Daily Btn"
+              value={texts.dailyBtn}
+              onChange={(v) => setText("dailyBtn", v)}
+              placeholder="Buy Now"
+            />
+            <MiniField
+              label="VIP Btn"
+              value={texts.vipBtn}
+              onChange={(v) => setText("vipBtn", v)}
+              placeholder="Buy Now"
+            />
+          </div>
         )}
       </div>
 
       {!plans ? (
         <Loader />
       ) : (
-        <div className="admin-card overflow-hidden">
+        <>
+        {/* MOBILE — compact card list (table hidden below sm) */}
+        <div className="flex flex-col gap-2.5 sm:hidden">
+          {filtered.map((p) => (
+            <div key={p._id} className="admin-card p-3">
+              <div className="flex items-center gap-2.5">
+                <div
+                  title={p.name}
+                  className={`grid h-[46px] w-[46px] shrink-0 place-items-center overflow-hidden rounded-[12px] ${
+                    p.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[#f7e3e7] text-maroon-600"
+                  }`}
+                >
+                  {p.image ? (
+                    <Image src={p.image} alt={p.name} width={46} height={46} unoptimized className="h-full w-full object-cover" />
+                  ) : p.vip ? (
+                    <Crown size={21} />
+                  ) : (
+                    <Gem size={21} />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13.5px] font-extrabold leading-tight text-ink">{p.name}</div>
+                  {p.presale && (
+                    <div className="mt-0.5 text-[10px] font-extrabold uppercase tracking-[0.4px] text-[#a9791c]">
+                      Pre Sale
+                    </div>
+                  )}
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[10.5px] font-extrabold uppercase ${
+                    p.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[#f7e3e7] text-maroon-700"
+                  }`}
+                >
+                  {p.vip ? "VIP" : "Daily"}
+                </span>
+              </div>
+
+              <div className="mt-2.5 flex items-end justify-between gap-2">
+                <div>
+                  <div className="text-[9.5px] font-bold uppercase tracking-[0.5px] text-[#8a6e75]">Price</div>
+                  <div className="mt-0.5 font-display text-[18px] font-extrabold leading-none text-maroon-700">
+                    {fmt0(p.price)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11.5px] font-bold text-[#7d6a6e]">{p.active ? "Active" : "Off"}</span>
+                  <Switch checked={p.active} onChange={() => toggleActive(p)} />
+                </div>
+              </div>
+
+              <div className="mt-2.5 grid grid-cols-3 gap-1.5 rounded-xl bg-[#fdf7f8] p-2">
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">Daily</div>
+                  <div className="mt-0.5 text-[12.5px] font-extrabold text-[#16a34a]">{fmt0(p.daily)}</div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">Cycle</div>
+                  <div className="mt-0.5 text-[12.5px] font-extrabold text-ink">{p.cycle}d</div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">Return</div>
+                  <div className="mt-0.5 text-[12.5px] font-extrabold text-[#a9791c]">{fmt0(p.total)}</div>
+                </div>
+              </div>
+
+              <div className="mt-2 flex items-center justify-between border-t border-line-rose/60 pt-2">
+                <span className="text-[10.5px] font-semibold text-muted-rose">
+                  Limit: {p.limit > 0 ? p.limit + "/user" : "Unlimited"}
+                </span>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    aria-label="Edit plan"
+                    onClick={() => openEdit(p)}
+                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line-rose bg-white px-3 py-1.5 text-[11.5px] font-extrabold text-maroon-700 transition-colors hover:bg-[#fbf1f3]"
+                  >
+                    <Pencil size={12} />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Delete plan"
+                    onClick={() => setDel(p)}
+                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line-rose bg-white px-3 py-1.5 text-[11.5px] font-extrabold text-[#dc2626] transition-colors hover:bg-[#fdecec]"
+                  >
+                    <Trash2 size={12} />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <div className="admin-card py-8 text-center text-[13px] font-medium text-muted-rose">
+              No plans found
+            </div>
+          )}
+        </div>
+
+        {/* DESKTOP — full table */}
+        <div className="admin-card hidden overflow-hidden sm:block">
           <div className="overflow-x-auto">
             <table className="admin-table min-w-[900px]">
               <thead>
                 <tr>
-                  <th>Plan</th>
+                  <th>Plan image</th>
                   <th>Price</th>
                   <th>Daily Income</th>
                   <th>Cycle</th>
@@ -311,9 +431,10 @@ export default function PlansPage() {
                 {filtered.map((p) => (
                   <tr key={p._id}>
                     <td>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2.5">
                         <div
-                          className={`grid h-[42px] w-[42px] shrink-0 place-items-center overflow-hidden rounded-[13px] ${
+                          title={p.name}
+                          className={`grid h-[48px] w-[48px] shrink-0 place-items-center overflow-hidden rounded-[13px] ${
                             p.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[#f7e3e7] text-maroon-600"
                           }`}
                         >
@@ -321,21 +442,21 @@ export default function PlansPage() {
                             <Image
                               src={p.image}
                               alt={p.name}
-                              width={42}
-                              height={42}
+                              width={48}
+                              height={48}
                               unoptimized
                               className="h-full w-full object-cover"
                             />
                           ) : p.vip ? (
-                            <Crown size={20} />
+                            <Crown size={22} />
                           ) : (
-                            <Gem size={20} />
+                            <Gem size={22} />
                           )}
                         </div>
-                        <div>
-                          <div className="font-bold text-ink">{p.name}</div>
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-bold leading-tight text-ink">{p.name}</div>
                           {p.presale && (
-                            <div className="text-[10.5px] font-extrabold uppercase tracking-[0.4px] text-[#a9791c]">
+                            <div className="mt-0.5 text-[10px] font-extrabold uppercase tracking-[0.4px] text-[#a9791c]">
                               Pre Sale
                             </div>
                           )}
@@ -392,6 +513,7 @@ export default function PlansPage() {
             </table>
           </div>
         </div>
+        </>
       )}
 
       {/* ADD / EDIT MODAL */}
@@ -496,15 +618,15 @@ export default function PlansPage() {
           <Field label="Sort Order" hint="Lower numbers appear first">
             <TextInput type="number" value={form.sort} onChange={(e) => set("sort", e.target.value)} placeholder="0" />
           </Field>
-          <div className="flex items-center justify-between rounded-xl border border-line-rose bg-[#fdfafa] px-4 py-3">
+          <div className="flex items-center justify-between rounded-xl border border-line-rose bg-[#fdfafa] px-3 py-2.5 sm:px-4 sm:py-3">
             <div className="text-[13.5px] font-bold text-ink">VIP Plan</div>
             <Switch checked={form.vip} onChange={(v) => set("vip", v)} />
           </div>
-          <div className="flex items-center justify-between rounded-xl border border-line-rose bg-[#fdfafa] px-4 py-3">
+          <div className="flex items-center justify-between rounded-xl border border-line-rose bg-[#fdfafa] px-3 py-2.5 sm:px-4 sm:py-3">
             <div className="text-[13.5px] font-bold text-ink">Pre Sale</div>
             <Switch checked={form.presale} onChange={(v) => set("presale", v)} />
           </div>
-          <div className="flex items-center justify-between rounded-xl border border-line-rose bg-[#fdfafa] px-4 py-3 sm:col-span-2">
+          <div className="flex items-center justify-between rounded-xl border border-line-rose bg-[#fdfafa] px-3 py-2.5 sm:px-4 sm:py-3 sm:col-span-2">
             <div>
               <div className="text-[13.5px] font-bold text-ink">Active</div>
               <div className="text-[11.5px] font-medium text-muted-rose">

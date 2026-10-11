@@ -689,7 +689,8 @@ router.post("/deposits", async (req, res) => {
   }
 });
 
-/* Status change — credit the recharge balance on Success, debit on revoke */
+/* Status change — credit the recharge balance on Success, debit on revoke
+   (atomic claim — race-safe, a double-tap can never double-credit) */
 router.put("/deposits/:id", async (req, res) => {
   try {
     const { status } = req.body || {};
@@ -700,20 +701,29 @@ router.put("/deposits/:id", async (req, res) => {
     if (deposit.status === status)
       return res.json({ success: true, message: "No change", deposit });
 
-    if (status === "Success" && deposit.status !== "Success")
+    const prev = deposit.status;
+
+    /* atomic claim — the exact transition is applied ONCE */
+    const claim = await Deposit.updateOne(
+      { _id: deposit._id, status: prev },
+      { $set: { status, processedAt: new Date() } }
+    );
+    if (claim.modifiedCount === 0)
+      return res
+        .status(409)
+        .json({ success: false, message: "Status was just changed — reload and try again" });
+
+    /* money movement — only the request that won the claim reaches here */
+    if (status === "Success" && prev !== "Success")
       await User.updateOne(
         { _id: deposit.user },
         { $inc: { rechargeBalance: deposit.amount, totalRecharge: deposit.amount } }
       );
-    if (status !== "Success" && deposit.status === "Success")
+    if (status !== "Success" && prev === "Success")
       await User.updateOne(
         { _id: deposit.user },
         { $inc: { rechargeBalance: -deposit.amount, totalRecharge: -deposit.amount } }
       );
-
-    deposit.status = status;
-    deposit.processedAt = new Date();
-    await deposit.save();
 
     /* keep the ledger entry in sync */
     await Transaction.updateMany({ refId: String(deposit._id) }, { status });
@@ -723,8 +733,10 @@ router.put("/deposits/:id", async (req, res) => {
     /* pages push — /records, /transaction, /card reload their lists live */
     emitToUser(deposit.phone, "activity:update", { type: "recharge", status });
 
-    res.json({ success: true, message: "Deposit " + status.toLowerCase(), deposit });
+    const fresh = await Deposit.findById(deposit._id).lean();
+    res.json({ success: true, message: "Deposit " + status.toLowerCase(), deposit: fresh });
   } catch (e) {
+    console.error("deposit status error:", e.message);
     res.status(500).json({ success: false, message: "Failed to update deposit" });
   }
 });
@@ -744,7 +756,7 @@ router.get("/withdrawals", async (req, res) => {
   }
 });
 
-/* Status change — refund the balance on Reject */
+/* Status change — refund the balance on Reject (atomic claim — race-safe) */
 router.put("/withdrawals/:id", async (req, res) => {
   try {
     const { status, note } = req.body || {};
@@ -755,17 +767,33 @@ router.put("/withdrawals/:id", async (req, res) => {
     if (wd.status === status)
       return res.json({ success: true, message: "No change", withdrawal: wd });
 
+    const prev = wd.status;
+
+    /* atomic claim — the exact transition is applied ONCE. A concurrent
+       duplicate (double-tap on Approve/Reject) loses the race here and can
+       never move the balance twice. */
+    const claim = await Withdrawal.updateOne(
+      { _id: wd._id, status: prev },
+      {
+        $set: {
+          status,
+          note: note !== undefined ? String(note) : wd.note,
+          processedAt: new Date(),
+        },
+      }
+    );
+    if (claim.modifiedCount === 0)
+      return res
+        .status(409)
+        .json({ success: false, message: "Status was just changed — reload and try again" });
+
+    /* money movement — only the request that won the claim reaches here */
     /* Reject → return the user's balance (refund from hold) */
-    if (status === "Rejected" && wd.status !== "Rejected")
+    if (status === "Rejected" && prev !== "Rejected")
       await User.updateOne({ _id: wd.user }, { $inc: { balance: wd.amount } });
     /* Was Rejected and moved back to Processing/Success → revoke the refund */
-    if (status !== "Rejected" && wd.status === "Rejected")
+    if (status !== "Rejected" && prev === "Rejected")
       await User.updateOne({ _id: wd.user }, { $inc: { balance: -wd.amount } });
-
-    wd.status = status;
-    if (note !== undefined) wd.note = String(note);
-    wd.processedAt = new Date();
-    await wd.save();
 
     /* keep the ledger entry in sync */
     await Transaction.updateMany({ refId: String(wd._id) }, { status });
@@ -775,8 +803,10 @@ router.put("/withdrawals/:id", async (req, res) => {
     /* pages push — /records, /transaction, /withdrawal reload live */
     emitToUser(wd.phone, "activity:update", { type: "withdraw", status });
 
-    res.json({ success: true, message: "Withdrawal " + status.toLowerCase(), withdrawal: wd });
+    const fresh = await Withdrawal.findById(wd._id).lean();
+    res.json({ success: true, message: "Withdrawal " + status.toLowerCase(), withdrawal: fresh });
   } catch (e) {
+    console.error("withdrawal status error:", e.message);
     res.status(500).json({ success: false, message: "Failed to update withdrawal" });
   }
 });
@@ -952,7 +982,10 @@ router.post("/withdrawals/:id/payout-status", async (req, res) => {
       emitToUser(wd.phone, "wallet:refresh", { reason: "withdraw", status: "Success" });
       emitToUser(wd.phone, "activity:update", { type: "withdraw", status: "Success" });
     } else if (g === "failed" || g === "rejected" || g === "cancelled") {
-      await Withdrawal.updateOne(
+      /* atomic claim + guarded refund — the balance is returned ONLY when this
+         call actually won the Pending/Processing → Rejected transition. A
+         late webhook or a parallel admin action can never double-refund. */
+      const claim = await Withdrawal.updateOne(
         { _id: wd._id, status: { $in: ["Pending", "Processing"] } },
         {
           $set: {
@@ -962,7 +995,8 @@ router.post("/withdrawals/:id/payout-status", async (req, res) => {
           },
         }
       );
-      await User.updateOne({ _id: wd.user }, { $inc: { balance: wd.amount } });
+      if (claim.modifiedCount === 1)
+        await User.updateOne({ _id: wd.user }, { $inc: { balance: wd.amount } });
       await Transaction.updateMany(
         { refId: String(wd._id), status: { $ne: "Rejected" } },
         { $set: { status: "Rejected" } }
@@ -1115,7 +1149,8 @@ router.post("/qwackpay/query-order", adminAuth, async (req, res) => {
       emitToUser(wd.phone, "activity:update", { type: "withdraw", status: "Success" });
       settled = "withdrawal-success";
     } else if (wd && isFailed && ["Pending", "Processing"].includes(wd.status)) {
-      await Withdrawal.updateOne(
+      /* atomic claim + guarded refund (same rule as the payout webhook) */
+      const claim = await Withdrawal.updateOne(
         { _id: wd._id, status: { $in: ["Pending", "Processing"] } },
         {
           $set: {
@@ -1125,7 +1160,8 @@ router.post("/qwackpay/query-order", adminAuth, async (req, res) => {
           },
         }
       );
-      await User.updateOne({ _id: wd.user }, { $inc: { balance: wd.amount } });
+      if (claim.modifiedCount === 1)
+        await User.updateOne({ _id: wd.user }, { $inc: { balance: wd.amount } });
       await Transaction.updateMany(
         { refId: String(wd._id), status: { $ne: "Rejected" } },
         { $set: { status: "Rejected" } }

@@ -157,11 +157,11 @@ export function Switch({ checked, onChange, disabled }) {
 export function Field({ label, children, hint }) {
   return (
     <div>
-      <label className="mb-1.5 block text-[12px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">
+      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.4px] text-[#8a6e75] sm:text-[12px]">
         {label}
       </label>
       {children}
-      {hint && <div className="mt-1 text-[11.5px] font-medium text-muted-rose">{hint}</div>}
+      {hint && <div className="mt-1 text-[11px] font-medium text-muted-rose sm:text-[11.5px]">{hint}</div>}
     </div>
   );
 }

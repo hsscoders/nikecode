@@ -241,7 +241,7 @@ export default function UsersPage() {
         <div className="flex min-w-[220px] flex-1 items-center gap-2.5 rounded-xl border border-line-rose bg-white px-3.5 py-2.5 sm:max-w-[360px]">
           <Search size={16} className="shrink-0 text-icon-rose" />
           <input
-            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13.5px] font-medium text-ink outline-none placeholder:text-[#c4a9b0]"
+            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[16px] font-medium text-ink outline-none placeholder:text-[#c4a9b0] sm:text-[13.5px]"
             placeholder="Search phone / userid / refId..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -258,7 +258,7 @@ export default function UsersPage() {
               setQuery(search);
               load(search);
             }}
-            className="cursor-pointer rounded-lg bg-[#f7e3e7] px-3 py-1.5 text-[12px] font-extrabold text-maroon-700 transition-colors hover:bg-[#f3d5dc]"
+            className="hidden cursor-pointer rounded-lg bg-[#f7e3e7] px-3 py-1.5 text-[12px] font-extrabold text-maroon-700 transition-colors hover:bg-[#f3d5dc] sm:block"
           >
             Search
           </button>
@@ -284,7 +284,104 @@ export default function UsersPage() {
       {!users ? (
         <Loader />
       ) : (
-        <div className="admin-card overflow-hidden">
+        <>
+        {/* MOBILE — compact card list (table hidden below sm) */}
+        <div className="flex flex-col gap-2.5 sm:hidden">
+          {users.map((u) => (
+            <div key={u._id} className="admin-card p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="shrink-0 rounded-lg bg-[#f7e3e7] px-2 py-0.5 text-[11px] font-extrabold text-maroon-700">
+                    {u.userid || "—"}
+                  </span>
+                  {u.refId && (
+                    <button
+                      type="button"
+                      onClick={() => copyText(u.refId, "Referral ID copied!")}
+                      className="shrink-0 cursor-pointer rounded-lg bg-[#fdf6e4] px-2 py-0.5 text-[11px] font-extrabold text-[#a9791c] transition-transform active:scale-95"
+                      title="Click to copy"
+                    >
+                      {u.refId}
+                    </button>
+                  )}
+                </div>
+                <Pill value={u.status} />
+              </div>
+
+              <div className="mt-2 flex items-end justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate text-[15px] font-extrabold leading-none text-ink">+91 {u.phone}</div>
+                  {u.refBy && (
+                    <div className="mt-1 text-[10.5px] font-semibold text-muted-rose">By {u.refBy}</div>
+                  )}
+                </div>
+                <div className="shrink-0 text-[10.5px] font-medium text-muted-rose">{fmtDate(u.createdAt)}</div>
+              </div>
+
+              <div className="mt-2.5 grid grid-cols-3 gap-1.5 rounded-xl bg-[#fdf7f8] p-2">
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">Recharge</div>
+                  <div className="mt-0.5 text-[12.5px] font-extrabold text-[#16a34a]">{fmt0(u.rechargeBalance)}</div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">Withdraw</div>
+                  <div className="mt-0.5 text-[12.5px] font-extrabold text-maroon-700">{fmt0(u.balance)}</div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">Income</div>
+                  <div className="mt-0.5 text-[12.5px] font-extrabold text-[#a9791c]">{fmt0(u.totalIncome)}</div>
+                </div>
+              </div>
+
+              <div className="mt-2.5 grid grid-cols-2 gap-1.5 border-t border-line-rose/60 pt-2.5">
+                <button
+                  type="button"
+                  onClick={() => openDetails(u)}
+                  className="flex cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-[#e8f0fe] px-2.5 py-2 text-[12px] font-extrabold text-[#2563eb] transition-colors hover:bg-[#dbe8fd]"
+                >
+                  <Eye size={13} />
+                  Details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openEdit(u)}
+                  className="flex cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-[#f7e3e7] px-2.5 py-2 text-[12px] font-extrabold text-maroon-700 transition-colors hover:bg-[#f3d5dc]"
+                >
+                  <Pencil size={13} />
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleBan(u)}
+                  className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-[12px] font-extrabold transition-colors ${
+                    u.status === "Banned"
+                      ? "bg-[#eafaf0] text-[#16a34a] hover:bg-[#d9f5e5]"
+                      : "bg-[#fdecec] text-[#dc2626] hover:bg-[#fbdcdc]"
+                  }`}
+                >
+                  {u.status === "Banned" ? <ShieldCheck size={13} /> : <Ban size={13} />}
+                  {u.status === "Banned" ? "Unban" : "Ban"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => oneClickLogin(u)}
+                  className="flex cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-[#fdf6e4] px-2.5 py-2 text-[12px] font-extrabold text-[#a9791c] transition-colors hover:bg-[#f8ecd0]"
+                >
+                  <LogIn size={13} />
+                  Login
+                </button>
+              </div>
+            </div>
+          ))}
+          {users.length === 0 && (
+            <div className="admin-card py-8 text-center text-[13px] font-medium text-muted-rose">
+              No users found
+            </div>
+          )}
+        </div>
+
+        {/* DESKTOP — full table */}
+        <div className="admin-card hidden overflow-hidden sm:block">
           <div className="overflow-x-auto">
             <table className="admin-table min-w-[1050px]">
               <thead>
@@ -391,6 +488,7 @@ export default function UsersPage() {
             </table>
           </div>
         </div>
+        </>
       )}
 
       {/* ===== EDIT USER MODAL ===== */}

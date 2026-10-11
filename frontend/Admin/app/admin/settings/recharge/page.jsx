@@ -209,12 +209,12 @@ export default function RechargeSettingsPage() {
       {!cfg ? (
         <Loader />
       ) : (
-        <div className="mx-auto flex max-w-[860px] flex-col gap-5">
+        <div className="mx-auto flex max-w-[860px] flex-col gap-3.5 sm:gap-5">
           {/* ===== LIMITS ===== */}
-          <div className="admin-card flex flex-col gap-4 p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
               <Percent size={17} className="text-maroon-700" />
-              <div className="font-display text-[16px] font-bold text-ink">
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Recharge Limits
               </div>
             </div>
@@ -239,10 +239,10 @@ export default function RechargeSettingsPage() {
           </div>
 
           {/* ===== QUICK AMOUNTS ===== */}
-          <div className="admin-card flex flex-col gap-4 p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
               <Zap size={17} className="text-maroon-700" />
-              <div className="font-display text-[16px] font-bold text-ink">
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Quick Amounts
               </div>
             </div>
@@ -259,11 +259,11 @@ export default function RechargeSettingsPage() {
           </div>
 
           {/* ===== PAYMENT METHODS ===== */}
-          <div className="admin-card flex flex-col gap-3.5 p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-3.5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Wallet size={17} className="text-maroon-700" />
-                <div className="font-display text-[16px] font-bold text-ink">
+                <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                   Payment Methods
                 </div>
               </div>
@@ -371,12 +371,12 @@ export default function RechargeSettingsPage() {
           </div>
 
           {/* ===== AUTO PAYMENT (gateway display names) ===== */}
-          <div className="admin-card flex flex-col gap-4 p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <GatewayIcon size={17} className="text-maroon-700" />
                 <div>
-                  <div className="font-display text-[16px] font-bold text-ink">
+                  <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                     Auto Payment (Gateways)
                   </div>
                   <div className="mt-0.5 text-[12px] font-medium text-muted-rose">
@@ -414,7 +414,7 @@ export default function RechargeSettingsPage() {
               ))}
             </div>
 
-            <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-4 py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
+            <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
               <Zap size={15} className="mt-0.5 shrink-0 text-maroon-600" />
               <span>
                 Turning the gateways on / off and their keys live in{" "}
@@ -427,12 +427,12 @@ export default function RechargeSettingsPage() {
           </div>
 
           {/* ===== MANUAL PAYMENT PAGE ===== */}
-          <div className="admin-card flex flex-col gap-4 p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <QrCode size={17} className="text-maroon-700" />
                 <div>
-                  <div className="font-display text-[16px] font-bold text-ink">
+                  <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                     Manual Payment Page
                   </div>
                   <div className="mt-0.5 text-[12px] font-medium text-muted-rose">
@@ -545,10 +545,10 @@ export default function RechargeSettingsPage() {
           </div>
 
           {/* ===== SAVE ===== */}
-          <div className="sticky bottom-4 flex justify-end">
+          <div className="sticky bottom-3 flex justify-end sm:bottom-4">
             <button
               type="button"
-              className="admin-btn admin-btn-primary px-8 shadow-[0_10px_26px_rgba(124,29,51,0.35)]"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >

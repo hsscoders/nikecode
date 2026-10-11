@@ -125,9 +125,9 @@ export default function PopupSettingsPage() {
       {!cfg ? (
         <Loader />
       ) : (
-        <div className="mx-auto flex max-w-[860px] flex-col gap-5">
+        <div className="mx-auto flex max-w-[860px] flex-col gap-3.5 sm:gap-5">
           {/* ===== STATUS CARD ===== */}
-          <div className="admin-card flex flex-wrap items-center gap-4 p-5">
+          <div className="admin-card flex flex-wrap items-center gap-3 p-4 sm:gap-4 sm:p-5">
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white shadow-[0_6px_16px_rgba(124,29,51,0.3)]">
               <Power size={19} />
             </div>
@@ -156,10 +156,10 @@ export default function PopupSettingsPage() {
           </div>
 
           {/* ===== CONTENT CARD ===== */}
-          <div className="admin-card flex flex-col gap-4 p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
               <MessageSquareText size={17} className="text-maroon-700" />
-              <div className="font-display text-[16px] font-bold text-ink">Popup Content</div>
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">Popup Content</div>
             </div>
 
             <Field label="Title" hint="Big heading under the popup logo">
@@ -201,11 +201,11 @@ export default function PopupSettingsPage() {
           </div>
 
           {/* ===== BULLETS CARD ===== */}
-          <div className="admin-card flex flex-col gap-3.5 p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-3.5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Type size={17} className="text-maroon-700" />
-                <div className="font-display text-[16px] font-bold text-ink">Text Bullets</div>
+                <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">Text Bullets</div>
               </div>
               <span className="rounded-full bg-[#fbf1f3] px-3 py-1 text-[11.5px] font-bold text-maroon-700">
                 {cfg.bullets.length} / {MAX_BULLETS}
@@ -300,10 +300,10 @@ export default function PopupSettingsPage() {
           </div>
 
           {/* ===== SAVE ===== */}
-          <div className="sticky bottom-4 flex justify-end">
+          <div className="sticky bottom-3 flex justify-end sm:bottom-4">
             <button
               type="button"
-              className="admin-btn admin-btn-primary px-8 shadow-[0_10px_26px_rgba(124,29,51,0.35)]"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >

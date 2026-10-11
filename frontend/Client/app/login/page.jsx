@@ -167,7 +167,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full min-[520px]:max-w-[430px] flex-col min-[520px]:mt-9 min-[520px]:min-h-0 min-[520px]:mb-10 min-[520px]:overflow-hidden min-[520px]:rounded-[30px] min-[520px]:border min-[520px]:border-line-rose/70">
+    <div className="mx-auto flex min-h-dvh w-full flex-col">
       {/* TOP BANNER — natural aspect, image's own alpha fade blends into page bg */}
       <div className="relative">
         <Image

@@ -63,48 +63,48 @@ export default function AdminDashboard() {
       {!data ? (
         <Loader />
       ) : (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-3.5 sm:gap-5">
           {/* ===== TODAY STRIP — IST business day ===== */}
-          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4">
             {[
               { lbl: "Recharge Today", val: fmt0(st.today.recharge), Icon: ArrowDownToLine, tile: "bg-[#eafaf0] text-[#16a34a]" },
               { lbl: "Withdraw Today", val: fmt0(st.today.withdrawals), Icon: ArrowUpFromLine, tile: "bg-[#f7e3e7] text-maroon-600" },
               { lbl: "New Users Today", val: st.today.users, Icon: Users, tile: "bg-[#fdf6e4] text-[#a9791c]" },
               { lbl: "Income Paid Today", val: fmt0(st.today.income), Icon: IndianRupee, tile: "bg-[#fdf3e0] text-[#a9791c]" },
             ].map(({ lbl, val, Icon, tile }) => (
-              <div key={lbl} className="admin-card flex items-center gap-3.5 p-4">
-                <div className={`grid h-[44px] w-[44px] shrink-0 place-items-center rounded-[14px] ${tile}`}>
-                  <Icon size={20} strokeWidth={2.1} />
+              <div key={lbl} className="admin-card flex items-center gap-2.5 p-3 sm:gap-3.5 sm:p-4">
+                <div className={`grid h-[36px] w-[36px] shrink-0 place-items-center rounded-[11px] sm:h-[44px] sm:w-[44px] sm:rounded-[14px] ${tile}`}>
+                  <Icon className="h-[17px] w-[17px] sm:h-5 sm:w-5" strokeWidth={2.1} />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1 truncate text-[10px] font-bold uppercase tracking-[0.5px] text-[#8a6e75]">
-                    <CalendarDays size={11} />
+                  <div className="flex items-center gap-1 truncate text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75] sm:text-[10px] sm:tracking-[0.5px]">
+                    <CalendarDays className="h-[10px] w-[10px] sm:h-[11px] sm:w-[11px]" />
                     {lbl}
                   </div>
-                  <div className="mt-0.5 font-display text-[21px] font-bold leading-none text-ink">{val}</div>
+                  <div className="mt-0.5 font-display text-[16px] font-bold leading-none text-ink sm:text-[21px]">{val}</div>
                 </div>
               </div>
             ))}
           </div>
 
           {/* ===== STAT CARDS ===== */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4">
             {cards.map(({ lbl, val, sub, Icon, tile }) => (
               <div
                 key={lbl}
-                className="admin-card flex items-center gap-4 p-4 transition-transform duration-150 hover:-translate-y-0.5"
+                className="admin-card flex items-center gap-2.5 p-3 transition-transform duration-150 hover:-translate-y-0.5 sm:gap-4 sm:p-4"
               >
-                <div className={`grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[16px] ${tile}`}>
-                  <Icon size={24} strokeWidth={2} />
+                <div className={`grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[12px] sm:h-[52px] sm:w-[52px] sm:rounded-[16px] ${tile}`}>
+                  <Icon className="h-[18px] w-[18px] sm:h-6 sm:w-6" strokeWidth={2} />
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate text-[11px] font-bold uppercase tracking-[0.5px] text-[#8a6e75]">
+                  <div className="truncate text-[9.5px] font-bold uppercase tracking-[0.3px] text-[#8a6e75] sm:text-[11px] sm:tracking-[0.5px]">
                     {lbl}
                   </div>
-                  <div className="mt-0.5 font-display text-[26px] font-bold leading-none text-ink">
+                  <div className="mt-0.5 font-display text-[17px] font-bold leading-none text-ink sm:text-[26px]">
                     {val}
                   </div>
-                  <div className="mt-1 truncate text-[11.5px] font-semibold text-muted-rose">{sub}</div>
+                  <div className="mt-0.5 truncate text-[10px] font-semibold text-muted-rose sm:mt-1 sm:text-[11.5px]">{sub}</div>
                 </div>
               </div>
             ))}
@@ -113,7 +113,7 @@ export default function AdminDashboard() {
           {/* ===== CHART + QUICK ===== */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             {/* 7-day registrations */}
-            <div className="admin-card p-5 xl:col-span-2">
+            <div className="admin-card p-4 sm:p-5 xl:col-span-2">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-display text-[17px] font-bold text-ink">
@@ -181,7 +181,7 @@ export default function AdminDashboard() {
           {/* ===== MONEY FLOW + TOP INVESTORS ===== */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             {/* 7-day money flow — successful deposits vs successful withdrawals */}
-            <div className="admin-card p-5 xl:col-span-2">
+            <div className="admin-card p-4 sm:p-5 xl:col-span-2">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-display text-[17px] font-bold text-ink">

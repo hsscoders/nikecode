@@ -7,7 +7,7 @@ const ITEMS = [
   { label: "Home", Icon: Home, to: "/home" },
   { label: "Team", Icon: Users, to: "/team" },
   { label: "Invite", Icon: UserPlus, to: "/invite" },
-  { label: "Records", Icon: ReceiptText, to: "/records" },
+  { label: "Device", Icon: ReceiptText, to: "/records" },
   { label: "Account", Icon: User, to: "/profile" },
 ];
 
@@ -22,7 +22,7 @@ const ITEMS = [
 export default function BottomNav({ active = -1 }) {
   const router = useRouter();
   return (
-    <nav className="fixed bottom-0 left-1/2 z-50 w-full min-[520px]:max-w-[430px] -translate-x-1/2 border-t border-line-rose bg-white">
+    <nav className="fixed bottom-0 left-1/2 z-50 w-full -translate-x-1/2 border-t border-line-rose bg-white">
       <div
         className="grid grid-cols-5"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}

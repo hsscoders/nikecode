@@ -118,6 +118,44 @@ body > div {
   mask-image: linear-gradient(180deg, #000 68%, rgba(0, 0, 0, 0) 100%);
 }
 
+/* Home announcement bar — seamless scrolling marquee (two identical halves) */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[marquee_18s_linear_infinite\] {
+    animation: none;
+  }
+}
+
+/* Records page: staggered card entrance */
+.rise-in {
+  animation: rise-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-in {
+    animation: none;
+  }
+}
+
 /* Home page: bottom-sheet + popup animations */
 @keyframes slide-up {
   from {
@@ -151,14 +189,9 @@ body > div {
   }
 }
 
-/* Tablet / Desktop backdrop */
+/* Tablet / Desktop — same flat surface as mobile (no decorative frame bg) */
 @media (min-width: 520px) {
   body {
-    background: linear-gradient(
-      160deg,
-      var(--c-tint) 0%,
-      var(--c-tint2) 45%,
-      var(--c-line) 100%
-    );
+    background: var(--c-bg);
   }
 }

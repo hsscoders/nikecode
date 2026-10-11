@@ -350,19 +350,19 @@ export default function AppearancePage() {
       {!cfg || !resolved ? (
         <Loader />
       ) : (
-        <div className="mx-auto flex max-w-[920px] flex-col gap-5">
+        <div className="mx-auto flex max-w-[920px] flex-col gap-3.5 sm:gap-5">
           {/* ===== PRESETS ===== */}
-          <div className="admin-card flex flex-col gap-4 p-5 sm:p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
               <Palette size={17} className="text-maroon-700" />
-              <div className="font-display text-[16px] font-bold text-ink">
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Color Themes — one click
               </div>
               <span className="ml-auto rounded-full bg-[#f6eef0] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.5px] text-maroon-700">
                 12 presets
               </span>
             </div>
-            <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-4 py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
+            <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
               <Info size={16} className="mt-0.5 shrink-0 text-maroon-600" />
               <span>
                 Tap a theme and press Save. Every shade (buttons, headers, cards,
@@ -401,9 +401,9 @@ export default function AppearancePage() {
           </div>
 
           {/* ===== CUSTOM BRAND COLORS ===== */}
-          <div className="admin-card flex flex-col gap-4 p-5 sm:p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center justify-between gap-2">
-              <div className="font-display text-[16px] font-bold text-ink">Custom Brand Colors</div>
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">Custom Brand Colors</div>
               {cfg.preset === "custom" && (
                 <span className="rounded-full bg-[#f6eef0] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.5px] text-maroon-700">
                   Custom active
@@ -445,7 +445,7 @@ export default function AppearancePage() {
               ))}
             </div>
             {tooLight && (
-              <div className="flex items-start gap-2.5 rounded-xl bg-[#fff7e8] px-4 py-3 text-[12px] font-medium leading-relaxed text-[#8a6116]">
+              <div className="flex items-start gap-2.5 rounded-xl bg-[#fff7e8] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#8a6116]">
                 <AlertTriangle size={15} className="mt-0.5 shrink-0" />
                 <span>
                   Very light primary — white text on buttons would be unreadable, so
@@ -457,10 +457,10 @@ export default function AppearancePage() {
           </div>
 
           {/* ===== BACKGROUND TONE ===== */}
-          <div className="admin-card flex flex-col gap-4 p-5 sm:p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
               <SunIcon />
-              <div className="font-display text-[16px] font-bold text-ink">Page Background Tone</div>
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">Page Background Tone</div>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {BG_TONES.map((t) => {
@@ -496,10 +496,10 @@ export default function AppearancePage() {
           </div>
 
           {/* ===== FONTS ===== */}
-          <div className="admin-card flex flex-col gap-4 p-5 sm:p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
               <Type size={17} className="text-maroon-700" />
-              <div className="font-display text-[16px] font-bold text-ink">Font Style</div>
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">Font Style</div>
               <span className="ml-auto rounded-full bg-[#f6eef0] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.5px] text-maroon-700">
                 12 + 10 fonts
               </span>
@@ -561,9 +561,9 @@ export default function AppearancePage() {
           </div>
 
           {/* ===== LIVE PREVIEW ===== */}
-          <div className="admin-card flex flex-col gap-4 p-5 sm:p-6">
+          <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center justify-between gap-2">
-              <div className="font-display text-[16px] font-bold text-ink">Live Preview</div>
+              <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">Live Preview</div>
               <span className="flex items-center gap-1.5 rounded-full bg-[#f6eef0] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.5px] text-maroon-700">
                 <Zap size={11} />
                 Exact client output
@@ -573,18 +573,18 @@ export default function AppearancePage() {
           </div>
 
           {/* ===== SAVE ===== */}
-          <div className="sticky bottom-4 flex items-center justify-between gap-3">
+          <div className="sticky bottom-3 flex-col items-stretch gap-2.5 sm:bottom-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <button
               type="button"
               onClick={reset}
-              className="admin-btn flex cursor-pointer items-center gap-2 rounded-[12px] border border-line-rose bg-white px-5 py-3 text-[13px] font-bold text-[#7d6a6e] transition-all hover:bg-[#fbf3f4]"
+              className="admin-btn w-full cursor-pointer items-center justify-center gap-2 rounded-[12px] border border-line-rose bg-white px-5 py-2.5 text-[13px] font-bold text-[#7d6a6e] transition-all hover:bg-[#fbf3f4] sm:w-auto sm:justify-start sm:py-3"
             >
               <RotateCcw size={15} />
               Reset to Default
             </button>
             <button
               type="button"
-              className="admin-btn admin-btn-primary px-8 shadow-[0_10px_26px_rgba(124,29,51,0.35)]"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >
