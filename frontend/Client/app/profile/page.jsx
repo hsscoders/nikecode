@@ -104,6 +104,7 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("");
   const [uid, setUid] = useState("");
   const [balance, setBalance] = useState(0);
+  const [rechargeBalance, setRechargeBalance] = useState(0);
   const [rechargeTotal, setRechargeTotal] = useState(0);
   const [incomeTotal, setIncomeTotal] = useState(0);
   const [alertMsg, setAlertMsg] = useState("");
@@ -114,6 +115,8 @@ export default function ProfilePage() {
     const h = (e) => {
       if (!e.detail) return;
       if (e.detail.balance !== undefined) setBalance(e.detail.balance || 0);
+      if (e.detail.rechargeBalance !== undefined)
+        setRechargeBalance(e.detail.rechargeBalance || 0);
       if (e.detail.totalRecharge !== undefined)
         setRechargeTotal(e.detail.totalRecharge || 0);
       if (e.detail.totalIncome !== undefined)
@@ -141,6 +144,7 @@ export default function ProfilePage() {
         const d = await r.json();
         if (d.success && d.wallet) {
           setRechargeTotal(d.wallet.totalRecharge || 0);
+          setRechargeBalance(d.wallet.rechargeBalance || 0);
           setIncomeTotal(d.wallet.totalIncome || 0);
           setBalance(d.wallet.balance || 0);
           if (d.wallet.userid) {
@@ -170,6 +174,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const apply = (w) => {
       setRechargeTotal(w.totalRecharge || 0);
+      setRechargeBalance(w.rechargeBalance || 0);
       setIncomeTotal(w.totalIncome || 0);
       setBalance(w.balance || 0);
       if (w.userid) {
@@ -284,10 +289,11 @@ export default function ProfilePage() {
             </button>
           </div>
 
-          {/* stats — Balance / Total Recharge / Total Income */}
+          {/* stats — Recharge Balance (deducts on every plan purchase) /
+              Total Recharge (lifetime recharges only) / Total Income */}
           <div className="mt-3.5 grid grid-cols-3 gap-2 max-[360px]:gap-1.5">
             {[
-              { lbl: "Balance", val: fmt(balance) },
+              { lbl: "Recharge Balance", val: fmt(rechargeBalance) },
               { lbl: "Total Recharge", val: fmt(rechargeTotal) },
               { lbl: "Total Income", val: fmt(incomeTotal) },
             ].map(({ lbl, val }) => (

@@ -15,6 +15,11 @@ const DepositSchema = new mongoose.Schema(
     },
     note: { type: String, default: "" },
     processedAt: { type: Date },
+    /* QwackPay auto-gateway tracking (method "QwackPay" orders only) */
+    gateway: { type: String, default: "" }, // "qwackpay"
+    gatewayOrderId: { type: String, default: "" }, // QwackPay's qwack_order_id
+    paymentUrl: { type: String, default: "" }, // hosted checkout link returned by the gateway
+    utr: { type: String, default: "" }, // bank UTR from the success callback
   },
   { timestamps: true }
 );

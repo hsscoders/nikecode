@@ -12,6 +12,9 @@ const Withdrawal = require("../models/Withdrawal");
 const Setting = require("../models/Setting");
 const Transaction = require("../models/Transaction");
 const LoginCode = require("../models/LoginCode");
+const gateways = require("../services/gateways");
+const { detectUrls } = require("../services/urls");
+const { creditPayinDeposit } = require("./payments");
 const { emitToUser, emitAdmin, emitAll } = require("../live");
 const {
   isRemote,
@@ -779,13 +782,432 @@ router.put("/withdrawals/:id", async (req, res) => {
 });
 
 /* ==================================================
+   AUTO PAYOUT (withdrawals → bank via a registered gateway)
+================================================== */
+/* One-click auto payout — sends the withdrawal's net amount to the user's
+   bank account through the SELECTED gateway (body.gateway; defaults to the
+   registry default). Registry-driven: the same endpoint serves every future
+   gateway added to services/gateways.js. The gateway starts the order in
+   "processing"; the signed callback on its payout-notify webhook settles it
+   (Success / Rejected + refund) idempotently. */
+router.post("/withdrawals/:id/auto-pay", async (req, res) => {
+  try {
+    const entry = gateways.getGateway(req.body && req.body.gateway);
+    const cfg = await entry.getCfg();
+    if (!cfg.enabled)
+      return res.status(403).json({
+        success: false,
+        message: entry.label + " is OFF — enable it in Settings → Payment Gateway",
+      });
+    if (!cfg.autoPayout)
+      return res.status(403).json({
+        success: false,
+        message: "Automatic payout is OFF for " + entry.label + " — enable it in Settings → Payment Gateway",
+      });
+    if (!cfg.merchantId || !cfg.apiKey)
+      return res.status(503).json({
+        success: false,
+        message: entry.label + " credentials are missing — save the API key first",
+      });
+    /* callback origin — saved publicUrls win, otherwise detect the public
+       domain from this admin request's proxy chain (fully automatic) */
+    const backendUrl = cfg.backendUrl || detectUrls(req).backendUrl || "";
+    if (!backendUrl)
+      return res.status(503).json({
+        success: false,
+        message: "Backend Public URL is missing — the payout callback needs it",
+      });
+
+    const wd = await Withdrawal.findById(req.params.id);
+    if (!wd) return res.status(404).json({ success: false, message: "Withdrawal not found" });
+    if (!["Pending", "Processing"].includes(wd.status))
+      return res.status(400).json({
+        success: false,
+        message: "Only Pending / Processing withdrawals can be auto-paid",
+      });
+    if (!wd.account || !wd.ifsc || !wd.realName)
+      return res.status(400).json({
+        success: false,
+        message: "Bank details are incomplete on this withdrawal — pay it manually",
+      });
+
+    const net = Number(wd.netAmount ?? wd.amount);
+    /* QwackPay payout limits — outside the window the admin must pay manually */
+    if (net < 100 || net > 100000)
+      return res.status(400).json({
+        success: false,
+        message:
+          "Auto payout supports \u20B9100 – \u20B91,00,000 only — pay \u20B9" +
+          net +
+          " manually for this request",
+      });
+
+    /* unique merchant payout order id — retries get a fresh suffix so the
+       gateway never rejects the retry as a duplicate order */
+    const payoutOrderId = wd.payoutOrderId
+      ? "WD" + wd._id + "X" + Date.now().toString(36)
+      : "WD" + wd._id;
+
+    const r = await entry.createPayoutOrder(cfg, {
+      amount: net,
+      orderId: payoutOrderId,
+      accountNo: wd.account,
+      ifsc: wd.ifsc,
+      userName: wd.realName,
+      phone: wd.phone,
+      email: String(wd.phone) + "@qwackuser.com",
+      notifyUrl: backendUrl + entry.payoutNotifyPath,
+    });
+
+    if (!r.ok) {
+      /* 403 = server IP not whitelisted in the merchant dashboard — the most
+         common setup mistake, so surface a targeted hint */
+      const msg =
+        r.code === 403
+          ? "Gateway rejected the payout — add this server's IP to the whitelist in the " + entry.label + " dashboard"
+          : r.message;
+      return res.status(502).json({ success: false, message: msg });
+    }
+
+    wd.autoPayout = true;
+    wd.gateway = entry.id;
+    wd.payoutOrderId = payoutOrderId;
+    wd.gatewayOrderId = String(r.data.qwack_order_id || "");
+    if (wd.status === "Pending") wd.status = "Processing";
+    wd.note = "Auto payout via " + entry.label + (r.data.fee != null ? " (fee \u20B9" + r.data.fee + ")" : "");
+    wd.processedAt = new Date();
+    await wd.save();
+
+    /* keep the ledger in sync — Pending entry now shows Processing */
+    await Transaction.updateMany(
+      { refId: String(wd._id), status: "Pending" },
+      { $set: { status: "Processing" } }
+    );
+
+    emitToUser(wd.phone, "activity:update", { type: "withdraw", status: "Processing" });
+    emitAdmin("txns:new", {
+      type: "withdraw",
+      phone: wd.phone,
+      amount: wd.amount,
+      message:
+        "Auto payout initiated — \u20B9" + net + " to " + wd.phone + " via " + entry.label,
+    });
+
+    res.json({
+      success: true,
+      message: "Auto payout submitted via " + entry.label + " — \u20B9" + net + " is being sent to the bank account",
+      withdrawal: wd,
+    });
+  } catch (e) {
+    console.error("auto-pay error:", e.message);
+    res.status(500).json({ success: false, message: "Auto payout failed — try again or pay manually" });
+  }
+});
+
+/* Reconcile an auto payout — asks the gateway for the current order status and
+   syncs the local withdrawal (settles Success / Rejected+refund if the webhook
+   was missed). */
+router.post("/withdrawals/:id/payout-status", async (req, res) => {
+  try {
+    const wd = await Withdrawal.findById(req.params.id);
+    if (!wd) return res.status(404).json({ success: false, message: "Withdrawal not found" });
+    if (!wd.autoPayout || !wd.payoutOrderId)
+      return res.status(400).json({
+        success: false,
+        message: "This withdrawal was not sent through the gateway",
+      });
+    if (wd.status === "Success" || wd.status === "Rejected")
+      return res.json({
+        success: true,
+        message: "Already settled — " + wd.status,
+        gatewayStatus: wd.status.toLowerCase(),
+        withdrawal: wd,
+      });
+
+    /* resolve the gateway the withdrawal was sent through (older rows have no
+       gateway field — they default to QwackPay) */
+    const entry = gateways.getGateway(wd.gateway || "qwackpay");
+    const cfg = await entry.getCfg();
+    /* kind "payout" — OKPay routes this to /v1/Query/Payout */
+    const r = await entry.queryOrder(cfg, wd.payoutOrderId, "payout");
+    if (!r.ok)
+      return res.status(502).json({ success: false, message: r.message || "Gateway query failed" });
+
+    const g = String((r.data && r.data.status) || "").toLowerCase();
+    if (g === "success" || g === "completed" || g === "paid") {
+      await Withdrawal.updateOne(
+        { _id: wd._id, status: { $in: ["Pending", "Processing"] } },
+        {
+          $set: {
+            status: "Success",
+            processedAt: new Date(),
+            utr: String((r.data && r.data.utr) || wd.utr || ""),
+          },
+        }
+      );
+      await Transaction.updateMany(
+        { refId: String(wd._id), status: { $ne: "Success" } },
+        { $set: { status: "Success" } }
+      );
+      emitToUser(wd.phone, "wallet:refresh", { reason: "withdraw", status: "Success" });
+      emitToUser(wd.phone, "activity:update", { type: "withdraw", status: "Success" });
+    } else if (g === "failed" || g === "rejected" || g === "cancelled") {
+      await Withdrawal.updateOne(
+        { _id: wd._id, status: { $in: ["Pending", "Processing"] } },
+        {
+          $set: {
+            status: "Rejected",
+            processedAt: new Date(),
+            note: "Gateway reported: " + g,
+          },
+        }
+      );
+      await User.updateOne({ _id: wd.user }, { $inc: { balance: wd.amount } });
+      await Transaction.updateMany(
+        { refId: String(wd._id), status: { $ne: "Rejected" } },
+        { $set: { status: "Rejected" } }
+      );
+      emitToUser(wd.phone, "wallet:refresh", { reason: "withdraw", status: "Rejected" });
+      emitToUser(wd.phone, "activity:update", { type: "withdraw", status: "Rejected" });
+    }
+
+    const fresh = await Withdrawal.findById(wd._id).lean();
+    res.json({
+      success: true,
+      message:
+        "Gateway status: " + (g || "unknown") +
+        (fresh && fresh.status !== "Processing" ? " — withdrawal " + fresh.status : ""),
+      gatewayStatus: g,
+      withdrawal: fresh,
+    });
+  } catch (e) {
+    console.error("payout-status error:", e.message);
+    res.status(500).json({ success: false, message: "Failed to check payout status" });
+  }
+});
+
+/* ==================================================
+   MULTI-GATEWAY CONSOLE (registry-driven — future gateways plug in here
+   without new endpoints; the admin UI menus read the same shape)
+================================================== */
+/* Payout gateway menu for Admin → Withdrawals — every registered gateway
+   that can push money right now, with its live balance. The default payout
+   gateway (Admin → Payment Gateway → Payout Defaults) comes first. */
+router.get("/payout-gateways", adminAuth, async (req, res) => {
+  try {
+    const list = await gateways.listPayoutGateways();
+    res.json({ success: true, gateways: list });
+  } catch (e) {
+    console.error("payout-gateways error:", e.message);
+    res.status(500).json({ success: false, message: "Failed to load gateways" });
+  }
+});
+
+/* ============ ORDER STATUS QUERY (order/query tool) ============
+   Full gateway order/query console for the admin: paste any order id (local
+   deposit id, local withdrawal id or payout order id like WD…, or the raw
+   gateway order id) and get the LIVE gateway status. Terminal statuses also
+   settle the local record automatically — this is the ultimate missed-webhook
+   recovery tool (works even when the webhook never arrived). */
+router.post("/qwackpay/query-order", adminAuth, async (req, res) => {
+  try {
+    const raw = String((req.body && req.body.orderId) || "").trim();
+    if (!raw)
+      return res
+        .status(400)
+        .json({ success: false, message: "Enter an order id to query" });
+
+    /* gateway picker — the console sends the selected registry id; omitted
+       (older UI) means QwackPay. An explicit unknown id is rejected. */
+    const gwId = String((req.body && req.body.gateway) || "qwackpay");
+    if (req.body && req.body.gateway && !gateways.REGISTRY[gwId])
+      return res.status(400).json({ success: false, message: "Unknown gateway" });
+    const entry = gateways.getGateway(gwId);
+
+    const cfg = await entry.getCfg();
+    if (!cfg.merchantId || !cfg.apiKey)
+      return res.status(403).json({
+        success: false,
+        message: entry.label + " is not configured — save the credentials first",
+      });
+
+    /* resolve what the id points to — a deposit, a withdrawal (either id),
+       or a raw gateway order id (query the gateway straight away) */
+    let deposit = null;
+    let wd = null;
+    if (/^[0-9a-fA-F]{24}$/.test(raw)) {
+      deposit = await Deposit.findById(raw).lean();
+      if (!deposit) wd = await Withdrawal.findById(raw).lean();
+    }
+    if (!deposit && !wd) wd = await Withdrawal.findOne({ payoutOrderId: raw }).lean();
+
+    /* the id we ask the gateway for: deposit id / payout order id / raw id */
+    const merchantOrderId = deposit
+      ? String(deposit._id)
+      : wd
+      ? String(wd.payoutOrderId || wd._id)
+      : raw;
+
+    /* kind "auto": payin/payout endpoints differ per gateway — the registry
+       entry resolves the right one (OKPay tries Collect, then Payout) */
+    const r = await entry.queryOrder(cfg, merchantOrderId, "auto");
+    if (!r.ok)
+      return res
+        .status(502)
+        .json({ success: false, message: r.message || "Gateway query failed" });
+
+    const g = String((r.data && r.data.status) || "").toLowerCase();
+    const isPaid = g === "success" || g === "completed" || g === "paid";
+    const isFailed = g === "failed" || g === "rejected" || g === "cancelled";
+    /* OKPay rule — pay_money is the paid basis when the gateway reports it */
+    const paidAmount =
+      Number(r.data && r.data.pay_money) > 0
+        ? Number(r.data.pay_money)
+        : Number(r.data && r.data.amount) > 0
+        ? Number(r.data.amount)
+        : null;
+
+    /* settle the local record when the gateway reports a terminal state —
+       exactly the same rules as the webhooks (idempotent, refund on failure) */
+    let settled = "not-applicable"; // no local record or already settled
+    if (deposit && isPaid && deposit.status === "Pending") {
+      const fresh = await Deposit.findById(deposit._id);
+      fresh.gatewayLabel = entry.label;
+      const credited = await creditPayinDeposit(fresh, {
+        qwackOrderId: String((r.data && r.data.qwack_order_id) || deposit.gatewayOrderId || ""),
+        utr: String((r.data && r.data.utr) || ""),
+        amount: paidAmount,
+      });
+      settled = credited ? "deposit-credited" : "already-settled";
+    } else if (deposit && isFailed && deposit.status === "Pending") {
+      await Deposit.updateOne(
+        { _id: deposit._id, status: "Pending" },
+        {
+          $set: {
+            status: "Rejected",
+            processedAt: new Date(),
+            note: "Admin order query: gateway reported " + g,
+          },
+        }
+      );
+      await Transaction.updateOne(
+        { refId: String(deposit._id), status: "Pending" },
+        { $set: { status: "Rejected" } }
+      );
+      emitToUser(deposit.phone, "activity:update", { type: "recharge", status: "Rejected" });
+      settled = "deposit-rejected";
+    } else if (wd && isPaid && ["Pending", "Processing"].includes(wd.status)) {
+      await Withdrawal.updateOne(
+        { _id: wd._id, status: { $in: ["Pending", "Processing"] } },
+        {
+          $set: {
+            status: "Success",
+            processedAt: new Date(),
+            utr: String((r.data && r.data.utr) || wd.utr || ""),
+          },
+        }
+      );
+      await Transaction.updateMany(
+        { refId: String(wd._id), status: { $ne: "Success" } },
+        { $set: { status: "Success" } }
+      );
+      emitToUser(wd.phone, "wallet:refresh", { reason: "withdraw", status: "Success" });
+      emitToUser(wd.phone, "activity:update", { type: "withdraw", status: "Success" });
+      settled = "withdrawal-success";
+    } else if (wd && isFailed && ["Pending", "Processing"].includes(wd.status)) {
+      await Withdrawal.updateOne(
+        { _id: wd._id, status: { $in: ["Pending", "Processing"] } },
+        {
+          $set: {
+            status: "Rejected",
+            processedAt: new Date(),
+            note: "Admin order query: gateway reported " + g,
+          },
+        }
+      );
+      await User.updateOne({ _id: wd.user }, { $inc: { balance: wd.amount } });
+      await Transaction.updateMany(
+        { refId: String(wd._id), status: { $ne: "Rejected" } },
+        { $set: { status: "Rejected" } }
+      );
+      emitToUser(wd.phone, "wallet:refresh", { reason: "withdraw", status: "Rejected" });
+      emitToUser(wd.phone, "activity:update", { type: "withdraw", status: "Rejected" });
+      settled = "withdrawal-rejected-refunded";
+    }
+
+    res.json({
+      success: true,
+      message: "Gateway order fetched" + (settled !== "not-applicable" ? " — local record settled" : ""),
+      kind: deposit ? "deposit" : wd ? "withdrawal" : "unknown",
+      settled,
+      order: {
+        merchantOrderId,
+        gatewayOrderId: String((r.data && r.data.qwack_order_id) || ""),
+        status: g || "unknown",
+        amount: (r.data && r.data.amount) ?? null,
+        utr: String((r.data && r.data.utr) || ""),
+        createdAt: (r.data && r.data.created_at) || null,
+        completedAt: (r.data && (r.data.paid_at || r.data.completed_at)) || null,
+      },
+      raw: r.data || {},
+    });
+  } catch (e) {
+    console.error("query-order error:", e.message);
+    res.status(500).json({ success: false, message: "Order query failed" });
+  }
+});
+
+/* ==================================================
    SITE SETTINGS
 ================================================== */
+/* ============ GATEWAY TEST CONNECTION ============
+   Calls the gateway /balance endpoint with the saved credentials — the admin
+   payment-gateway page uses it to verify the merchant id + key work.
+   body.gateway picks the registry entry (default qwackpay — older UI). */
+router.post("/qwackpay/test", adminAuth, async (req, res) => {
+  try {
+    const gwId = String((req.body && req.body.gateway) || "qwackpay");
+    if (req.body && req.body.gateway && !gateways.REGISTRY[gwId])
+      return res.status(400).json({ success: false, message: "Unknown gateway" });
+    const entry = gateways.getGateway(gwId);
+    const cfg = await entry.getCfg();
+    if (!cfg.merchantId || !cfg.apiKey)
+      return res
+        .status(400)
+        .json({ success: false, message: "Save the " + entry.label + " merchant ID and key first" });
+    const r = await entry.queryBalance(cfg);
+    if (!r.ok)
+      return res
+        .status(502)
+        .json({ success: false, message: r.message || "Gateway test failed" });
+    const balance = entry.parseBalance(r.data || {});
+    res.json({
+      success: true,
+      gateway: entry.id,
+      label: entry.label,
+      message: entry.label + " connected — merchant balance fetched",
+      balance,
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: "Gateway test failed" });
+  }
+});
+
 router.get("/settings", async (req, res) => {
   const s = await Setting.findOne({ key: "global" }).lean();
+  /* Public URLs auto-detected from THIS request's proxy chain — the admin UI
+     pre-fills the Server & Webhooks card with them (saved once → reused by
+     every gateway). effectiveUrls = saved override ?? detected. */
+  const detected = detectUrls(req);
+  const saved = (s && s.publicUrls) || {};
   res.json({
     success: true,
     settings: s || { commission: {}, site: {} },
+    detectedUrls: detected,
+    effectiveUrls: {
+      backendUrl: saved.backendUrl || detected.backendUrl || "",
+      clientUrl: saved.clientUrl || detected.clientUrl || "",
+    },
   });
 });
 
@@ -949,6 +1371,94 @@ router.put("/settings", async (req, res) => {
           return res.status(400).json({ success: false, message: "Invalid background tone" });
         s.appearance.bgTone = a.bgTone;
         appearanceChanged = true;
+      }
+    }
+
+    /* QwackPay auto payment gateway — credentials from Admin → Payment Gateway.
+       Field-level merge: only the fields the admin page sends are touched. */
+    if (b.qwackpay) {
+      const q = b.qwackpay;
+      if (!s.qwackpay) s.qwackpay = {};
+      if (q.enabled !== undefined) s.qwackpay.enabled = !!q.enabled;
+      if (q.autoPayout !== undefined) s.qwackpay.autoPayout = !!q.autoPayout;
+      if (q.displayName !== undefined)
+        s.qwackpay.displayName = String(q.displayName).trim().slice(0, 40) || "QwackPay";
+      if (q.merchantId !== undefined)
+        s.qwackpay.merchantId = String(q.merchantId).trim().slice(0, 40);
+      /* the API key (docking key) — stored verbatim so the admin can change it
+         anytime; it is never exposed on any public route */
+      if (q.apiKey !== undefined)
+        s.qwackpay.apiKey = String(q.apiKey).trim().slice(0, 120);
+      if (q.baseUrl !== undefined) {
+        const base = String(q.baseUrl).trim().slice(0, 200);
+        s.qwackpay.baseUrl = base || "https://qwackpay.com/api/v1";
+      }
+      if (q.backendUrl !== undefined)
+        s.qwackpay.backendUrl = String(q.backendUrl).trim().slice(0, 200);
+      if (q.clientUrl !== undefined)
+        s.qwackpay.clientUrl = String(q.clientUrl).trim().slice(0, 200);
+    }
+
+    /* OKPay auto payment gateway (wpay.one) — same field-level merge rules
+       as QwackPay. The key is stored verbatim and never exposed publicly. */
+    if (b.okpay) {
+      const q = b.okpay;
+      if (!s.okpay) s.okpay = {};
+      if (q.enabled !== undefined) s.okpay.enabled = !!q.enabled;
+      if (q.autoPayout !== undefined) s.okpay.autoPayout = !!q.autoPayout;
+      if (q.displayName !== undefined)
+        s.okpay.displayName = String(q.displayName).trim().slice(0, 40) || "OKPay";
+      if (q.mchId !== undefined)
+        s.okpay.mchId = String(q.mchId).trim().slice(0, 40);
+      if (q.apiKey !== undefined)
+        s.okpay.apiKey = String(q.apiKey).trim().slice(0, 120);
+      if (q.baseUrl !== undefined) {
+        const base = String(q.baseUrl).trim().slice(0, 200);
+        s.okpay.baseUrl = base || "https://api.wpay.one";
+      }
+      if (q.backendUrl !== undefined)
+        s.okpay.backendUrl = String(q.backendUrl).trim().slice(0, 200);
+      if (q.clientUrl !== undefined)
+        s.okpay.clientUrl = String(q.clientUrl).trim().slice(0, 200);
+    }
+
+    /* Public server URLs — auto-detected on the client and saved once here.
+       Every gateway reuses them (webhook notify_url + payment return_url);
+       a per-gateway override (legacy fields) still wins when set. */
+    if (b.publicUrls) {
+      if (!s.publicUrls) s.publicUrls = {};
+      const saveUrl = (v) => {
+        const t = String(v).trim().replace(/\/+$/, "").slice(0, 200);
+        if (t && !/^https?:\/\/[^\s]+$/i.test(t)) return null; // invalid
+        return t;
+      };
+      if (b.publicUrls.backendUrl !== undefined) {
+        const t = saveUrl(b.publicUrls.backendUrl);
+        if (t === null)
+          return res.status(400).json({
+            success: false,
+            message: "Backend URL must start with http:// or https://",
+          });
+        s.publicUrls.backendUrl = t;
+      }
+      if (b.publicUrls.clientUrl !== undefined) {
+        const t = saveUrl(b.publicUrls.clientUrl);
+        if (t === null)
+          return res.status(400).json({
+            success: false,
+            message: "Website URL must start with http:// or https://",
+          });
+        s.publicUrls.clientUrl = t;
+      }
+    }
+
+    /* Cross-gateway preferences — default payout gateway used by the
+       Admin → Withdrawals menu (must be a registered gateway id) */
+    if (b.gatewayPrefs) {
+      if (!s.gatewayPrefs) s.gatewayPrefs = {};
+      if (b.gatewayPrefs.defaultPayoutGateway !== undefined) {
+        const gid = String(b.gatewayPrefs.defaultPayoutGateway).trim();
+        if (gateways.REGISTRY[gid]) s.gatewayPrefs.defaultPayoutGateway = gid;
       }
     }
 

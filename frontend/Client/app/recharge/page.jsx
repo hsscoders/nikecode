@@ -136,7 +136,11 @@ export default function RechargePage() {
   const [wallet, setWallet] = useState({ rechargeBalance: 0 });
   useLiveWallet(setWallet); /* realtime — recharge approval lands here instantly */
   const [cfg, setCfg] = useState(() => mergeRecharge(gs && gs.recharge));
+  const [autoGws, setAutoGws] = useState([]); // enabled auto gateways [{id, name}]
+  const [qwLoading, setQwLoading] = useState(false); // create-order in flight
+  const [paidBanner, setPaidBanner] = useState(""); // ?paid=<orderId> return banner
   const [manualOpen, setManualOpen] = useState(false);
+  const autoGwsRef = useRef([]); // sync inside async fetch without re-running it
   const alertTimer = useRef(null);
 
   /* token guard — /recharge stays locked without login */
@@ -146,6 +150,15 @@ export default function RechargePage() {
       router.replace("/login");
       return;
     }
+    /* payment-return banner — QwackPay redirects back to /recharge?paid=<orderId> */
+    try {
+      const p = new URLSearchParams(window.location.search).get("paid");
+      if (p) {
+        setPaidBanner(p);
+        /* clean the URL so a refresh / back-nav does not re-show the banner */
+        window.history.replaceState({}, "", "/recharge");
+      }
+    } catch (e) {}
     /* wallet balance + recharge settings (admin panel live) */
     (async () => {
       try {
@@ -158,12 +171,34 @@ export default function RechargePage() {
       try {
         const r = await fetch("/api/settings");
         const d = await r.json();
-        if (d.success && d.settings && d.settings.recharge) {
-          const rc = mergeRecharge(d.settings.recharge);
-          setCfg(rc);
-          /* preselect first active method */
-          const first = rc.methods.find((m) => m.active);
-          if (first) setMethod(first.name);
+        if (d.success && d.settings) {
+          if (d.settings.recharge) {
+            const rc = mergeRecharge(d.settings.recharge);
+            setCfg(rc);
+            if (!autoGwsRef.current.length) {
+              /* preselect first active method */
+              const first = rc.methods.find((m) => m.active);
+              if (first) setMethod(first.name);
+            }
+          }
+          /* enabled automatic gateways — one AUTO tile each on /recharge,
+             display names are admin-set (Payment Gateway / Recharge Setting) */
+          let list = null;
+          if (Array.isArray(d.settings.autoGateways) && d.settings.autoGateways.length) {
+            list = d.settings.autoGateways.slice(0, 4).map((g) => ({
+              id: String(g.id || ""),
+              name: String(g.displayName || g.id || "Pay").slice(0, 40),
+            }));
+          } else if (d.settings.qwackpay && d.settings.qwackpay.enabled) {
+            /* backward-compatible fallback for cached settings payloads */
+            list = [{ id: "qwackpay", name: String(d.settings.qwackpay.displayName || "QwackPay").slice(0, 40) }];
+          }
+          if (list && list.length) {
+            list = list.filter((g) => g.id);
+            setAutoGws(list);
+            autoGwsRef.current = list;
+            setMethod("gw:" + list[0].id); /* auto method is the preferred default */
+          }
         }
       } catch (e) {}
     })();
@@ -244,6 +279,35 @@ export default function RechargePage() {
     return true;
   };
 
+  /* Auto gateway flow (every registered gateway) — create a gateway order,
+     then redirect to the hosted checkout. The wallet is credited by the
+     signed webhook (server-to-server). */
+  const payViaGateway = async (gwId) => {
+    if (qwLoading) return;
+    setQwLoading(true);
+    try {
+      const token = localStorage.getItem("zapto_token");
+      const res = await fetch("/api/payments/" + gwId + "/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify({ amount: Number(amount) }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.paymentUrl) {
+        showAlert(data.message || "Could not start the payment — please try again");
+        setQwLoading(false);
+        return;
+      }
+      window.location.href = data.paymentUrl; /* hosted checkout page */
+    } catch (e) {
+      showAlert("Network error — please try again");
+      setQwLoading(false);
+    }
+  };
+
   /* Pay — validate, then open the manual payment sheet (admin controlled) */
   const pay = () => {
     if (!amount || Number(amount) <= 0) {
@@ -260,6 +324,10 @@ export default function RechargePage() {
     }
     if (!method) {
       showAlert("Select a payment method");
+      return;
+    }
+    if (method.startsWith("gw:")) {
+      payViaGateway(method.slice(3));
       return;
     }
     if (cfg.manual.enabled) {
@@ -308,6 +376,17 @@ export default function RechargePage() {
           </span>
         </div>
 
+        {/* --- PAID RETURN BANNER (QwackPay redirect-back) --- */}
+        {paidBanner && (
+          <div className="mt-3 flex items-start gap-2.5 rounded-[14px] border border-[#bfe8cc] bg-[#eafaf0] px-4 py-3">
+            <CircleCheck size={16} className="mt-0.5 shrink-0 text-[#16a34a]" />
+            <div className="text-[12.5px] font-medium leading-relaxed text-[#1d7a3e]">
+              Payment completed — your recharge is credited automatically. The
+              balance updates in a few seconds.
+            </div>
+          </div>
+        )}
+
         {/* --- AMOUNT (same card layout as the withdrawal page) --- */}
         <div className={`${card} mt-3 p-4`}>
           <label className="mb-1.5 block text-[12.5px] font-bold text-ink">Amount</label>
@@ -355,9 +434,10 @@ export default function RechargePage() {
           <button
             type="button"
             onClick={pay}
-            className={`mt-4 w-full cursor-pointer rounded-xl py-[14px] text-center font-display text-[16.5px] font-bold tracking-[0.4px] text-white transition-all duration-150 active:scale-[0.98] ${gradientBtn} max-[360px]:py-[13px]`}
+            disabled={qwLoading}
+            className={`mt-4 w-full cursor-pointer rounded-xl py-[14px] text-center font-display text-[16.5px] font-bold tracking-[0.4px] text-white transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 ${gradientBtn} max-[360px]:py-[13px]`}
           >
-            Pay
+            {qwLoading ? "Starting payment..." : "Pay"}
           </button>
 
           <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] font-medium text-muted-rose">
@@ -375,6 +455,40 @@ export default function RechargePage() {
           <div className="font-display text-[16px] font-bold text-ink">Payment Method</div>
 
           <div className="mt-2.5">
+            {/* Automatic gateways — one AUTO tile per enabled gateway,
+                display names are admin-set */}
+            {autoGws.map((gw) => {
+              const selected = method === "gw:" + gw.id;
+              return (
+                <button
+                  key={gw.id}
+                  type="button"
+                  onClick={() => setMethod("gw:" + gw.id)}
+                  aria-pressed={selected}
+                  className={`mb-1.5 flex w-full cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all duration-150 active:scale-[0.99] ${
+                    selected
+                      ? "border-maroon-600/35 bg-[var(--c-tint)]"
+                      : "border-line-rose/70 bg-white hover:bg-[var(--c-tint)]"
+                  }`}
+                >
+                  <span className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-xl bg-[#eafaf0] text-[#16a34a]">
+                    <IndianRupee size={19} strokeWidth={2.1} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-[14.5px] font-bold text-ink">{gw.name}</span>
+                      <span className="rounded-full bg-[#eafaf0] px-1.5 py-0.5 text-[8.5px] font-extrabold tracking-[0.8px] text-[#16a34a]">
+                        AUTO
+                      </span>
+                    </span>
+                    <span className="mt-0.5 block truncate text-[11px] font-medium text-muted-rose">
+                      Instant UPI — automatic approval
+                    </span>
+                  </span>
+                  <Radio selected={selected} />
+                </button>
+              );
+            })}
             {activeMethods.map((m) => {
               const Icon = METHOD_ICONS[m.icon] || Wallet;
               const selected = method === m.name;
@@ -412,7 +526,7 @@ export default function RechargePage() {
                 </button>
               );
             })}
-            {activeMethods.length === 0 && (
+            {activeMethods.length === 0 && !qwEnabled && (
               <div className="rounded-xl border border-dashed border-line-rose py-6 text-center text-[13px] font-semibold text-muted-rose">
                 No payment methods available right now
               </div>

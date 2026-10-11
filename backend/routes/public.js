@@ -58,6 +58,28 @@ router.get("/settings", async (req, res) => {
             withdraw: s.withdraw || null,
             income: s.income ? { creditTime: s.income.creditTime } : null,
             appearance: s.appearance || null,
+            /* Automatic gateways — the client /recharge page renders one AUTO
+               method tile per enabled gateway, using the admin-set display
+               names. Keys / merchant ids NEVER go out on a public route.
+               `qwackpay` stays for backward compatibility (cached pages). */
+            qwackpay: s.qwackpay
+              ? {
+                  enabled: !!s.qwackpay.enabled,
+                  displayName: String(s.qwackpay.displayName || "QwackPay").slice(0, 40),
+                }
+              : { enabled: false, displayName: "QwackPay" },
+            autoGateways: [
+              {
+                id: "qwackpay",
+                enabled: !!(s.qwackpay && s.qwackpay.enabled),
+                displayName: String((s.qwackpay && s.qwackpay.displayName) || "QwackPay").slice(0, 40),
+              },
+              {
+                id: "okpay",
+                enabled: !!(s.okpay && s.okpay.enabled),
+                displayName: String((s.okpay && s.okpay.displayName) || "OKPay").slice(0, 40),
+              },
+            ].filter((g) => g.enabled),
           }
         : null,
     });

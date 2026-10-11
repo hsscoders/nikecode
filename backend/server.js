@@ -14,6 +14,7 @@ const adminAuthRoutes = require("./routes/adminAuth");
 const adminRoutes = require("./routes/admin");
 const publicRoutes = require("./routes/public");
 const walletRoutes = require("./routes/wallet");
+const paymentsRoutes = require("./routes/payments");
 const Admin = require("./models/Admin");
 const Setting = require("./models/Setting");
 const Plan = require("./models/Plan");
@@ -24,6 +25,12 @@ const Transaction = require("./models/Transaction");
 const { emitToUser } = require("./live");
 
 const app = express();
+
+/* Public-URL auto-detection: trust the X-Forwarded-* headers from the
+   reverse-proxy chain (nginx / Next.js rewrites) so req.protocol + host
+   reflect the PUBLIC origin the browser used — this is what gateway
+   webhook notify_url and the payment return_url are built from. */
+app.set("trust proxy", true);
 
 /* ============ SOCKET.IO (realtime updates) ============
    Client/admin connect through the Next.js rewrite proxy
@@ -64,6 +71,10 @@ app.use("/api/admin/upload", express.json({ limit: "36mb" }));
 
 app.use(cors());
 app.use(express.json());
+/* OKPay (wpay.one) posts its payin/payout callbacks as
+   application/x-www-form-urlencoded — without this parser req.body is empty
+   and the webhook signature check fails. JSON routes are unaffected. */
+app.use(express.urlencoded({ extended: true }));
 
 /* Banner/asset static serve (backend/public) */
 app.use(express.static(path.join(__dirname, "public")));
@@ -83,6 +94,9 @@ app.use("/api/admin", adminRoutes);
 // Public content (plans/banners/settings) + user wallet actions
 app.use("/api", publicRoutes);
 app.use("/api", walletRoutes);
+
+// QwackPay auto-gateway (create order / webhook notify / status poll)
+app.use("/api/payments", paymentsRoutes);
 
 // 404 fallback for unknown api routes
 app.use("/api", (req, res) =>
@@ -138,6 +152,14 @@ async function seed() {
     await Setting.updateOne(
       { key: "global", appearance: { $exists: false } },
       { $set: { appearance: { preset: "maroon", primary: "#7c1d33", accent: "#d4a94f", fontHead: "playfair", fontBody: "inter" } } }
+    );
+    await Setting.updateOne(
+      { key: "global", qwackpay: { $exists: false } },
+      { $set: { qwackpay: { enabled: false, merchantId: "", apiKey: "", baseUrl: "https://qwackpay.com/api/v1", backendUrl: "", clientUrl: "" } } }
+    );
+    await Setting.updateOne(
+      { key: "global", okpay: { $exists: false } },
+      { $set: { okpay: { enabled: false, autoPayout: false, displayName: "OKPay", mchId: "", apiKey: "", baseUrl: "https://api.wpay.one", backendUrl: "", clientUrl: "" } } }
     );
     await Invest.updateMany(
       { paidDays: { $exists: false } },

@@ -1,13 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CircleCheck, XCircle, Clock3, Eye, RefreshCw, Search, ArrowUpFromLine } from "lucide-react";
+import {
+  CircleCheck,
+  XCircle,
+  Clock3,
+  Eye,
+  RefreshCw,
+  Search,
+  Zap,
+  Radar,
+  Landmark,
+  CheckCircle2,
+} from "lucide-react";
 import AdminShell from "../../../components/AdminShell";
 import { api, fmt0, fmtD } from "../../../lib/api";
 import {
   Modal,
   Pill,
-  Confirm,
   Loader,
   Toast,
   useToast,
@@ -15,14 +25,29 @@ import {
 
 const TABS = ["All", "Pending", "Processing", "Success", "Rejected"];
 
+/* gateway registry labels — kept in sync with backend services/gateways.js
+   (the /payout-gateways response also carries labels; this map covers rows
+   before the list loads) */
+const GW_LABEL = { qwackpay: "QwackPay", okpay: "OKPay" };
+const gwLabel = (id) => GW_LABEL[id] || (id ? id.charAt(0).toUpperCase() + id.slice(1) : "Gateway");
+
 export default function WithdrawalsPage() {
   const [wds, setWds] = useState(null);
   const [tab, setTab] = useState("All");
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [view, setView] = useState(null);
-  const [confirm, setConfirm] = useState(null); // { wd, action }
+  const [confirm, setConfirm] = useState(null); // { wd, action } (manual actions)
+  const [payDlg, setPayDlg] = useState(null); // { wd } — auto payout dialog
+  const [payGw, setPayGw] = useState("qwackpay"); // gateway picked in the dialog
+  const [payBusy, setPayBusy] = useState(false);
+  const [busyId, setBusyId] = useState(null); // row-level busy (check status)
+  const [gwList, setGwList] = useState(null); // registry gateways + live balances
+  const [selGw, setSelGw] = useState("qwackpay"); // toolbar gateway menu (session default)
   const { toast, showToast, isError } = useToast();
+
+  const readyGws = (gwList || []).filter((g) => g.ready);
+  const autoOn = readyGws.length > 0;
 
   const load = async (q = query) => {
     try {
@@ -33,8 +58,22 @@ export default function WithdrawalsPage() {
     }
   };
 
+  /* gateway menu payload — who can pay right now + live balances */
+  const loadGateways = async () => {
+    try {
+      const d = await api("/api/admin/payout-gateways");
+      const list = d.gateways || [];
+      setGwList(list);
+      const def = list.find((g) => g.isDefault);
+      setSelGw((cur) => (list.some((g) => g.id === cur && g.ready) ? cur : def && def.ready ? def.id : list.find((g) => g.ready)?.id || cur));
+    } catch (e) {
+      setGwList([]);
+    }
+  };
+
   useEffect(() => {
     load();
+    loadGateways();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -44,6 +83,7 @@ export default function WithdrawalsPage() {
 
   const filtered = (wds || []).filter((w) => tab === "All" || w.status === tab);
 
+  /* manual status actions (Approve / Reject / Processing) */
   const applyAction = async () => {
     const { wd, action } = confirm;
     try {
@@ -65,23 +105,89 @@ export default function WithdrawalsPage() {
     }
   };
 
+  /* AUTO PAYOUT — sends through the gateway picked in the dialog */
+  const submitAutoPay = async () => {
+    if (!payDlg || payBusy) return;
+    setPayBusy(true);
+    try {
+      const d = await api("/api/admin/withdrawals/" + payDlg.wd._id + "/auto-pay", {
+        method: "POST",
+        body: JSON.stringify({ gateway: payGw }),
+      });
+      showToast(d.message || "Auto payout submitted — money is being sent to the bank account");
+      setPayDlg(null);
+      load();
+    } catch (e) {
+      showToast(e.message, true);
+    } finally {
+      setPayBusy(false);
+    }
+  };
+
+  /* ask the gateway for the live payout status and settle the row */
+  const checkStatus = async (wd) => {
+    setBusyId(wd._id);
+    try {
+      const d = await api("/api/admin/withdrawals/" + wd._id + "/payout-status", {
+        method: "POST",
+      });
+      showToast(d.message || "Status checked");
+      load();
+    } catch (e) {
+      showToast(e.message, true);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const actionsFor = (w) => {
-    if (w.status === "Pending")
-      return [
-        { key: "Processing", label: "Processing", cls: "bg-[#e8f0fe] text-[#2563eb] hover:bg-[#dbe8fd]", Icon: Clock3 },
-        { key: "Success", label: "Approve", cls: "bg-[#eafaf0] text-[#16a34a] hover:bg-[#d9f5e5]", Icon: CircleCheck },
-        { key: "Rejected", label: "Reject", cls: "bg-[#fdecec] text-[#dc2626] hover:bg-[#fbdcdc]", Icon: XCircle },
-      ];
-    if (w.status === "Processing")
-      return [
-        { key: "Success", label: "Approve", cls: "bg-[#eafaf0] text-[#16a34a] hover:bg-[#d9f5e5]", Icon: CircleCheck },
-        { key: "Rejected", label: "Reject", cls: "bg-[#fdecec] text-[#dc2626] hover:bg-[#fbdcdc]", Icon: XCircle },
-      ];
+    if (w.status === "Pending" || w.status === "Processing") {
+      const acts = [];
+      if (autoOn)
+        acts.push({
+          key: "auto-pay",
+          label: "Auto Pay",
+          cls: "bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white hover:brightness-110",
+          Icon: Zap,
+        });
+      if (w.status === "Pending")
+        acts.push({
+          key: "Processing",
+          label: "Processing",
+          cls: "bg-[#e8f0fe] text-[#2563eb] hover:bg-[#dbe8fd]",
+          Icon: Clock3,
+        });
+      acts.push({
+        key: "Success",
+        label: "Approve",
+        cls: "bg-[#eafaf0] text-[#16a34a] hover:bg-[#d9f5e5]",
+        Icon: CircleCheck,
+      });
+      acts.push({
+        key: "Rejected",
+        label: "Reject",
+        cls: "bg-[#fdecec] text-[#dc2626] hover:bg-[#fbdcdc]",
+        Icon: XCircle,
+      });
+      return acts;
+    }
     return null;
   };
 
+  const onAction = (w, key) => {
+    if (key === "auto-pay") {
+      setPayGw(selGw); /* preselect the toolbar choice */
+      setPayDlg({ wd: w });
+      return;
+    }
+    setConfirm({ wd: w, action: key });
+  };
+
+  const money = (v) =>
+    "\u20B9" + Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+
   return (
-    <AdminShell title="Withdrawals" sub="Payout requests — rejecting refunds the amount to the user's balance">
+    <AdminShell title="Withdrawals" sub="Payout requests — pick a gateway and pay automatically, or approve manually. Rejecting refunds the user's balance">
       <Toast message={toast} isError={isError} />
 
       {/* Toolbar */}
@@ -114,6 +220,55 @@ export default function WithdrawalsPage() {
         </button>
       </div>
 
+      {/* ===== PAYOUT VIA GATEWAY — clickable chips, one per ready gateway ===== */}
+      {autoOn && (
+        <div className="mb-4 rounded-2xl border border-line-rose bg-white p-4">
+          <div className="mb-2.5 flex flex-wrap items-center gap-2">
+            <Landmark size={15} className="text-maroon-700" />
+            <span className="text-[11px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">
+              Payout via Gateway
+            </span>
+            <span className="text-[11.5px] font-medium text-muted-rose">
+              — Auto Pay sends the money through the gateway you select here · Approve / Reject stay manual
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {readyGws.map((g) => {
+              const active = selGw === g.id;
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setSelGw(g.id)}
+                  className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-4 py-2.5 text-[13px] font-extrabold transition-all duration-150 ${
+                    active
+                      ? "border-maroon-700 bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white shadow-[0_6px_16px_rgba(124,29,51,0.3)]"
+                      : "border-line-rose bg-white text-ink hover:border-maroon-700/40"
+                  }`}
+                >
+                  {active ? <CheckCircle2 size={15} /> : <Zap size={14} className="text-maroon-600" />}
+                  {g.label}
+                  {g.balance ? (
+                    <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${active ? "bg-white/20 text-white" : "bg-[#eafaf0] text-[#16a34a]"}`}>
+                      {money(g.balance.available)} avail.
+                    </span>
+                  ) : (
+                    <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${active ? "bg-white/20 text-white" : "bg-[#f3eef0] text-[#9a8b90]"}`}>
+                      balance —
+                    </span>
+                  )}
+                  {g.isDefault && (
+                    <span className={`rounded-full px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide ${active ? "bg-white/20 text-white" : "bg-[#f7e3e7] text-maroon-700"}`}>
+                      default
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Status tabs */}
       <div className="mb-4 flex flex-wrap gap-2">
         {TABS.map((t) => (
@@ -144,7 +299,7 @@ export default function WithdrawalsPage() {
       ) : (
         <div className="admin-card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="admin-table min-w-[980px]">
+            <table className="admin-table min-w-[1080px]">
               <thead>
                 <tr>
                   <th>Date</th>
@@ -183,6 +338,18 @@ export default function WithdrawalsPage() {
                     </td>
                     <td>
                       <Pill value={w.status} />
+                      {w.autoPayout && (
+                        <div className="mt-1 flex items-center gap-1">
+                          <span className="inline-flex items-center gap-0.5 rounded-full bg-[#fdf6e4] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-[#8a6a1c]">
+                            <Zap size={9} /> Auto · {gwLabel(w.gateway)}
+                          </span>
+                          {w.utr && (
+                            <span className="text-[9.5px] font-bold text-muted-rose">
+                              UTR {String(w.utr).slice(0, 10)}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <div className="flex justify-end gap-1.5">
@@ -191,7 +358,7 @@ export default function WithdrawalsPage() {
                             <button
                               key={key}
                               type="button"
-                              onClick={() => setConfirm({ wd: w, action: key })}
+                              onClick={() => onAction(w, key)}
                               className={`flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-extrabold transition-colors ${cls}`}
                             >
                               <Icon size={13} />
@@ -202,6 +369,17 @@ export default function WithdrawalsPage() {
                           <span className="text-[12px] font-semibold text-muted-rose">
                             {w.processedAt ? "Processed " + fmtD(w.processedAt) : "—"}
                           </span>
+                        )}
+                        {w.autoPayout && w.status === "Processing" && (
+                          <button
+                            type="button"
+                            onClick={() => checkStatus(w)}
+                            disabled={busyId === w._id}
+                            className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#e8f0fe] px-3 py-1.5 text-[12px] font-extrabold text-[#2563eb] transition-colors hover:bg-[#dbe8fd] disabled:opacity-60"
+                          >
+                            <Radar size={13} className={busyId === w._id ? "animate-spin" : ""} />
+                            {busyId === w._id ? "Checking..." : "Check Status"}
+                          </button>
                         )}
                       </div>
                     </td>
@@ -240,8 +418,15 @@ export default function WithdrawalsPage() {
                 val: view.charge ? "− " + fmt0(view.charge) : "—",
               },
               { lbl: "Net Payable", val: fmt0(view.netAmount ?? view.amount) },
+              {
+                lbl: "Payout Mode",
+                val: view.autoPayout ? "Automatic (" + gwLabel(view.gateway) + ")" : "Manual",
+              },
+              { lbl: "Payout Order ID", val: view.payoutOrderId || "—" },
+              { lbl: "UTR / Reference", val: view.utr || "—" },
               { lbl: "Requested At", val: fmtD(view.createdAt) },
               { lbl: "Processed At", val: view.processedAt ? fmtD(view.processedAt) : "—" },
+              ...(view.note ? [{ lbl: "Note", val: view.note }] : []),
             ].map(({ lbl, val }) => (
               <div key={lbl} className="flex items-start justify-between gap-4 border-b border-line-rose/60 pb-2.5 last:border-b-0">
                 <span className="shrink-0 text-[12.5px] font-semibold text-muted-rose">{lbl}</span>
@@ -252,10 +437,106 @@ export default function WithdrawalsPage() {
         )}
       </Modal>
 
-      {/* ===== ACTION CONFIRM ===== */}
-      <Confirm
+      {/* ===== AUTO PAYOUT DIALOG — pick the gateway, then send ===== */}
+      <Modal
+        open={!!payDlg}
+        title="Auto Payout"
+        sub={payDlg ? "+91 " + payDlg.wd.phone + " · " + fmt0(payDlg.wd.netAmount ?? payDlg.wd.amount) : ""}
+        onClose={() => (payBusy ? null : setPayDlg(null))}
+      >
+        {payDlg && (
+          <div className="flex flex-col gap-4">
+            {/* beneficiary summary */}
+            <div className="rounded-xl bg-[var(--c-tint)] px-4 py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-bold text-ink">{payDlg.wd.realName || "Beneficiary"}</span>
+                <span className="font-display text-[15px] font-extrabold text-maroon-700">
+                  {fmt0(payDlg.wd.netAmount ?? payDlg.wd.amount)}
+                </span>
+              </div>
+              <div className="mt-1">
+                {payDlg.wd.bankName || "Bank"} · account{" "}
+                <span className="font-bold">••••{String(payDlg.wd.account || "").slice(-4)}</span> · IFSC{" "}
+                <span className="font-bold">{payDlg.wd.ifsc || "—"}</span>
+              </div>
+            </div>
+
+            {/* gateway picker — clickable chips, same style as the toolbar */}
+            <div>
+              <label className="mb-1.5 block text-[12px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">
+                Pay via Gateway
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {readyGws.map((g) => {
+                  const active = payGw === g.id;
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => setPayGw(g.id)}
+                      className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-4 py-2.5 text-[13px] font-extrabold transition-all duration-150 ${
+                        active
+                          ? "border-maroon-700 bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white shadow-[0_6px_16px_rgba(124,29,51,0.3)]"
+                          : "border-line-rose bg-white text-ink hover:border-maroon-700/40"
+                      }`}
+                    >
+                      {active ? <CheckCircle2 size={15} /> : <Zap size={14} className="text-maroon-600" />}
+                      {g.label}
+                      {g.balance ? (
+                        <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${active ? "bg-white/20 text-white" : "bg-[#eafaf0] text-[#16a34a]"}`}>
+                          {money(g.balance.available)} avail.
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-1.5 text-[11.5px] font-medium text-muted-rose">
+                The gateway settles the payout automatically through its signed
+                webhook and refunds the user instantly if it fails.
+              </div>
+            </div>
+
+            {/* insufficient-balance warning */}
+            {(() => {
+              const info = readyGws.find((g) => g.id === payGw);
+              const net = Number(payDlg.wd.netAmount ?? payDlg.wd.amount) || 0;
+              if (info && info.balance && Number(info.balance.available) < net)
+                return (
+                  <div className="flex items-start gap-2.5 rounded-xl border border-[#f3c8c8] bg-[#fdecec] px-4 py-3 text-[12.5px] font-semibold text-[#b91c1c]">
+                    <XCircle size={15} className="mt-0.5 shrink-0" />
+                    {info.label} balance ({money(info.balance.available)}) is lower than the payout amount — fund the gateway wallet first or pay manually.
+                  </div>
+                );
+              return null;
+            })()}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="admin-btn admin-btn-ghost"
+                onClick={() => setPayDlg(null)}
+                disabled={payBusy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="admin-btn admin-btn-primary px-6"
+                onClick={submitAutoPay}
+                disabled={payBusy}
+              >
+                <Zap size={15} />
+                {payBusy ? "Sending..." : "Send Money"}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ===== MANUAL ACTION CONFIRM ===== */}
+      <Modal
         open={!!confirm}
-        danger={confirm?.action === "Rejected"}
         title={
           confirm?.action === "Success"
             ? "Approve Withdrawal"
@@ -263,23 +544,38 @@ export default function WithdrawalsPage() {
             ? "Reject Withdrawal"
             : "Mark Processing"
         }
-        confirmLabel={confirm?.action === "Success" ? "Approve" : confirm?.action === "Rejected" ? "Reject" : "Processing"}
-        message={
-          confirm
-            ? `${fmt0(confirm.wd.amount)} withdrawal request of +91 ${confirm.wd.phone} — payable ${fmt0(
-                confirm.wd.netAmount ?? confirm.wd.amount
-              )}${
-                confirm.action === "Success"
-                  ? " will be approved — amount will be marked as paid."
-                  : confirm.action === "Rejected"
-                  ? " will be rejected — amount will be refunded to the user's balance."
-                  : " will be moved to Processing."
-              }`
-            : ""
+        onClose={() => setConfirm(null)}
+        footer={
+          <>
+            <button type="button" className="admin-btn admin-btn-ghost" onClick={() => setConfirm(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className={`admin-btn ${confirm?.action === "Rejected" ? "admin-btn-danger" : "admin-btn-primary"}`}
+              onClick={applyAction}
+            >
+              {confirm?.action === "Success"
+                ? "Approve"
+                : confirm?.action === "Rejected"
+                ? "Reject"
+                : "Processing"}
+            </button>
+          </>
         }
-        onCancel={() => setConfirm(null)}
-        onConfirm={applyAction}
-      />
+      >
+        <p className="text-[14px] leading-relaxed text-[#7d6a6e]">
+          {confirm
+            ? `${fmt0(confirm.wd.netAmount ?? confirm.wd.amount)} withdrawal of +91 ${confirm.wd.phone} — ${
+                confirm.action === "Success"
+                  ? "will be approved — amount will be marked as paid."
+                  : confirm.action === "Rejected"
+                  ? "will be rejected — amount will be refunded to the user's balance."
+                  : "will be moved to Processing."
+              }`
+            : ""}
+        </p>
+      </Modal>
     </AdminShell>
   );
 }

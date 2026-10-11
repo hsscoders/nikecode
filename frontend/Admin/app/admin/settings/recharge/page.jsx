@@ -17,6 +17,7 @@ import {
   Percent,
   Zap,
   Upload,
+  CreditCard as GatewayIcon,
 } from "lucide-react";
 import AdminShell from "../../../../components/AdminShell";
 import { api } from "../../../../lib/api";
@@ -46,6 +47,13 @@ const MAX_QUICK = 6;
 export default function RechargeSettingsPage() {
   const [cfg, setCfg] = useState(null);
   const [quickText, setQuickText] = useState("");
+  /* auto-gateway display names on /recharge — one per integrated gateway */
+  const [gwNames, setGwNames] = useState({ qwackpay: "QwackPay", okpay: "OKPay" });
+  const [gwEnabled, setGwEnabled] = useState({ qwackpay: false, okpay: false });
+  const GW_META = [
+    { id: "qwackpay", label: "QwackPay", def: "QwackPay" },
+    { id: "okpay", label: "OKPay", def: "OKPay" },
+  ];
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pick, setPick] = useState(null); // open icon-picker row index
@@ -75,6 +83,15 @@ export default function RechargeSettingsPage() {
         };
         setCfg(built);
         setQuickText((built.quickAmounts || []).join(", "));
+        const s = d.settings || {};
+        setGwNames({
+          qwackpay: (s.qwackpay && s.qwackpay.displayName) || "QwackPay",
+          okpay: (s.okpay && s.okpay.displayName) || "OKPay",
+        });
+        setGwEnabled({
+          qwackpay: !!(s.qwackpay && s.qwackpay.enabled),
+          okpay: !!(s.okpay && s.okpay.enabled),
+        });
       } catch (e) {
         showToast(e.message, true);
       }
@@ -168,6 +185,10 @@ export default function RechargeSettingsPage() {
             methods: cfg.methods,
             manual: cfg.manual,
           },
+          /* auto-gateway display names — field-level merge, gateway
+             credentials are never touched from this page */
+          qwackpay: { displayName: gwNames.qwackpay.trim() || "QwackPay" },
+          okpay: { displayName: gwNames.okpay.trim() || "OKPay" },
         }),
       });
       showToast("Recharge settings saved — live on the client /recharge page");
@@ -347,6 +368,62 @@ export default function RechargeSettingsPage() {
               <Plus size={17} />
               Add Payment Method
             </button>
+          </div>
+
+          {/* ===== AUTO PAYMENT (gateway display names) ===== */}
+          <div className="admin-card flex flex-col gap-4 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <GatewayIcon size={17} className="text-maroon-700" />
+                <div>
+                  <div className="font-display text-[16px] font-bold text-ink">
+                    Auto Payment (Gateways)
+                  </div>
+                  <div className="mt-0.5 text-[12px] font-medium text-muted-rose">
+                    The automatic UPI methods shown above the manual methods on /recharge
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {GW_META.map((g) => (
+                <Field
+                  key={g.id}
+                  label={g.label + " Display Name"}
+                  hint="Users see this label on the payment method"
+                >
+                  <div className="flex items-center gap-2">
+                    <TextInput
+                      value={gwNames[g.id]}
+                      onChange={(e) => setGwNames((n) => ({ ...n, [g.id]: e.target.value }))}
+                      placeholder={g.def}
+                      maxLength={40}
+                    />
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.4px] ${
+                        gwEnabled[g.id]
+                          ? "bg-[#eafaf0] text-[#16a34a]"
+                          : "bg-[#fdecec] text-[#dc2626]"
+                      }`}
+                    >
+                      {gwEnabled[g.id] ? "On" : "Off"}
+                    </span>
+                  </div>
+                </Field>
+              ))}
+            </div>
+
+            <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-4 py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
+              <Zap size={15} className="mt-0.5 shrink-0 text-maroon-600" />
+              <span>
+                Turning the gateways on / off and their keys live in{" "}
+                <a href="/admin/settings/payment" className="font-bold text-maroon-700 underline">
+                  Payment Gateway
+                </a>{" "}
+                — this page only renames what users see on the recharge page.
+              </span>
+            </div>
           </div>
 
           {/* ===== MANUAL PAYMENT PAGE ===== */}

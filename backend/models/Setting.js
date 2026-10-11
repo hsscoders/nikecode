@@ -83,6 +83,49 @@ const SettingSchema = new mongoose.Schema(
       creditTime: { type: String, default: "00:00" },
       lastCreditDate: { type: String, default: "" }, // YYYY-MM-DD (IST) — prevents double credit
     },
+    /* QwackPay auto payment gateway (recharge + payout) — credentials are edited
+       from Admin → Settings → Payment Gateway. The API key NEVER leaves the
+       backend: the public settings route only exposes the `enabled` flag.
+       displayName = the method label users see on the client /recharge page
+       (admin can rename it there without touching the gateway itself). */
+    qwackpay: {
+      enabled: { type: Boolean, default: false }, // master switch — off hides the auto method
+      autoPayout: { type: Boolean, default: false }, // allow one-click auto bank payouts from Admin → Withdrawals
+      displayName: { type: String, default: "QwackPay" }, // label shown on the client recharge page
+      merchantId: { type: String, default: "" }, // QwackPay merchant ID, e.g. 681551699
+      apiKey: { type: String, default: "" }, // docking key from the merchant dashboard
+      baseUrl: { type: String, default: "https://qwackpay.com/api/v1" },
+      backendUrl: { type: String, default: "" }, // public backend origin — webhook notify_url
+      clientUrl: { type: String, default: "" }, // public site origin — payment return_url
+    },
+    /* OKPay auto payment gateway (wpay.one) — recharge + payout. Credentials
+       (mchId + key) come from the OKPay merchant dashboard and are edited in
+       Admin → Settings → Payment Gateway. The key NEVER leaves the backend.
+       backendUrl/clientUrl fall back to the QwackPay ones when left empty. */
+    okpay: {
+      enabled: { type: Boolean, default: false }, // master switch — off hides the auto method
+      autoPayout: { type: Boolean, default: false }, // allow one-click auto bank payouts
+      displayName: { type: String, default: "OKPay" }, // label shown on the client recharge page
+      mchId: { type: String, default: "" }, // merchant id from the OKPay dashboard
+      apiKey: { type: String, default: "" }, // private key from the OKPay dashboard
+      baseUrl: { type: String, default: "https://api.wpay.one" },
+      backendUrl: { type: String, default: "" }, // public backend origin — webhook notify_url
+      clientUrl: { type: String, default: "" }, // public site origin — payment return_url
+    },
+    /* Cross-gateway preferences — shared by every automatic gateway (QwackPay
+       today, more coming). defaultPayoutGateway preselects the gateway in the
+       Admin → Withdrawals payout menu as more gateways are integrated. */
+    gatewayPrefs: {
+      defaultPayoutGateway: { type: String, default: "qwackpay" },
+    },
+    /* Public server URLs — auto-detected from the request domain the admin
+       browses from and saved ONCE. EVERY gateway reuses them for the webhook
+       notify_url and the payment return_url unless a per-gateway override is
+       set (rare). No per-gateway URL typing as more gateways are added. */
+    publicUrls: {
+      backendUrl: { type: String, default: "" }, // e.g. https://domain.com — gateway callbacks
+      clientUrl: { type: String, default: "" }, // e.g. https://domain.com — payment return
+    },
     /* Look & feel — one-click color theme + font style for the whole client site.
        Presets carry a full hand-tuned palette on the client; custom colors are
        derived with warm HSL mixing (see applyTheme in AppearanceProvider).

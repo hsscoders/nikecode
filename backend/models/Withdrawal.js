@@ -22,6 +22,12 @@ const WithdrawalSchema = new mongoose.Schema(
     },
     note: { type: String, default: "" },
     processedAt: { type: Date },
+    /* ---- QwackPay auto payout tracking ---- */
+    autoPayout: { type: Boolean, default: false }, // true = sent through the gateway
+    gateway: { type: String, default: "" }, // registry id of the gateway used (qwackpay, …)
+    payoutOrderId: { type: String, default: "", index: true }, // merchant order_id sent to the gateway
+    gatewayOrderId: { type: String, default: "" }, // gateway's own order id
+    utr: { type: String, default: "" }, // bank transaction reference on success
   },
   { timestamps: true }
 );
