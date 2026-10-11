@@ -20,7 +20,6 @@ import {
   Star,
   Zap,
   CircleCheck,
-  ArrowRight,
 } from "lucide-react";
 import planDaily from "../../public/product-starter.png";
 import planVip from "../../public/product-platinum.png";
@@ -257,9 +256,7 @@ function PlanCard({ plan, type, btn, onBuy, used = 0 }) {
             onClick={() => onBuy(plan)}
             className={`flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl py-[14px] text-[15px] font-extrabold text-white transition-all duration-150 active:scale-[0.97] ${gradientBtn}`}
           >
-            {isVip && <Crown size={18} />}
             {btn || "Buy Now"}
-            <ArrowRight size={18} />
           </button>
         )}
       </div>
