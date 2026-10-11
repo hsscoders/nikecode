@@ -50,7 +50,7 @@ const teamCommission = [1, 2, 3].reduce(
 /* ================= HELPERS ================= */
 
 const fmt2 = (n) =>
-  "₹" +
+  "₹ " +
   Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const maskPhone = (p) => (p && p.length >= 6 ? p.slice(0, 3) + "***" + p.slice(-3) : p);

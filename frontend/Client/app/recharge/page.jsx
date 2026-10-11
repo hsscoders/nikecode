@@ -72,7 +72,7 @@ function mergeRecharge(source) {
 /* ================= HELPERS ================= */
 
 const fmt = (n) =>
-  "₹" +
+  "₹ " +
   Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const gradientBtn =
@@ -443,8 +443,8 @@ export default function RechargePage() {
           <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] font-medium text-muted-rose">
             <Clock size={12} />
             {minA > 0 || maxA > 0
-              ? `Min ₹${minA.toLocaleString("en-IN")}${
-                  maxA > 0 ? ` • Max ₹${maxA.toLocaleString("en-IN")}` : ""
+              ? `Min ₹ ${minA.toLocaleString("en-IN")}${
+                  maxA > 0 ? ` • Max ₹ ${maxA.toLocaleString("en-IN")}` : ""
                 }`
               : "Recharge requests are processed within 24 hours"}
           </div>

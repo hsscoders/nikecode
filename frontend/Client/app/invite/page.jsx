@@ -20,7 +20,7 @@ import { readCache, writeCache } from "../components/liveCache";
 
 /* ================= HELPERS ================= */
 
-const fmt = (n) => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+const fmt = (n) => "₹ " + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
 const gradientBtn =
   "bg-[linear-gradient(135deg,var(--c-primary)_0%,var(--c-primary2)_55%,var(--c-primary)_100%)]";

@@ -20,6 +20,7 @@ import {
   Star,
   Zap,
   CircleCheck,
+  ArrowRight,
 } from "lucide-react";
 import planDaily from "../../public/product-starter.png";
 import planVip from "../../public/product-platinum.png";
@@ -44,10 +45,10 @@ const VIP_PLANS = [
 ];
 
 const QUICK_ITEMS = [
-  { label: "Recharge", Icon: CreditCard, tile: "bg-[var(--c-tint2)] text-maroon-600" },
-  { label: "Withdraw", Icon: IndianRupee, tile: "bg-[#fdf6e4] text-[#a9791c]" },
-  { label: "Records", Icon: ReceiptText, tile: "bg-[#eafaf0] text-[#16a34a]" },
-  { label: "Channel", Icon: MessageCircle, tile: "bg-[#eef4ff] text-[#2563eb]" },
+  { label: "Recharge", Icon: CreditCard },
+  { label: "Withdraw", Icon: IndianRupee },
+  { label: "Records", Icon: ReceiptText },
+  { label: "Channel", Icon: MessageCircle },
 ];
 
 /* ================= WELCOME POPUP (controlled from the admin panel) ================= */
@@ -80,7 +81,7 @@ const DEFAULT_POPUP = {
 
 /* ================= HELPERS ================= */
 
-const fmt = (n) => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+const fmt = (n) => "₹ " + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
 const gradientBtn =
   "bg-[linear-gradient(135deg,var(--c-primary)_0%,var(--c-primary2)_55%,var(--c-primary)_100%)] shadow-[0_10px_24px_var(--s-btn)]";
@@ -181,7 +182,10 @@ function BannerCarousel({ banners }) {
 function PlanCard({ plan, type, onBuy, used = 0 }) {
   const isVip = type === "vip";
   return (
-    <div className="group mx-3.5 mt-3.5 overflow-hidden rounded-[24px] border border-line-rose bg-white shadow-[0_4px_24px_rgba(87,18,36,0.08)]">
+    <div className="group relative mx-3.5 mt-4 overflow-hidden rounded-[24px] border border-line-rose bg-white shadow-[0_8px_28px_rgba(87,18,36,0.10)]">
+      {/* gold accent line — ties the card to the royal theme */}
+      <div className="h-[3px] w-full bg-[linear-gradient(90deg,transparent,var(--c-accent)_35%,var(--c-accent)_65%,transparent)]" />
+
       {/* IMAGE */}
       <div className="relative h-[180px] overflow-hidden">
         <Image
@@ -189,23 +193,40 @@ function PlanCard({ plan, type, onBuy, used = 0 }) {
           alt={plan.name}
           fill
           sizes="(max-width: 520px) 100vw, 430px"
-          className="absolute inset-0 object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+          className="absolute inset-0 object-cover transition-transform duration-500 group-hover:scale-[1.05]"
         />
-        <div className="absolute inset-0 bg-[linear-gradient(to_top,var(--s-alert)_0%,var(--s-alert)_55%,transparent_100%)]" />
-        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between p-4">
-          <div className="font-display text-lg font-bold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]">
-            {plan.name}
+        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(66,9,26,0.88)_0%,rgba(87,18,36,0.38)_48%,transparent_78%)]" />
+
+        {/* VIP crown badge */}
+        {isVip && (
+          <div className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-gold px-2.5 py-[5px] text-[10px] font-extrabold uppercase tracking-[0.6px] text-maroon-950 shadow-[0_4px_14px_rgba(66,9,26,0.45)]">
+            <Crown size={11} strokeWidth={2.6} />
+            VIP
+          </div>
+        )}
+
+        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-4">
+          <div className="min-w-0">
+            <div className="truncate font-display text-lg font-bold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)]">
+              {plan.name}
+            </div>
+            {/* price chip — gold on maroon, ₹ spaced from the amount */}
+            <div className="mt-1.5 inline-flex items-center rounded-full bg-gold px-3 py-1 shadow-[0_4px_14px_rgba(66,9,26,0.4)]">
+              <span className="text-[15px] font-extrabold leading-none text-maroon-950">
+                {fmt(plan.price)}
+              </span>
+            </div>
           </div>
           {plan.limit > 0 && (
-            <div className="rounded-full border border-white/35 bg-white/20 px-2.5 py-1 text-[10px] font-extrabold text-white backdrop-blur-sm">
+            <div className="shrink-0 rounded-full border border-white/30 bg-black/35 px-2.5 py-1 text-[10px] font-extrabold text-white backdrop-blur-sm">
               {used}/{plan.limit}
             </div>
           )}
         </div>
       </div>
 
-      {/* SPECS 2x2 */}
-      <div className="grid grid-cols-2 border-b border-line-rose">
+      {/* SPECS — rounded theme cells */}
+      <div className="mx-4 mt-3.5 grid grid-cols-2 gap-2">
         {[
           { lbl: isVip ? "Value" : "Price", val: fmt(plan.price), cls: "text-maroon-700" },
           { lbl: isVip ? "Revenue/Day" : "Daily", val: fmt(plan.daily), cls: "text-[#16a34a]" },
@@ -214,9 +235,9 @@ function PlanCard({ plan, type, onBuy, used = 0 }) {
         ].map((s) => (
           <div
             key={s.lbl}
-            className="border-line-rose p-3.5 max-[360px]:p-3 [&:nth-child(n+3)]:border-t [&:nth-child(odd)]:border-r"
+            className="rounded-[14px] border border-line-rose/70 bg-[var(--c-tint)] px-3 py-2.5"
           >
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.4px] text-muted-rose">
+            <div className="mb-1 text-[9.5px] font-semibold uppercase tracking-[0.5px] text-muted-rose">
               {s.lbl}
             </div>
             <div className={`text-[15px] font-extrabold leading-none max-[360px]:text-sm ${s.cls}`}>
@@ -227,7 +248,7 @@ function PlanCard({ plan, type, onBuy, used = 0 }) {
       </div>
 
       {/* BUY */}
-      <div className="p-4">
+      <div className="p-4 pt-3.5">
         {plan.presale ? (
           <button
             type="button"
@@ -244,6 +265,7 @@ function PlanCard({ plan, type, onBuy, used = 0 }) {
           >
             {isVip && <Crown size={18} />}
             {isVip ? "Buy VIP Plan" : "Invest Now"}
+            <ArrowRight size={18} />
           </button>
         )}
       </div>
@@ -516,7 +538,7 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
       {/* ===== QUICK MENU ===== */}
       <div className="mx-3.5 mt-3.5 rounded-[20px] border border-maroon-900 bg-maroon-950 px-2.5 py-4 shadow-[0_8px_24px_var(--s-alert)]">
         <div className="grid grid-cols-4 gap-1">
-          {QUICK_ITEMS.map(({ label, Icon, tile }) => (
+          {QUICK_ITEMS.map(({ label, Icon }) => (
             <button
               key={label}
               type="button"
@@ -528,10 +550,10 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
                 else showToast(label + " coming soon");
               }}
             >
-              <div className={`grid h-[52px] w-[52px] place-items-center rounded-2xl ${tile} max-[360px]:h-[46px] max-[360px]:w-[46px]`}>
+              <div className={`grid h-[52px] w-[52px] place-items-center rounded-2xl bg-white/12 text-gold ring-1 ring-white/15 max-[360px]:h-[46px] max-[360px]:w-[46px]`}>
                 <Icon size={23} strokeWidth={2.1} />
               </div>
-              <span className="text-[11px] font-semibold text-[#e9d4d9]">{label}</span>
+              <span className="text-[11px] font-semibold text-white/85">{label}</span>
             </button>
           ))}
         </div>

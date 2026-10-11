@@ -27,7 +27,7 @@ import useLive from "../components/useLive";
 /* ================= HELPERS ================= */
 
 const fmt = (n) =>
-  "₹" +
+  "₹ " +
   Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const gradientBtn =

@@ -39,7 +39,7 @@ const MENU_ITEMS = [
 /* ================= HELPERS ================= */
 
 const fmt = (n) =>
-  "₹" +
+  "₹ " +
   Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /* type-wise amount sum from localStorage zapto_transactions */
