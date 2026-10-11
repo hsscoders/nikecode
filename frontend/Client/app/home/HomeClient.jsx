@@ -182,7 +182,7 @@ function BannerCarousel({ banners }) {
 function PlanCard({ plan, type, onBuy, used = 0 }) {
   const isVip = type === "vip";
   return (
-    <div className="group relative mx-3.5 mt-4 overflow-hidden rounded-[24px] border border-line-rose bg-white shadow-[0_8px_28px_rgba(87,18,36,0.10)]">
+    <div className="group relative mx-3.5 mt-4 overflow-hidden rounded-[24px] border border-line-rose bg-white shadow-[0_8px_28px_rgba(0,0,0,0.08)]">
       {/* gold accent line — ties the card to the royal theme */}
       <div className="h-[3px] w-full bg-[linear-gradient(90deg,transparent,var(--c-accent)_35%,var(--c-accent)_65%,transparent)]" />
 
@@ -195,11 +195,11 @@ function PlanCard({ plan, type, onBuy, used = 0 }) {
           sizes="(max-width: 520px) 100vw, 430px"
           className="absolute inset-0 object-cover transition-transform duration-500 group-hover:scale-[1.05]"
         />
-        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(66,9,26,0.88)_0%,rgba(87,18,36,0.38)_48%,transparent_78%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.78)_0%,rgba(0,0,0,0.32)_48%,transparent_78%)]" />
 
         {/* VIP crown badge */}
         {isVip && (
-          <div className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-gold px-2.5 py-[5px] text-[10px] font-extrabold uppercase tracking-[0.6px] text-maroon-950 shadow-[0_4px_14px_rgba(66,9,26,0.45)]">
+          <div className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-gold px-2.5 py-[5px] text-[10px] font-extrabold uppercase tracking-[0.6px] text-maroon-950 shadow-[0_4px_14px_rgba(0,0,0,0.25)]">
             <Crown size={11} strokeWidth={2.6} />
             VIP
           </div>
@@ -209,12 +209,6 @@ function PlanCard({ plan, type, onBuy, used = 0 }) {
           <div className="min-w-0">
             <div className="truncate font-display text-lg font-bold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)]">
               {plan.name}
-            </div>
-            {/* price chip — gold on maroon, ₹ spaced from the amount */}
-            <div className="mt-1.5 inline-flex items-center rounded-full bg-gold px-3 py-1 shadow-[0_4px_14px_rgba(66,9,26,0.4)]">
-              <span className="text-[15px] font-extrabold leading-none text-maroon-950">
-                {fmt(plan.price)}
-              </span>
             </div>
           </div>
           {plan.limit > 0 && (
