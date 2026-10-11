@@ -54,6 +54,7 @@ router.get("/settings", async (req, res) => {
             commission: s.commission,
             site: s.site,
             popup: s.popup || null,
+            homeTexts: s.homeTexts || null,
             recharge: s.recharge || null,
             withdraw: s.withdraw || null,
             income: s.income ? { creditTime: s.income.creditTime } : null,

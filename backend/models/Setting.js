@@ -36,6 +36,13 @@ const SettingSchema = new mongoose.Schema(
         },
       ],
     },
+    /* Home page plan tabs + buy buttons — texts editable from /admin/plans */
+    homeTexts: {
+      dailyTab: { type: String, default: "Daily Plans" },
+      vipTab: { type: String, default: "Premium VIP" },
+      dailyBtn: { type: String, default: "Buy Now" },
+      vipBtn: { type: String, default: "Buy Now" },
+    },
     /* Recharge page (/recharge) — full control from the admin panel */
     recharge: {
       minAmount: { type: Number, default: 530 },

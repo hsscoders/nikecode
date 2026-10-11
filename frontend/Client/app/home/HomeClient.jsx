@@ -179,7 +179,7 @@ function BannerCarousel({ banners }) {
   );
 }
 
-function PlanCard({ plan, type, onBuy, used = 0 }) {
+function PlanCard({ plan, type, btn, onBuy, used = 0 }) {
   const isVip = type === "vip";
   return (
     <div className="group relative mx-3.5 mt-4 overflow-hidden rounded-[24px] border border-line-rose bg-white shadow-[0_8px_28px_rgba(0,0,0,0.08)]">
@@ -258,7 +258,7 @@ function PlanCard({ plan, type, onBuy, used = 0 }) {
             className={`flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl py-[14px] text-[15px] font-extrabold text-white transition-all duration-150 active:scale-[0.97] ${gradientBtn}`}
           >
             {isVip && <Crown size={18} />}
-            {isVip ? "Buy VIP Plan" : "Invest Now"}
+            {btn || "Buy Now"}
             <ArrowRight size={18} />
           </button>
         )}
@@ -306,6 +306,13 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
   /* SSR-seeded popup config — the notice renders with the real admin
      text on the very first paint (no 1s default/absent flash) */
   const gs = useSettings();
+  /* Home page texts — plan tabs + buy buttons (admin-editable from /admin/plans,
+     live via the settings context) */
+  const ht = (gs && gs.homeTexts) || {};
+  const dailyTab = ht.dailyTab || "Daily Plans";
+  const vipTab = ht.vipTab || "Premium VIP";
+  const dailyBtn = ht.dailyBtn || "Buy Now";
+  const vipBtn = ht.vipBtn || "Buy Now";
   const [popupCfg, setPopupCfg] = useState(() =>
     gs && gs.popup ? { ...DEFAULT_POPUP, ...gs.popup } : DEFAULT_POPUP
   );
@@ -555,7 +562,7 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
 
       {/* ===== TABS ===== */}
       <div className="mx-3.5 mt-3.5 flex rounded-2xl border border-line-rose bg-white p-1 shadow-[0_2px_12px_rgba(87,18,36,0.06)]">
-        {["Daily Plans", "Premium VIP"].map((label, i) => (
+        {[dailyTab, vipTab].map((label, i) => (
           <button
             key={label}
             type="button"
@@ -578,6 +585,7 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
             key={plan.id || plan._id}
             plan={plan}
             type={tab === 0 ? "daily" : "vip"}
+            btn={tab === 0 ? dailyBtn : vipBtn}
             onBuy={setSelectedPlan}
             used={usedByPlan[plan._id] || 0}
           />

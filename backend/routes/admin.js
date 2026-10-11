@@ -1251,6 +1251,22 @@ router.put("/settings", async (req, res) => {
           }));
     }
 
+    /* Home page plan tabs + buy buttons (/admin/plans → Home Page Texts) —
+       empty save falls back to the built-in default label */
+    if (b.homeTexts) {
+      if (!s.homeTexts) s.homeTexts = {};
+      const HT_DEFAULTS = {
+        dailyTab: "Daily Plans",
+        vipTab: "Premium VIP",
+        dailyBtn: "Buy Now",
+        vipBtn: "Buy Now",
+      };
+      for (const k of Object.keys(HT_DEFAULTS)) {
+        if (b.homeTexts[k] !== undefined)
+          s.homeTexts[k] = String(b.homeTexts[k]).trim().slice(0, 30) || HT_DEFAULTS[k];
+      }
+    }
+
     /* Recharge settings — limits, quick amounts, methods, manual payment page */
     if (b.recharge) {
       const r = b.recharge;

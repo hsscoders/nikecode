@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Plus, Pencil, Trash2, Crown, Gem, Search, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, Crown, Gem, Search, Upload, Type } from "lucide-react";
 import AdminShell from "../../../components/AdminShell";
 import { api, fmt0 } from "../../../lib/api";
 import {
@@ -39,6 +39,8 @@ export default function PlansPage() {
   const [del, setDel] = useState(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [texts, setTexts] = useState(null);
+  const [savingTexts, setSavingTexts] = useState(false);
   const fileRef = useRef(null);
   const { toast, showToast, isError } = useToast();
 
@@ -53,6 +55,19 @@ export default function PlansPage() {
 
   useEffect(() => {
     load();
+    /* Home Page Texts — current tab labels + buy button texts */
+    api("/api/admin/settings")
+      .then((d) => {
+        const h = d.settings && d.settings.homeTexts;
+        if (h)
+          setTexts({
+            dailyTab: h.dailyTab || "",
+            vipTab: h.vipTab || "",
+            dailyBtn: h.dailyBtn || "",
+            vipBtn: h.vipBtn || "",
+          });
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -161,6 +176,24 @@ export default function PlansPage() {
     }
   };
 
+  /* Home Page Texts — /home plan tabs + buy buttons (client updates live) */
+  const setText = (k, v) => setTexts((t) => ({ ...t, [k]: v }));
+
+  const saveTexts = async () => {
+    setSavingTexts(true);
+    try {
+      await api("/api/admin/settings", {
+        method: "PUT",
+        body: JSON.stringify({ homeTexts: texts }),
+      });
+      showToast("Home page texts saved");
+    } catch (e) {
+      showToast(e.message, true);
+    } finally {
+      setSavingTexts(false);
+    }
+  };
+
   const doDelete = async () => {
     try {
       await api("/api/admin/plans/" + del._id, { method: "DELETE" });
@@ -195,6 +228,64 @@ export default function PlansPage() {
           <Plus size={16} />
           Add New Plan
         </button>
+      </div>
+
+      {/* Home Page Texts — plan tabs + buy buttons (client /home reads live) */}
+      <div className="admin-card mb-4 p-4">
+        <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Type size={16} className="text-maroon-600" />
+            <div className="font-display text-[15px] font-bold text-ink">Home Page Texts</div>
+          </div>
+          <div className="text-[12px] text-muted-rose">
+            Tab labels &amp; buy button text on /home — empty = default
+          </div>
+        </div>
+        {!texts ? (
+          <Loader />
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Daily Tab Label" hint="First tab on /home (default: Daily Plans)">
+                <TextInput
+                  value={texts.dailyTab}
+                  onChange={(e) => setText("dailyTab", e.target.value)}
+                  placeholder="Daily Plans"
+                />
+              </Field>
+              <Field label="VIP Tab Label" hint="Second tab on /home (default: Premium VIP)">
+                <TextInput
+                  value={texts.vipTab}
+                  onChange={(e) => setText("vipTab", e.target.value)}
+                  placeholder="Premium VIP"
+                />
+              </Field>
+              <Field label="Daily Plan Buy Button" hint="Button on daily plans (default: Buy Now)">
+                <TextInput
+                  value={texts.dailyBtn}
+                  onChange={(e) => setText("dailyBtn", e.target.value)}
+                  placeholder="Buy Now"
+                />
+              </Field>
+              <Field label="VIP Plan Buy Button" hint="Button on VIP plans (default: Buy Now)">
+                <TextInput
+                  value={texts.vipBtn}
+                  onChange={(e) => setText("vipBtn", e.target.value)}
+                  placeholder="Buy Now"
+                />
+              </Field>
+            </div>
+            <button
+              type="button"
+              className="admin-btn admin-btn-primary mt-4"
+              onClick={saveTexts}
+              disabled={savingTexts}
+            >
+              <Type size={16} />
+              {savingTexts ? "Saving..." : "Save Home Texts"}
+            </button>
+          </>
+        )}
       </div>
 
       {!plans ? (
