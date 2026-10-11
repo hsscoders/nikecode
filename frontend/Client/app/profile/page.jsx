@@ -289,12 +289,12 @@ export default function ProfilePage() {
             </button>
           </div>
 
-          {/* stats — Recharge Balance (deducts on every plan purchase) /
-              Total Recharge (lifetime recharges only) / Total Income */}
+          {/* stats — Withdrawal Balance (wallet balance, withdrawable) /
+              Recharge Balance (deducts on every plan purchase) / Total Income */}
           <div className="mt-3.5 grid grid-cols-3 gap-2 max-[360px]:gap-1.5">
             {[
+              { lbl: "Withdrawal Balance", val: fmt(balance) },
               { lbl: "Recharge Balance", val: fmt(rechargeBalance) },
-              { lbl: "Total Recharge", val: fmt(rechargeTotal) },
               { lbl: "Total Income", val: fmt(incomeTotal) },
             ].map(({ lbl, val }) => (
               <div
