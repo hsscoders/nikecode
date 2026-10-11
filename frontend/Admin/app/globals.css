@@ -46,6 +46,36 @@ body {
   background: rgba(124, 29, 51, 0.14);
 }
 
+/* Lining figures — Playfair Display falls back to oldstyle digits in some
+   rendering paths, making "0" paint tiny (₹0 looked like ₹o). Force lining
+   numerals everywhere the display font is used. */
+.font-display {
+  font-variant-numeric: lining-nums;
+  font-feature-settings: "lnum" 1;
+}
+
+/* Consistent, accessible keyboard focus ring */
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-maroon-500) 55%, transparent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Clean tap feedback on touch devices */
+button,
+a,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Butter-smooth hover lifts for every admin card */
+.admin-card {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.admin-card:hover {
+  box-shadow: 0 8px 30px rgba(87, 18, 36, 0.1);
+}
+
 /* Premium scrollbar */
 ::-webkit-scrollbar {
   width: 9px;

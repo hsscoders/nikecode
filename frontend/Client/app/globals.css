@@ -76,6 +76,42 @@ body {
   background: color-mix(in srgb, var(--c-primary) 14%, transparent);
 }
 
+/* Lining figures — if the admin picks Playfair Display as the site font,
+   its oldstyle "0" can paint tiny (₹0 -> ₹o). Force lining numerals. */
+.font-display {
+  font-variant-numeric: lining-nums;
+  font-feature-settings: "lnum" 1;
+}
+
+/* Clean tap feedback on touch devices */
+button,
+a,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Gentle entrance for page content on every navigation.
+   Opacity only — transform here would break position:fixed children
+   (bottom nav, popups) by turning the page div into a containing block. */
+body > div {
+  animation: fade-page 0.28s ease both;
+}
+
+@keyframes fade-page {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body > div {
+    animation: none;
+  }
+}
+
 /* Banner bottom fade — merges into the page background */
 .banner-fade {
   -webkit-mask-image: linear-gradient(180deg, #000 68%, rgba(0, 0, 0, 0) 100%);

@@ -190,7 +190,7 @@ export default function LoginPage() {
       </div>
 
       {/* FORM AREA — transparent, flows straight out of the banner fade */}
-      <div className="mt-1 flex-1 px-5 pb-[30px] pt-5 max-[360px]:px-3.5 max-[360px]:pb-[26px] max-[360px]:pt-4">
+      <div className="mt-1 flex flex-1 flex-col px-5 pb-[26px] pt-5 max-[360px]:px-3.5 max-[360px]:pb-[22px] max-[360px]:pt-4">
         {/* TABS */}
         <div className="mb-6 flex items-baseline justify-between">
           <Link href="/login" className={`${tabBase} ${tabActive}`}>
@@ -272,6 +272,17 @@ export default function LoginPage() {
             </Link>
           </div>
         </form>
+
+        {/* BRAND FOOTER — pinned to the bottom on tall screens */}
+        <div className="mt-auto flex flex-col items-center gap-1.5 pt-7">
+          <span className="h-px w-14 bg-[linear-gradient(90deg,transparent,var(--c-accent),transparent)]" />
+          <p className="font-display text-[12.5px] font-bold tracking-[1.6px] text-maroon-700">
+            SAUDI ARAMCO
+          </p>
+          <p className="text-[11px] font-medium tracking-[0.4px] text-muted-rose">
+            Earn daily, withdraw daily
+          </p>
+        </div>
       </div>
     </div>
   );
