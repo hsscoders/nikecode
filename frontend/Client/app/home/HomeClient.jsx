@@ -7,7 +7,6 @@ import {
   Home,
   CreditCard,
   IndianRupee,
-  ReceiptText,
   MessageCircle,
   Users,
   User,
@@ -21,6 +20,7 @@ import {
   Zap,
   CircleCheck,
   Megaphone,
+  Headset,
 } from "lucide-react";
 import planDaily from "../../public/product-starter.png";
 import planVip from "../../public/product-platinum.png";
@@ -47,7 +47,7 @@ const VIP_PLANS = [
 const QUICK_ITEMS = [
   { label: "Recharge", Icon: CreditCard },
   { label: "Withdraw", Icon: IndianRupee },
-  { label: "Records", Icon: ReceiptText },
+  { label: "Support", Icon: Headset },
   { label: "Channel", Icon: MessageCircle },
 ];
 
@@ -317,6 +317,7 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
   const homeSubtitle = site.homeSubtitle || "Earn daily, withdraw daily";
   const announcement = String(site.announcement || "").trim();
   const telegramUrl = String(site.telegramUrl || "").trim();
+  const supportUrl = String(site.supportUrl || "").trim();
   const [popupCfg, setPopupCfg] = useState(() =>
     gs && gs.popup ? { ...DEFAULT_POPUP, ...gs.popup } : DEFAULT_POPUP
   );
@@ -568,7 +569,10 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
               onClick={() => {
                 if (label === "Recharge") router.push("/recharge");
                 else if (label === "Withdraw") router.push("/withdrawal");
-                else if (label === "Records") router.push("/records");
+                else if (label === "Support") {
+                  if (supportUrl) window.open(supportUrl, "_blank", "noopener");
+                  else showToast(label + " coming soon");
+                }
                 else if (label === "Channel") {
                   if (telegramUrl) window.open(telegramUrl, "_blank", "noopener");
                   else showToast(label + " coming soon");
