@@ -65,14 +65,14 @@ export default function IncomeTimePage() {
           {/* ===== TIME SETTING ===== */}
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
-              <Clock3 size={17} className="text-maroon-700" />
+              <Clock3 size={17} className="text-brand-700" />
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Daily Income Credit Time
               </div>
             </div>
 
-            <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
-              <Info size={16} className="mt-0.5 shrink-0 text-maroon-600" />
+            <div className="flex items-start gap-3 rounded-xl bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#475569]">
+              <Info size={16} className="mt-0.5 shrink-0 text-brand-600" />
               <span>
                 Buy-plan daily income is credited automatically to every user&apos;s
                 withdrawal wallet at this time (Indian Standard Time). Each active plan
@@ -90,7 +90,7 @@ export default function IncomeTimePage() {
                 />
               </Field>
               <Field label="Last Auto-Credit">
-                <div className="rounded-[12px] border-[1.5px] border-line-rose bg-[#fdfafa] px-3.5 py-[10px] text-[14px] font-semibold text-ink">
+                <div className="rounded-[12px] border-[1.5px] border-line bg-[var(--color-tint)] px-3.5 py-[10px] text-[14px] font-semibold text-ink">
                   {cfg.lastCreditDate
                     ? cfg.lastCreditDate + " (" + cfg.creditTime + " IST)"
                     : "Not credited yet"}
@@ -98,7 +98,7 @@ export default function IncomeTimePage() {
               </Field>
             </div>
 
-            <div className="flex items-center gap-2 rounded-xl border border-line-rose bg-[#fdf6e4]/60 px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-semibold text-[#8a6a1c]">
+            <div className="flex items-center gap-2 rounded-xl border border-line bg-[#fdf6e4]/60 px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-semibold text-[#8a6a1c]">
               <Zap size={15} className="shrink-0" />
               Current schedule: every day at {cfg.creditTime} IST
               {cfg.lastCreditDate ? " — last run " + cfg.lastCreditDate : ""}
@@ -109,7 +109,7 @@ export default function IncomeTimePage() {
           <div className="sticky bottom-3 flex justify-end sm:bottom-4">
             <button
               type="button"
-              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(79,70,229,0.35)] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >

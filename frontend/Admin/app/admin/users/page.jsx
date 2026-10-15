@@ -16,7 +16,7 @@ import {
   ReceiptText,
 } from "lucide-react";
 import AdminShell from "../../../components/AdminShell";
-import { api, fmt0, fmtDate, fmtD } from "../../../lib/api";
+import { api, clientBase, fmt0, fmtDate, fmtD } from "../../../lib/api";
 import {
   Modal,
   Pill,
@@ -26,6 +26,7 @@ import {
   Loader,
   Toast,
   useToast,
+  Pagination,
 } from "../../../components/ui";
 
 const EMPTY_EDIT = {
@@ -46,10 +47,10 @@ const EMPTY_EDIT = {
 
 function SectionTitle({ Icon, children, right }) {
   return (
-    <div className="mt-5 flex items-center justify-between border-t border-line-rose pt-4 first:mt-0 first:border-0 first:pt-0">
+    <div className="mt-5 flex items-center justify-between border-t border-line pt-4 first:mt-0 first:border-0 first:pt-0">
       <div className="flex items-center gap-2">
-        <Icon size={15} className="text-maroon-700" />
-        <span className="font-display text-[14.5px] font-bold text-maroon-700">{children}</span>
+        <Icon size={15} className="text-brand-700" />
+        <span className="font-display text-[14.5px] font-bold text-brand-700">{children}</span>
       </div>
       {right}
     </div>
@@ -59,7 +60,7 @@ function SectionTitle({ Icon, children, right }) {
 function InfoRow({ k, v }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg bg-[#fbf7f8] px-3 py-2">
-      <span className="text-[11.5px] font-bold uppercase tracking-[0.3px] text-[#8a6e75]">{k}</span>
+      <span className="text-[11.5px] font-bold uppercase tracking-[0.3px] text-muted">{k}</span>
       <span className="truncate text-[13px] font-bold text-ink">{v || "—"}</span>
     </div>
   );
@@ -67,7 +68,7 @@ function InfoRow({ k, v }) {
 
 function MiniTable({ head, children }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-line-rose">
+    <div className="overflow-x-auto rounded-xl border border-line">
       <table className="admin-table min-w-[560px]">
         <thead>
           <tr>{head.map((h) => <th key={h}>{h}</th>)}</tr>
@@ -82,24 +83,24 @@ function TeamBlock({ label, list }) {
   return (
     <div>
       <div className="mb-2 flex items-center gap-2">
-        <span className="rounded-full bg-[#f7e3e7] px-2.5 py-1 text-[11px] font-extrabold text-maroon-700">
+        <span className="rounded-full bg-[var(--color-tint2)] px-2.5 py-1 text-[11px] font-extrabold text-brand-700">
           {label} · {list.length}
         </span>
       </div>
       {list.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-line-rose py-4 text-center text-[12.5px] font-semibold text-muted-rose">
+        <div className="rounded-xl border border-dashed border-line py-4 text-center text-[12.5px] font-semibold text-muted">
           No referrals at this level
         </div>
       ) : (
         <MiniTable head={["User ID", "Phone", "Wallet", "Income", "Status", "Joined"]}>
           {list.map((u) => (
             <tr key={u._id}>
-              <td className="font-bold text-maroon-700">{u.userid || "—"}</td>
+              <td className="font-bold text-brand-700">{u.userid || "—"}</td>
               <td className="whitespace-nowrap font-semibold text-ink">+91 {u.phone}</td>
               <td className="font-bold text-[#16a34a]">{fmt0(u.rechargeBalance)}</td>
               <td className="font-bold text-[#a9791c]">{fmt0(u.totalIncome)}</td>
               <td><Pill value={u.status} /></td>
-              <td className="whitespace-nowrap text-[12px] text-[#7d6a6e]">{fmtDate(u.createdAt)}</td>
+              <td className="whitespace-nowrap text-[12px] text-[#475569]">{fmtDate(u.createdAt)}</td>
             </tr>
           ))}
         </MiniTable>
@@ -110,6 +111,8 @@ function TeamBlock({ label, list }) {
 
 export default function UsersPage() {
   const [users, setUsers] = useState(null);
+  const [page, setPage] = useState(0);
+  const PER = 20;
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [edit, setEdit] = useState(null);
@@ -123,6 +126,7 @@ export default function UsersPage() {
     try {
       const d = await api("/api/admin/users" + (q ? "?search=" + encodeURIComponent(q) : ""));
       setUsers(d.users);
+      setPage(0); /* fresh dataset — back to the first page */
     } catch (e) {
       showToast(e.message, true);
     }
@@ -203,7 +207,10 @@ export default function UsersPage() {
     const win = window.open("", "_blank");
     try {
       const d = await api("/api/admin/users/" + u._id + "/onelogin", { method: "POST" });
-      if (win) win.location = "/auto-login?code=" + encodeURIComponent(d.code);
+      /* /auto-login is a CLIENT app route — resolve the client origin at
+         runtime (env → proxy detection), otherwise the popup 404s on any
+         standalone admin deployment */
+      if (win) win.location = clientBase() + "/auto-login?code=" + encodeURIComponent(d.code);
       showToast("One-click login opened — session valid for 7 days");
     } catch (e) {
       if (win) win.close();
@@ -232,16 +239,21 @@ export default function UsersPage() {
     }
   };
 
+  /* pagination over the loaded user list */
+  const pages = Math.max(1, Math.ceil((users || []).length / PER));
+  const safePage = Math.min(page, pages - 1);
+  const rows = (users || []).slice(safePage * PER, safePage * PER + PER);
+
   return (
     <AdminShell title="Manage Users" sub="All users — wallets edit, ban/unban, one-click login">
       <Toast message={toast} isError={isError} />
 
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex min-w-[220px] flex-1 items-center gap-2.5 rounded-xl border border-line-rose bg-white px-3.5 py-2.5 sm:max-w-[360px]">
-          <Search size={16} className="shrink-0 text-icon-rose" />
+        <div className="flex min-w-[220px] flex-1 items-center gap-2.5 rounded-xl border border-line bg-white px-3.5 py-2.5 sm:max-w-[360px]">
+          <Search size={16} className="shrink-0 text-icon" />
           <input
-            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[16px] font-medium text-ink outline-none placeholder:text-[#c4a9b0] sm:text-[13.5px]"
+            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[16px] font-medium text-ink outline-none placeholder:text-muted sm:text-[13.5px]"
             placeholder="Search phone / userid / refId..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -258,7 +270,7 @@ export default function UsersPage() {
               setQuery(search);
               load(search);
             }}
-            className="hidden cursor-pointer rounded-lg bg-[#f7e3e7] px-3 py-1.5 text-[12px] font-extrabold text-maroon-700 transition-colors hover:bg-[#f3d5dc] sm:block"
+            className="hidden cursor-pointer rounded-lg bg-[var(--color-tint2)] px-3 py-1.5 text-[12px] font-extrabold text-brand-700 transition-colors hover:bg-[var(--color-line)] sm:block"
           >
             Search
           </button>
@@ -276,7 +288,7 @@ export default function UsersPage() {
           Reset
         </button>
         <div className="ml-auto flex items-center gap-1.5 text-[13px] font-bold text-ink">
-          <Users size={16} className="text-maroon-600" />
+          <Users size={16} className="text-brand-600" />
           {users ? users.length + " user(s)" : "—"}
         </div>
       </div>
@@ -287,11 +299,11 @@ export default function UsersPage() {
         <>
         {/* MOBILE — compact card list (table hidden below sm) */}
         <div className="flex flex-col gap-2.5 sm:hidden">
-          {users.map((u) => (
+          {rows.map((u) => (
             <div key={u._id} className="admin-card p-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-1.5">
-                  <span className="shrink-0 rounded-lg bg-[#f7e3e7] px-2 py-0.5 text-[11px] font-extrabold text-maroon-700">
+                  <span className="shrink-0 rounded-lg bg-[var(--color-tint2)] px-2 py-0.5 text-[11px] font-extrabold text-brand-700">
                     {u.userid || "—"}
                   </span>
                   {u.refId && (
@@ -312,28 +324,28 @@ export default function UsersPage() {
                 <div className="min-w-0">
                   <div className="truncate text-[15px] font-extrabold leading-none text-ink">+91 {u.phone}</div>
                   {u.refBy && (
-                    <div className="mt-1 text-[10.5px] font-semibold text-muted-rose">By {u.refBy}</div>
+                    <div className="mt-1 text-[10.5px] font-semibold text-muted">By {u.refBy}</div>
                   )}
                 </div>
-                <div className="shrink-0 text-[10.5px] font-medium text-muted-rose">{fmtDate(u.createdAt)}</div>
+                <div className="shrink-0 text-[10.5px] font-medium text-muted">{fmtDate(u.createdAt)}</div>
               </div>
 
-              <div className="mt-2.5 grid grid-cols-3 gap-1.5 rounded-xl bg-[#fdf7f8] p-2">
+              <div className="mt-2.5 grid grid-cols-3 gap-1.5 rounded-xl bg-[var(--color-tint)] p-2">
                 <div>
-                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">Recharge</div>
+                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-muted">Recharge</div>
                   <div className="mt-0.5 text-[12.5px] font-extrabold text-[#16a34a]">{fmt0(u.rechargeBalance)}</div>
                 </div>
                 <div>
-                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">Withdraw</div>
-                  <div className="mt-0.5 text-[12.5px] font-extrabold text-maroon-700">{fmt0(u.balance)}</div>
+                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-muted">Withdraw</div>
+                  <div className="mt-0.5 text-[12.5px] font-extrabold text-brand-700">{fmt0(u.balance)}</div>
                 </div>
                 <div>
-                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">Income</div>
+                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-muted">Income</div>
                   <div className="mt-0.5 text-[12.5px] font-extrabold text-[#a9791c]">{fmt0(u.totalIncome)}</div>
                 </div>
               </div>
 
-              <div className="mt-2.5 grid grid-cols-2 gap-1.5 border-t border-line-rose/60 pt-2.5">
+              <div className="mt-2.5 grid grid-cols-2 gap-1.5 border-t border-line/60 pt-2.5">
                 <button
                   type="button"
                   onClick={() => openDetails(u)}
@@ -345,7 +357,7 @@ export default function UsersPage() {
                 <button
                   type="button"
                   onClick={() => openEdit(u)}
-                  className="flex cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-[#f7e3e7] px-2.5 py-2 text-[12px] font-extrabold text-maroon-700 transition-colors hover:bg-[#f3d5dc]"
+                  className="flex cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-[var(--color-tint2)] px-2.5 py-2 text-[12px] font-extrabold text-brand-700 transition-colors hover:bg-[var(--color-line)]"
                 >
                   <Pencil size={13} />
                   Edit
@@ -374,7 +386,7 @@ export default function UsersPage() {
             </div>
           ))}
           {users.length === 0 && (
-            <div className="admin-card py-8 text-center text-[13px] font-medium text-muted-rose">
+            <div className="admin-card py-8 text-center text-[13px] font-medium text-muted">
               No users found
             </div>
           )}
@@ -399,10 +411,10 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => (
+                {rows.map((u) => (
                   <tr key={u._id}>
                     <td>
-                      <span className="rounded-lg bg-[#f7e3e7] px-2.5 py-1 font-extrabold text-maroon-700">
+                      <span className="rounded-lg bg-[var(--color-tint2)] px-2.5 py-1 font-extrabold text-brand-700">
                         {u.userid || "—"}
                       </span>
                     </td>
@@ -417,11 +429,11 @@ export default function UsersPage() {
                       </button>
                     </td>
                     <td className="whitespace-nowrap font-bold text-ink">+91 {u.phone}</td>
-                    <td className="font-semibold text-[#7d6a6e]">{u.refBy || "—"}</td>
+                    <td className="font-semibold text-[#475569]">{u.refBy || "—"}</td>
                     <td className="font-bold text-[#16a34a]">{fmt0(u.rechargeBalance)}</td>
-                    <td className="font-bold text-maroon-700">{fmt0(u.balance)}</td>
+                    <td className="font-bold text-brand-700">{fmt0(u.balance)}</td>
                     <td className="font-bold text-[#a9791c]">{fmt0(u.totalIncome)}</td>
-                    <td className="whitespace-nowrap font-medium text-[#7d6a6e]">
+                    <td className="whitespace-nowrap font-medium text-[#475569]">
                       {fmtDate(u.createdAt)}
                     </td>
                     <td>
@@ -434,7 +446,7 @@ export default function UsersPage() {
                           type="button"
                           aria-label="View user details"
                           onClick={() => openDetails(u)}
-                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line-rose bg-white text-[#2563eb] transition-colors hover:bg-[#eef4ff]"
+                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line bg-white text-[#2563eb] transition-colors hover:bg-[#eef4ff]"
                           title="Bank, team tree, plans, recharges & withdrawals"
                         >
                           <Eye size={14} />
@@ -444,7 +456,7 @@ export default function UsersPage() {
                           type="button"
                           aria-label="Edit user"
                           onClick={() => openEdit(u)}
-                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line-rose bg-white text-maroon-700 transition-colors hover:bg-[#fbf1f3]"
+                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line bg-white text-brand-700 transition-colors hover:bg-[var(--color-tint2)]"
                           title="Edit all details"
                         >
                           <Pencil size={14} />
@@ -457,7 +469,7 @@ export default function UsersPage() {
                           className={`grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border transition-colors ${
                             u.status === "Banned"
                               ? "border-[#bbf7d0] bg-[#eafaf0] text-[#16a34a] hover:bg-[#d9f5e5]"
-                              : "border-line-rose bg-white text-[#dc2626] hover:bg-[#fdecec]"
+                              : "border-line bg-white text-[#dc2626] hover:bg-[#fdecec]"
                           }`}
                           title={u.status === "Banned" ? "Unban" : "Ban"}
                         >
@@ -468,7 +480,7 @@ export default function UsersPage() {
                           type="button"
                           aria-label="One click login"
                           onClick={() => oneClickLogin(u)}
-                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line-rose bg-white text-[#a9791c] transition-colors hover:bg-[#fdf6e4]"
+                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line bg-white text-[#a9791c] transition-colors hover:bg-[#fdf6e4]"
                           title="Login as this user — opens the app, valid 7 days"
                         >
                           <LogIn size={14} />
@@ -479,7 +491,7 @@ export default function UsersPage() {
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="py-10 text-center text-[13.5px] font-medium text-muted-rose">
+                    <td colSpan={10} className="py-10 text-center text-[13.5px] font-medium text-muted">
                       No users found
                     </td>
                   </tr>
@@ -488,6 +500,9 @@ export default function UsersPage() {
             </table>
           </div>
         </div>
+
+        {/* PAGINATION */}
+        <Pagination page={safePage} pages={pages} onPage={setPage} total={users.length} />
         </>
       )}
 
@@ -510,7 +525,7 @@ export default function UsersPage() {
         }
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2 font-display text-[14.5px] font-bold text-maroon-700">
+          <div className="sm:col-span-2 font-display text-[14.5px] font-bold text-brand-700">
             Profile Details
           </div>
           <Field label="Name">
@@ -531,7 +546,7 @@ export default function UsersPage() {
             </Field>
           </div>
 
-          <div className="sm:col-span-2 mt-1 font-display text-[14.5px] font-bold text-maroon-700">
+          <div className="sm:col-span-2 mt-1 font-display text-[14.5px] font-bold text-brand-700">
             Wallets
           </div>
           <Field label="Recharge Balance (₹)">
@@ -550,8 +565,8 @@ export default function UsersPage() {
             </Select>
           </Field>
 
-          <div className="sm:col-span-2 mt-1 font-display text-[14.5px] font-bold text-maroon-700">
-            Security <span className="text-[11.5px] font-medium text-muted-rose">(blank = no change)</span>
+          <div className="sm:col-span-2 mt-1 font-display text-[14.5px] font-bold text-brand-700">
+            Security <span className="text-[11.5px] font-medium text-muted">(blank = no change)</span>
           </div>
           <Field label="New Login Password">
             <TextInput type="text" value={form.password} onChange={(e) => set("password", e.target.value)} placeholder="Min 6 characters" />
@@ -598,12 +613,12 @@ export default function UsersPage() {
               {[
                 { lbl: "Total Recharge", val: fmt0(details.stats.totalDeposit), cls: "text-[#16a34a]" },
                 { lbl: "Total Withdraw", val: fmt0(details.stats.totalWithdraw), cls: "text-[#dc2626]" },
-                { lbl: "Total Invested", val: fmt0(details.stats.totalInvest), cls: "text-maroon-700" },
+                { lbl: "Total Invested", val: fmt0(details.stats.totalInvest), cls: "text-brand-700" },
                 { lbl: "Team", val: String(details.stats.teamCount), cls: "text-[#a9791c]" },
                 { lbl: "Active Plans", val: String(details.stats.activePlans), cls: "text-ink" },
               ].map((s) => (
-                <div key={s.lbl} className="rounded-xl border border-line-rose bg-[#fdfafa] px-3 py-2.5 text-center">
-                  <div className="text-[9.5px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">
+                <div key={s.lbl} className="rounded-xl border border-line bg-[var(--color-tint)] px-3 py-2.5 text-center">
+                  <div className="text-[9.5px] font-bold uppercase tracking-[0.4px] text-muted">
                     {s.lbl}
                   </div>
                   <div className={`mt-1 text-[15px] font-extrabold leading-none ${s.cls}`}>
@@ -636,7 +651,7 @@ export default function UsersPage() {
                 <InfoRow k="IFSC Code" v={details.bank.ifsc} />
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-line-rose py-4 text-center text-[12.5px] font-semibold text-muted-rose">
+              <div className="rounded-xl border border-dashed border-line py-4 text-center text-[12.5px] font-semibold text-muted">
                 No bank details saved yet — the bank card is saved automatically on the
                 user&apos;s first withdrawal
               </div>
@@ -646,7 +661,7 @@ export default function UsersPage() {
             <SectionTitle
               Icon={Network}
               right={
-                <span className="rounded-full bg-[#f7e3e7] px-3 py-1 text-[11px] font-extrabold text-maroon-700">
+                <span className="rounded-full bg-[var(--color-tint2)] px-3 py-1 text-[11px] font-extrabold text-brand-700">
                   {details.stats.teamCount} total
                 </span>
               }
@@ -662,7 +677,7 @@ export default function UsersPage() {
             {/* ===== PLANS PURCHASED ===== */}
             <SectionTitle Icon={TrendingUp}>Plans Purchased</SectionTitle>
             {details.invests.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-line-rose py-4 text-center text-[12.5px] font-semibold text-muted-rose">
+              <div className="rounded-xl border border-dashed border-line py-4 text-center text-[12.5px] font-semibold text-muted">
                 No plans purchased yet
               </div>
             ) : (
@@ -670,14 +685,14 @@ export default function UsersPage() {
                 {details.invests.map((i) => (
                   <tr key={i._id}>
                     <td className="font-bold text-ink">{i.planName}</td>
-                    <td className="font-bold text-maroon-700">{fmt0(i.price)}</td>
+                    <td className="font-bold text-brand-700">{fmt0(i.price)}</td>
                     <td className="font-bold text-[#16a34a]">{fmt0(i.daily)}</td>
                     <td className="font-semibold text-ink">{i.cycle} days</td>
                     <td className="font-semibold text-[#a9791c]">
                       {i.paidDays || 0}/{i.cycle}
                     </td>
                     <td><Pill value={i.status} /></td>
-                    <td className="whitespace-nowrap text-[12px] text-[#7d6a6e]">
+                    <td className="whitespace-nowrap text-[12px] text-[#475569]">
                       {fmtD(i.createdAt)}
                     </td>
                   </tr>
@@ -688,7 +703,7 @@ export default function UsersPage() {
             {/* ===== RECHARGES ===== */}
             <SectionTitle Icon={ReceiptText}>Recharges</SectionTitle>
             {details.deposits.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-line-rose py-4 text-center text-[12.5px] font-semibold text-muted-rose">
+              <div className="rounded-xl border border-dashed border-line py-4 text-center text-[12.5px] font-semibold text-muted">
                 No recharges yet
               </div>
             ) : (
@@ -698,7 +713,7 @@ export default function UsersPage() {
                     <td className="font-bold text-[#16a34a]">{fmt0(d.amount)}</td>
                     <td className="font-semibold text-ink">{d.method}</td>
                     <td><Pill value={d.status} /></td>
-                    <td className="whitespace-nowrap text-[12px] text-[#7d6a6e]">
+                    <td className="whitespace-nowrap text-[12px] text-[#475569]">
                       {fmtD(d.createdAt)}
                     </td>
                   </tr>
@@ -709,7 +724,7 @@ export default function UsersPage() {
             {/* ===== WITHDRAWALS ===== */}
             <SectionTitle Icon={ReceiptText}>Withdrawals</SectionTitle>
             {details.withdrawals.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-line-rose py-4 text-center text-[12.5px] font-semibold text-muted-rose">
+              <div className="rounded-xl border border-dashed border-line py-4 text-center text-[12.5px] font-semibold text-muted">
                 No withdrawals yet
               </div>
             ) : (
@@ -718,11 +733,11 @@ export default function UsersPage() {
                   <tr key={w._id}>
                     <td className="font-bold text-[#dc2626]">{fmt0(w.amount)}</td>
                     <td className="font-semibold text-ink">{w.bankName}</td>
-                    <td className="font-mono text-[12px] text-[#7d6a6e]">
+                    <td className="font-mono text-[12px] text-[#475569]">
                       {String(w.account).replace(/\d(?=\d{4})/g, "•")}
                     </td>
                     <td><Pill value={w.status} /></td>
-                    <td className="whitespace-nowrap text-[12px] text-[#7d6a6e]">
+                    <td className="whitespace-nowrap text-[12px] text-[#475569]">
                       {fmtD(w.createdAt)}
                     </td>
                   </tr>
@@ -732,7 +747,7 @@ export default function UsersPage() {
             {/* ===== WALLET LEDGER ===== */}
             <SectionTitle Icon={ReceiptText}>Wallet Ledger</SectionTitle>
             {details.transactions.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-line-rose py-4 text-center text-[12.5px] font-semibold text-muted-rose">
+              <div className="rounded-xl border border-dashed border-line py-4 text-center text-[12.5px] font-semibold text-muted">
                 No wallet activity yet
               </div>
             ) : (
@@ -766,7 +781,7 @@ export default function UsersPage() {
                       {fmt0(t.amount)}
                     </td>
                     <td><Pill value={t.status} /></td>
-                    <td className="whitespace-nowrap text-[12px] text-[#7d6a6e]">
+                    <td className="whitespace-nowrap text-[12px] text-[#475569]">
                       {fmtD(t.createdAt)}
                     </td>
                   </tr>

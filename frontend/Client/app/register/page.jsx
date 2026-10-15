@@ -69,32 +69,6 @@ function PasswordField({ id, name, Icon, placeholder, autoComplete }) {
   );
 }
 
-/* ===== Register Success — black full-screen loader + Success text ===== */
-
-function SuccessOverlay() {
-  return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 px-8">
-      <div className="relative h-[86px] w-[86px] overflow-hidden rounded-full border-[3px] border-gold/70 shadow-[0_16px_44px_rgba(0,0,0,0.55)]">
-        <Image
-          src={logo}
-          alt="Saudi Aramco"
-          fill
-          sizes="86px"
-          className="object-cover"
-          priority
-        />
-      </div>
-      <div className="mt-7 h-9 w-9 animate-spin rounded-full border-[3px] border-white/20 border-t-gold" />
-      <div className="mt-7 font-display text-[30px] font-bold tracking-[1px] text-gold">
-        Success!
-      </div>
-      <div className="mt-2 text-center text-[13.5px] font-semibold text-white/70">
-        Account created — taking you to your dashboard...
-      </div>
-    </div>
-  );
-}
-
 /* ===== MAIN (Suspense inner — needed for useSearchParams) ===== */
 
 function RegisterInner() {
@@ -211,8 +185,11 @@ function RegisterInner() {
       clearUserSession();
       localStorage.setItem("zapto_token", data.token);
       localStorage.setItem("zapto_phone", (data.user && data.user.phone) || "");
+      /* live pushes — re-auth the shared socket with the fresh token */
+      if (window.__zaptoSocketRefreshAuth) window.__zaptoSocketRefreshAuth();
+      /* straight to the dashboard — no interstitial success screen */
       setSuccess(true);
-      setTimeout(() => router.replace("/home"), 2000);
+      router.replace("/home");
     } catch (err) {
       setError("Network error — please check your connection and try again");
     } finally {
@@ -374,9 +351,6 @@ function RegisterInner() {
           </p>
         </div>
       </div>
-
-      {/* SUCCESS OVERLAY (black loader) */}
-      {success && <SuccessOverlay />}
     </div>
   );
 }

@@ -19,7 +19,6 @@ import {
   Star,
   Zap,
   CircleCheck,
-  Megaphone,
   Headset,
 } from "lucide-react";
 import planDaily from "../../public/product-starter.png";
@@ -30,6 +29,7 @@ import useLive from "../components/useLive";
 import BottomNav from "../components/BottomNav";
 import { useSettings } from "../components/SettingsProvider";
 import { readCache, writeCache } from "../components/liveCache";
+import { safeOpen } from "../../lib/safeOpen";
 
 /* ================= DEMO FALLBACK (live plans/banners come from the admin panel) ================= */
 
@@ -120,6 +120,12 @@ function BannerCarousel({ banners }) {
 
   /* fresh banner list — clear old per-slide failures */
   useEffect(() => setFailed(new Set()), [banners]);
+
+  /* failed slides shrink the visible list — keep the index inside range,
+     otherwise every image renders opacity-0 and the carousel goes blank */
+  useEffect(() => {
+    setSlide((s) => (count ? s % count : 0));
+  }, [count]);
 
   const next = () => setSlide((s) => (s + 1) % count);
   const prev = () => setSlide((s) => (s - 1 + count) % count);
@@ -311,11 +317,10 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
   const vipTab = ht.vipTab || "Premium VIP";
   const dailyBtn = ht.dailyBtn || "Buy Now";
   const vipBtn = ht.vipBtn || "Buy Now";
-  /* site texts — header subtitle + announcement marquee + channel link
+  /* site texts — header subtitle + channel link
      (admin-editable from /admin/settings/website, live via settings context) */
   const site = (gs && gs.site) || {};
   const homeSubtitle = site.homeSubtitle || "Earn daily, withdraw daily";
-  const announcement = String(site.announcement || "").trim();
   const telegramUrl = String(site.telegramUrl || "").trim();
   const supportUrl = String(site.supportUrl || "").trim();
   const [popupCfg, setPopupCfg] = useState(() =>
@@ -456,13 +461,13 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
   const rechargeShort =
     !!selectedPlan && Number(wallet.rechargeBalance) < Number(selectedPlan.price);
 
-  /* order save — localStorage (the records page reads from here) */
+  /* optimistic cache — the fresh order joins the session invests cache so
+     the used/limit badge and /records paint it instantly; the SERVER list
+     (refetched on navigation) stays the single source of truth */
   const saveOrderLocal = (o) => {
     try {
-      const orders = JSON.parse(localStorage.getItem("zapto_orders") || "[]");
+      const orders = readCache("invests") || [];
       orders.unshift(o);
-      localStorage.setItem("zapto_orders", JSON.stringify(orders));
-      /* same list cached for the records page + the used/limit badge */
       writeCache("invests", orders);
       if (o && o.planId && o.status === "Active")
         setUsedByPlan((m) => ({ ...m, [o.planId]: (m[o.planId] || 0) + 1 }));
@@ -497,20 +502,10 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
         return;
       }
     }
-    /* fallback demo plan (API plans failed to load) */
-    saveOrderLocal({
-      id: "ZP" + String(Date.now()).slice(-8),
-      name: p.name,
-      vip: !!p.vip,
-      price: p.price,
-      daily: p.daily,
-      cycle: p.cycle,
-      total: p.total,
-      boughtAt: new Date().toISOString(),
-      status: "Active",
-    });
-    showToast("Plan purchased successfully!");
-    setTimeout(() => router.push("/records"), 700);
+    /* fallback demo plan (API plans failed to load) — NEVER fake a purchase:
+       the old demo path saved a local "order" and showed success while the
+       server had no invest record and no money moved. Fail honestly instead. */
+    showToast("Plans could not load — please refresh and try again");
   };
 
   return (
@@ -531,23 +526,6 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
           </div>
         </div>
       </header>
-
-      {/* ===== ANNOUNCEMENT MARQUEE (admin-editable, empty = hidden) ===== */}
-      {announcement && (
-        <div className="relative overflow-hidden bg-[linear-gradient(90deg,var(--c-deep2)_0%,var(--c-deep)_100%)] py-[7px]">
-          <div className="flex w-max animate-[marquee_18s_linear_infinite] items-center">
-            {[0, 1].map((k) => (
-              <span
-                key={k}
-                className="flex items-center gap-2 whitespace-nowrap px-5 text-[11.5px] font-semibold text-gold"
-              >
-                <Megaphone size={13} className="shrink-0" />
-                {announcement}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ===== BANNER CAROUSEL (admin banners only — skeleton while loading) ===== */}
       {banners === null ? (
@@ -570,12 +548,12 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
                 if (label === "Recharge") router.push("/recharge");
                 else if (label === "Withdraw") router.push("/withdrawal");
                 else if (label === "Support") {
-                  if (supportUrl) window.open(supportUrl, "_blank", "noopener");
-                  else showToast(label + " coming soon");
+                  /* safeOpen — http/https only (a javascript: admin value
+                     can never execute) + noopener/noreferrer */
+                  if (!safeOpen(supportUrl)) showToast(label + " coming soon");
                 }
                 else if (label === "Channel") {
-                  if (telegramUrl) window.open(telegramUrl, "_blank", "noopener");
-                  else showToast(label + " coming soon");
+                  if (!safeOpen(telegramUrl)) showToast(label + " coming soon");
                 } else showToast(label + " coming soon");
               }}
             >
@@ -754,8 +732,10 @@ export default function HomeClient({ initialBanners = null, initialPlans = null 
               <button
                 type="button"
                 onClick={() => {
-                  if (popupCfg.buttonUrl) window.open(popupCfg.buttonUrl, "_blank");
-                  else showToast("Telegram channel link coming soon");
+                  /* safeOpen — the popup URL is admin-configured, same XSS
+                     and tabnabbing rules as the quick-menu links */
+                  if (!safeOpen(popupCfg.buttonUrl))
+                    showToast("Telegram channel link coming soon");
                 }}
                 className={`block w-full cursor-pointer rounded-[14px] py-3 text-center text-[14px] font-extrabold text-white ${gradientBtn}`}
               >

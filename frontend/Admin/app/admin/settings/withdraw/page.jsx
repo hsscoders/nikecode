@@ -124,7 +124,7 @@ export default function WithdrawSettingsPage() {
           {/* ===== LIMITS ===== */}
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
-              <Percent size={17} className="text-maroon-700" />
+              <Percent size={17} className="text-brand-700" />
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Withdrawal Limits
               </div>
@@ -147,7 +147,7 @@ export default function WithdrawSettingsPage() {
                 />
               </Field>
             </div>
-            <div className="rounded-xl border border-line-rose bg-[#fbf1f3] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
+            <div className="rounded-xl border border-line bg-[var(--color-tint2)] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#475569]">
               These limits are enforced server-side in the withdraw API — the client only
               receives them for display, so they stay manipulation-safe.
             </div>
@@ -156,7 +156,7 @@ export default function WithdrawSettingsPage() {
           {/* ===== CHARGE ===== */}
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
-              <BadgePercent size={17} className="text-maroon-700" />
+              <BadgePercent size={17} className="text-brand-700" />
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Withdrawal Charge
               </div>
@@ -171,12 +171,12 @@ export default function WithdrawSettingsPage() {
                   onChange={(e) => set("chargePercent", e.target.value)}
                 />
               </Field>
-              <div className="flex flex-col justify-center rounded-xl border border-line-rose bg-[#fbf1f3] px-3 py-2.5 sm:px-4 sm:py-3">
+              <div className="flex flex-col justify-center rounded-xl border border-line bg-[var(--color-tint2)] px-3 py-2.5 sm:px-4 sm:py-3">
                 <div className="text-[10.5px] font-extrabold uppercase tracking-[0.6px] text-[#a98f95]">
                   Live preview — user withdraws ₹500
                 </div>
                 <div className="mt-2 flex flex-col gap-1 text-[13px] font-semibold">
-                  <div className="flex items-center justify-between text-[#7d6a6e]">
+                  <div className="flex items-center justify-between text-[#475569]">
                     <span>Charge ({chgPct}%)</span>
                     <span className="font-bold text-[#b3372f]">
                       − ₹{((500 * chgPct) / 100).toLocaleString("en-IN")}
@@ -184,14 +184,14 @@ export default function WithdrawSettingsPage() {
                   </div>
                   <div className="flex items-center justify-between text-[#3d2a2f]">
                     <span>You&apos;ll receive</span>
-                    <span className="font-extrabold text-maroon-700">
+                    <span className="font-extrabold text-brand-700">
                       ₹{(500 - (500 * chgPct) / 100).toLocaleString("en-IN")}
                     </span>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="rounded-xl border border-line-rose bg-[#fbf1f3] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
+            <div className="rounded-xl border border-line bg-[var(--color-tint2)] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#475569]">
               The charge is calculated server-side on every withdraw request and stored on
               the withdrawal record — rejecting a request refunds the user&apos;s full
               amount, the charge only applies on successful payouts.
@@ -201,7 +201,7 @@ export default function WithdrawSettingsPage() {
           {/* ===== AVAILABILITY — switch + daily limit + time window ===== */}
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
-              <Timer size={17} className="text-maroon-700" />
+              <Timer size={17} className="text-brand-700" />
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Withdrawal Availability
               </div>
@@ -286,7 +286,7 @@ export default function WithdrawSettingsPage() {
               </Field>
             </div>
 
-            <div className="rounded-xl border border-line-rose bg-[#fbf1f3] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
+            <div className="rounded-xl border border-line bg-[var(--color-tint2)] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#475569]">
               Times are IST. Overnight windows work too (e.g. 22:00 → 06:00). The switch
               is instant — enforced server-side on every request, and the client page
               shows a stopped banner with a disabled button.
@@ -296,7 +296,7 @@ export default function WithdrawSettingsPage() {
           {/* ===== NOTE ===== */}
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
-              <Clock size={17} className="text-maroon-700" />
+              <Clock size={17} className="text-brand-700" />
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Processing Note
               </div>
@@ -318,7 +318,7 @@ export default function WithdrawSettingsPage() {
           <div className="sticky bottom-3 flex justify-end sm:bottom-4">
             <button
               type="button"
-              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(79,70,229,0.35)] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >

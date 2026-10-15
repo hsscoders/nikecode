@@ -213,7 +213,7 @@ export default function RechargeSettingsPage() {
           {/* ===== LIMITS ===== */}
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
-              <Percent size={17} className="text-maroon-700" />
+              <Percent size={17} className="text-brand-700" />
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Recharge Limits
               </div>
@@ -241,7 +241,7 @@ export default function RechargeSettingsPage() {
           {/* ===== QUICK AMOUNTS ===== */}
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
-              <Zap size={17} className="text-maroon-700" />
+              <Zap size={17} className="text-brand-700" />
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Quick Amounts
               </div>
@@ -262,23 +262,23 @@ export default function RechargeSettingsPage() {
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-3.5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Wallet size={17} className="text-maroon-700" />
+                <Wallet size={17} className="text-brand-700" />
                 <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                   Payment Methods
                 </div>
               </div>
-              <span className="rounded-full bg-[#fbf1f3] px-3 py-1 text-[11.5px] font-bold text-maroon-700">
+              <span className="rounded-full bg-[var(--color-tint2)] px-3 py-1 text-[11.5px] font-bold text-brand-700">
                 {cfg.methods.length} / {MAX_METHODS}
               </span>
             </div>
 
-            <div className="rounded-xl bg-[#fbf3f4] px-4 py-2.5 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
+            <div className="rounded-xl bg-[var(--color-tint)] px-4 py-2.5 text-[12px] font-medium leading-relaxed text-[#475569]">
               Only active methods appear on the client recharge page. Toggle off to hide a
               method without deleting it.
             </div>
 
             {cfg.methods.length === 0 && (
-              <div className="rounded-xl border border-dashed border-line-rose py-8 text-center text-[13px] font-semibold text-muted-rose">
+              <div className="rounded-xl border border-dashed border-line py-8 text-center text-[13px] font-semibold text-muted">
                 No payment methods yet — add your first method below
               </div>
             )}
@@ -289,7 +289,7 @@ export default function RechargeSettingsPage() {
               return (
                 <div
                   key={i}
-                  className="flex flex-wrap items-center gap-2.5 rounded-xl border border-line-rose bg-white p-2.5"
+                  className="flex flex-wrap items-center gap-2.5 rounded-xl border border-line bg-white p-2.5"
                 >
                   {/* Icon button + picker */}
                   <div className="relative shrink-0">
@@ -297,7 +297,7 @@ export default function RechargeSettingsPage() {
                       type="button"
                       title="Change icon"
                       onClick={() => setPick(pick === i ? null : i)}
-                      className="grid h-10 w-10 cursor-pointer place-items-center rounded-[10px] border border-line-rose bg-[#fbf1f3] text-maroon-600 transition-colors hover:bg-[#f7e3e7]"
+                      className="grid h-10 w-10 cursor-pointer place-items-center rounded-[10px] border border-line bg-[var(--color-tint2)] text-brand-600 transition-colors hover:bg-[var(--color-tint2)]"
                     >
                       <CurIcon size={17} />
                     </button>
@@ -305,7 +305,7 @@ export default function RechargeSettingsPage() {
                     {pick === i && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setPick(null)} />
-                        <div className="absolute left-0 top-12 z-20 grid w-[188px] grid-cols-3 gap-1.5 rounded-xl border border-line-rose bg-white p-2 shadow-[0_16px_40px_rgba(66,9,26,0.25)]">
+                        <div className="absolute left-0 top-12 z-20 grid w-[188px] grid-cols-3 gap-1.5 rounded-xl border border-line bg-white p-2 shadow-[0_16px_40px_rgba(30,27,75,0.25)]">
                           {METHOD_ICONS.map(({ key, Icon: OIcon }) => (
                             <button
                               key={key}
@@ -317,8 +317,8 @@ export default function RechargeSettingsPage() {
                               }}
                               className={`grid h-9 w-9 cursor-pointer place-items-center rounded-[9px] transition-all ${
                                 m.icon === key
-                                  ? "bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white"
-                                  : "bg-[#fbf1f3] text-maroon-600 hover:bg-[#f7e3e7]"
+                                  ? "brand-grad text-white"
+                                  : "bg-[var(--color-tint2)] text-brand-600 hover:bg-[var(--color-tint2)]"
                               }`}
                             >
                               <OIcon size={16} />
@@ -338,7 +338,7 @@ export default function RechargeSettingsPage() {
                   />
 
                   <div className="flex items-center gap-2 px-1">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.4px] text-muted">
                       {m.active ? "Active" : "Hidden"}
                     </span>
                     <Switch
@@ -363,7 +363,7 @@ export default function RechargeSettingsPage() {
               type="button"
               onClick={addMethod}
               disabled={cfg.methods.length >= MAX_METHODS}
-              className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-maroon-600/40 bg-[#fdf7f8] py-3 text-[13.5px] font-extrabold text-maroon-700 transition-all hover:bg-[#fbf1f3] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-brand-600/40 bg-[var(--color-tint)] py-3 text-[13.5px] font-extrabold text-brand-700 transition-all hover:bg-[var(--color-tint2)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus size={17} />
               Add Payment Method
@@ -374,12 +374,12 @@ export default function RechargeSettingsPage() {
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <GatewayIcon size={17} className="text-maroon-700" />
+                <GatewayIcon size={17} className="text-brand-700" />
                 <div>
                   <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                     Auto Payment (Gateways)
                   </div>
-                  <div className="mt-0.5 text-[12px] font-medium text-muted-rose">
+                  <div className="mt-0.5 text-[12px] font-medium text-muted">
                     The automatic UPI methods shown above the manual methods on /recharge
                   </div>
                 </div>
@@ -414,11 +414,11 @@ export default function RechargeSettingsPage() {
               ))}
             </div>
 
-            <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
-              <Zap size={15} className="mt-0.5 shrink-0 text-maroon-600" />
+            <div className="flex items-start gap-3 rounded-xl bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#475569]">
+              <Zap size={15} className="mt-0.5 shrink-0 text-brand-600" />
               <span>
                 Turning the gateways on / off and their keys live in{" "}
-                <a href="/admin/settings/payment" className="font-bold text-maroon-700 underline">
+                <a href="/admin/settings/payment" className="font-bold text-brand-700 underline">
                   Payment Gateway
                 </a>{" "}
                 — this page only renames what users see on the recharge page.
@@ -430,12 +430,12 @@ export default function RechargeSettingsPage() {
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <QrCode size={17} className="text-maroon-700" />
+                <QrCode size={17} className="text-brand-700" />
                 <div>
                   <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                     Manual Payment Page
                   </div>
-                  <div className="mt-0.5 text-[12px] font-medium text-muted-rose">
+                  <div className="mt-0.5 text-[12px] font-medium text-muted">
                     Shown when the user taps Pay on the recharge page
                   </div>
                 </div>
@@ -488,7 +488,7 @@ export default function RechargeSettingsPage() {
             <Field label="QR Image (optional)" hint="Stored on the server — shown inside the payment sheet">
               <div className="flex items-center gap-3">
                 {cfg.manual.qrImage ? (
-                  <div className="relative h-[76px] w-[76px] shrink-0 overflow-hidden rounded-xl border border-line-rose bg-white">
+                  <div className="relative h-[76px] w-[76px] shrink-0 overflow-hidden rounded-xl border border-line bg-white">
                     <Image
                       src={cfg.manual.qrImage}
                       alt="Payment QR"
@@ -499,7 +499,7 @@ export default function RechargeSettingsPage() {
                     />
                   </div>
                 ) : (
-                  <div className="grid h-[76px] w-[76px] shrink-0 place-items-center rounded-xl border border-dashed border-line-rose bg-[#fdf7f8] text-muted-rose">
+                  <div className="grid h-[76px] w-[76px] shrink-0 place-items-center rounded-xl border border-dashed border-line bg-[var(--color-tint)] text-muted">
                     <QrCode size={26} strokeWidth={1.6} />
                   </div>
                 )}
@@ -548,7 +548,7 @@ export default function RechargeSettingsPage() {
           <div className="sticky bottom-3 flex justify-end sm:bottom-4">
             <button
               type="button"
-              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(79,70,229,0.35)] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >

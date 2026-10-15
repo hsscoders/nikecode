@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { io } from "socket.io-client";
-import { clearUserSession } from "./liveCache";
+import { clearUserSession, writeCache } from "./liveCache";
 
 /* Global JWT guard — when an authed API returns 401 (expired/invalid
    token) on any page, clear the token and send the user to /login?expired=1.
@@ -68,6 +68,23 @@ export default function GlobalAuthGuard() {
     if (window.__zaptoAuthHooked) return;
     window.__zaptoAuthHooked = true;
 
+    /* ---- socket re-auth helper ----
+       socket.io fixes the JWT at connect time. After login / register /
+       auto-login the layout does NOT remount, so a fresh token would never
+       reach the socket and the user would silently stop receiving live
+       wallet pushes. Pages call window.__zaptoSocketRefreshAuth() right
+       after storing a new token (logoutUser() calls it on the way out to
+       drop the socket back to anonymous). */
+    window.__zaptoSocketRefreshAuth = () => {
+      try {
+        const sock = window.__zaptoSocket;
+        if (!sock) return;
+        sock.auth = { token: localStorage.getItem("zapto_token") || null };
+        if (sock.connected) sock.disconnect();
+        sock.connect();
+      } catch (e) {}
+    };
+
     /* ---- wallet response interceptor ----
        EVERY successful /api/wallet response (from any page) →
        localStorage cache + "zapto:wallet" fan-out. This way, on the next
@@ -85,11 +102,11 @@ export default function GlobalAuthGuard() {
             .json()
             .then((d) => {
               if (d && d.success && d.wallet) {
+                /* writeCache routes the wallet to sessionStorage (per-tab,
+                   wiped on logout) — writing it to localStorage here leaked
+                   the previous user's balance + bank details on the device */
                 try {
-                  localStorage.setItem(
-                    "zapto_cache_wallet",
-                    JSON.stringify({ ts: Date.now(), data: d.wallet })
-                  );
+                  writeCache("wallet", d.wallet);
                 } catch (e) {}
                 window.dispatchEvent(
                   new CustomEvent("zapto:wallet", { detail: d.wallet })

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import logo from "../../public/aramco-logo.png";
 import BottomNav from "../components/BottomNav";
+import { logoutUser, readCache, writeCache } from "../components/liveCache";
 
 /* ================= HELPERS ================= */
 
@@ -110,7 +111,7 @@ export default function CardPage() {
       return;
     }
     try {
-      const saved = JSON.parse(localStorage.getItem("zapto_bank_card") || "null");
+      const saved = readCache("bank");
       if (saved) {
         setRealName(saved.realName || "");
         setIfsc(saved.ifsc || "");
@@ -181,8 +182,7 @@ export default function CardPage() {
   }, [ifsc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const logout = () => {
-    localStorage.removeItem("zapto_token");
-    localStorage.removeItem("zapto_phone");
+    logoutUser();
     router.replace("/login");
   };
 
@@ -222,11 +222,14 @@ export default function CardPage() {
       return showAlert("Network error — please try again");
     }
 
-    /* local mirror for the instant prefill on the next visit */
-    localStorage.setItem(
-      "zapto_bank_card",
-      JSON.stringify({ realName: name, ifsc, account, bankName: bankName.trim() })
-    );
+    /* session-cache mirror for the instant prefill in THIS tab — the saved
+       copy lives on the user account in MongoDB (GET /api/wallet → bank) */
+    writeCache("bank", {
+      realName: name,
+      ifsc,
+      account,
+      bankName: bankName.trim(),
+    });
     showAlert("Bank card saved successfully!");
     setTimeout(() => router.push("/withdrawal"), 900);
   };

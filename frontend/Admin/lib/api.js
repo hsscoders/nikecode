@@ -63,5 +63,21 @@ export const fmtDate = (d) =>
       })
     : "—";
 
-/* Client app URL — used for the one-click login link */
-export const CLIENT_URL = "http://localhost:3000";
+/* Client app URL — used for the one-click login link. Resolve at runtime:
+   1) NEXT_PUBLIC_CLIENT_URL (.env) always wins — set your server domain there
+      (e.g. https://yourdomain.com) and rebuild once; no port needed.
+   2) Fallback auto-detect: admin reached through the client's /admin proxy
+      (same origin, no port) → that origin's root IS the client site;
+      direct :3001 access falls back to the same hostname on port 3000.
+   The old hardcoded http://localhost:3000 broke one-click login on every
+   standalone deployment. */
+export const clientBase = () => {
+  if (typeof window === "undefined") return "";
+  const envUrl = (process.env.NEXT_PUBLIC_CLIENT_URL || "").trim();
+  if (envUrl) return envUrl.replace(/\/+$/, "");
+  const loc = window.location;
+  const viaProxy = !loc.port && loc.pathname.startsWith("/admin");
+  return viaProxy || loc.port === "3000"
+    ? loc.origin
+    : loc.protocol + "//" + loc.hostname + ":3000";
+};

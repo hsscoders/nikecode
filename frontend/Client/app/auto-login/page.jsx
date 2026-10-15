@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import logo from "../../public/aramco-logo.png";
 import { clearUserSession } from "../components/liveCache";
@@ -13,6 +13,10 @@ function AutoLoginInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const [error, setError] = useState("");
+  /* effect must run ONCE per mount — StrictMode double-invokes effects in
+     dev and the code is single-use, so the second call would fail and
+     bounce a successful login back to /login */
+  const didRun = useRef(false);
 
   /* page title */
   useEffect(() => {
@@ -20,6 +24,8 @@ function AutoLoginInner() {
   }, []);
 
   useEffect(() => {
+    if (didRun.current) return;
+    didRun.current = true;
     const code = sp.get("code") || "";
     if (!code) {
       setError("Invalid login link — redirecting to login...");
@@ -43,6 +49,8 @@ function AutoLoginInner() {
         }
         localStorage.setItem("zapto_token", d.token);
         localStorage.setItem("zapto_phone", d.user ? d.user.phone : "");
+        /* live pushes — re-auth the shared socket with the fresh token */
+        if (window.__zaptoSocketRefreshAuth) window.__zaptoSocketRefreshAuth();
         router.replace("/home");
       } catch (e) {
         setError("Network error — redirecting to login...");

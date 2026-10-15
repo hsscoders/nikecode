@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const bcrypt = require("bcryptjs");
 const userAuth = require("../middleware/userAuth");
+const { moneyRateLimit } = require("../middleware/rateLimit");
 const User = require("../models/User");
 const Invest = require("../models/Invest");
 const Deposit = require("../models/Deposit");
@@ -9,6 +10,11 @@ const Plan = require("../models/Plan");
 const Setting = require("../models/Setting");
 const Transaction = require("../models/Transaction");
 const { emitToUser, emitAdmin } = require("../live");
+const audit = require("../services/audit");
+
+/* Absolute amount ceiling — a defensive cap in case the admin left
+   maxAmount empty. Recharges beyond ₹1 crore are never legitimate. */
+const ABS_MAX_AMOUNT = 10000000;
 
 /* ============ WALLET SUMMARY (profile/home) ============ */
 router.get("/wallet", userAuth, async (req, res) => {
@@ -31,14 +37,22 @@ router.get("/wallet", userAuth, async (req, res) => {
 });
 
 /* ============ DEPOSIT REQUEST (recharge page) ============ */
-router.post("/deposit", userAuth, async (req, res) => {
+router.post("/deposit", userAuth, moneyRateLimit, async (req, res) => {
   try {
     const amount = Math.floor(Number(req.body && req.body.amount));
-    const method = String((req.body && req.body.method) || "Pay-T");
+    /* method is a free string from the client — clamp its length so a
+       oversized payload can never bloat the ledger documents */
+    const method = String((req.body && req.body.method) || "Pay-T")
+      .trim()
+      .slice(0, 40);
     if (!amount || amount <= 0)
       return res
         .status(400)
         .json({ success: false, message: "Enter a valid amount" });
+    if (amount > ABS_MAX_AMOUNT)
+      return res
+        .status(400)
+        .json({ success: false, message: "Amount too large" });
 
     /* Recharge limits — from the admin recharge setting (server-side validation) */
     const s = await Setting.findOne({ key: "global" }).lean();
@@ -86,6 +100,16 @@ router.post("/deposit", userAuth, async (req, res) => {
     /* pages push — /records, /transaction, /card show the request live */
     emitToUser(req.user.phone, "activity:update", { type: "recharge", status: "Pending" });
 
+    audit.log(req, {
+      actorType: "user",
+      actor: { id: req.user._id, label: req.user.phone },
+      action: "deposit.request",
+      category: "deposit",
+      target: String(deposit._id),
+      message: "Recharge request \u20B9" + amount + " via " + method,
+      detail: { amount, method, status: "Pending" },
+    });
+
     res.json({
       success: true,
       message: "Recharge request submitted!",
@@ -103,7 +127,7 @@ router.post("/deposit", userAuth, async (req, res) => {
 });
 
 /* ============ INVEST (buy plan) ============ */
-router.post("/invest", userAuth, async (req, res) => {
+router.post("/invest", userAuth, moneyRateLimit, async (req, res) => {
   try {
     const planId = req.body && req.body.planId;
     const plan = await Plan.findById(planId);
@@ -220,6 +244,16 @@ router.post("/invest", userAuth, async (req, res) => {
     /* pages push — /records shows the new plan instantly */
     emitToUser(req.user.phone, "activity:update", { type: "invest" });
 
+    audit.log(req, {
+      actorType: "user",
+      actor: { id: req.user._id, label: req.user.phone },
+      action: "invest.purchase",
+      category: "invest",
+      target: String(invest._id),
+      message: "Bought " + plan.name + " for \u20B9" + plan.price,
+      detail: { planId: String(plan._id), planName: plan.name, price: plan.price, daily: plan.daily, cycle: plan.cycle },
+    });
+
     res.json({
       success: true,
       message: "Plan purchased successfully!",
@@ -248,10 +282,14 @@ router.post("/invest", userAuth, async (req, res) => {
 });
 
 /* ============ WITHDRAW REQUEST ============ */
-router.post("/withdraw", userAuth, async (req, res) => {
+router.post("/withdraw", userAuth, moneyRateLimit, async (req, res) => {
   try {
     const { withdraw_password, bank } = req.body || {};
     const amount = Math.floor(Number(req.body && req.body.amount));
+    if (amount > ABS_MAX_AMOUNT)
+      return res
+        .status(400)
+        .json({ success: false, message: "Amount too large" });
 
     const s = await Setting.findOne({ key: "global" }).lean();
     const wdCfg = (s && s.withdraw) || {};
@@ -365,10 +403,12 @@ router.post("/withdraw", userAuth, async (req, res) => {
         chargePercent: chargePct,
         charge,
         netAmount,
-        realName: bank.realName,
-        bankName: bank.bankName,
-        account: bank.account,
-        ifsc: bank.ifsc,
+        /* same clamps as PUT /bank — the request body must never store
+           longer strings than the dedicated card-saving endpoint allows */
+        realName: String(bank.realName || "").trim().slice(0, 30),
+        bankName: String(bank.bankName || "").trim().slice(0, 30),
+        account: String(bank.account || "").trim().slice(0, 24),
+        ifsc: String(bank.ifsc || "").trim().toUpperCase().slice(0, 11),
         status: "Pending",
       });
 
@@ -377,10 +417,10 @@ router.post("/withdraw", userAuth, async (req, res) => {
         { _id: req.user._id },
         {
           bank: {
-            realName: String(bank.realName || ""),
-            bankName: String(bank.bankName || ""),
-            account: String(bank.account || ""),
-            ifsc: String(bank.ifsc || ""),
+            realName: String(bank.realName || "").trim().slice(0, 30),
+            bankName: String(bank.bankName || "").trim().slice(0, 30),
+            account: String(bank.account || "").trim().slice(0, 24),
+            ifsc: String(bank.ifsc || "").trim().toUpperCase().slice(0, 11),
           },
         }
       );
@@ -419,6 +459,16 @@ router.post("/withdraw", userAuth, async (req, res) => {
     /* pages push — /records, /transaction, /withdrawal add the request live */
     emitToUser(req.user.phone, "activity:update", { type: "withdraw", status: "Pending" });
 
+    audit.log(req, {
+      actorType: "user",
+      actor: { id: req.user._id, label: req.user.phone },
+      action: "withdraw.request",
+      category: "withdraw",
+      target: String(wd._id),
+      message: "Withdrawal request \u20B9" + amount + " (net \u20B9" + netAmount + ") to " + bank.bankName,
+      detail: { amount, charge, netAmount, chargePct, account: String(bank.account).slice(-4), ifsc: bank.ifsc },
+    });
+
     res.json({
       success: true,
       message: "Withdrawal request submitted!",
@@ -446,7 +496,7 @@ router.post("/withdraw", userAuth, async (req, res) => {
    The card used to live only in the browser's localStorage, so it disappeared
    whenever that storage got cleared (or the user switched device). It is now
    saved on the user document server-side and restored from there. */
-router.put("/bank", userAuth, async (req, res) => {
+router.put("/bank", userAuth, moneyRateLimit, async (req, res) => {
   try {
     const { realName, ifsc, account, bankName } = req.body || {};
     const name = String(realName || "").trim().slice(0, 30);
@@ -474,6 +524,15 @@ router.put("/bank", userAuth, async (req, res) => {
       { _id: req.user._id },
       { bank: { realName: name, bankName: bank, account: acc, ifsc: code } }
     );
+    audit.log(req, {
+      actorType: "user",
+      actor: { id: req.user._id, label: req.user.phone },
+      action: "bank.save",
+      category: "user",
+      target: req.user.phone,
+      message: "Bank card saved — " + bank + " (a/c ••" + acc.slice(-4) + ")",
+      detail: { bankName: bank, ifsc: code, accountLast4: acc.slice(-4) },
+    });
     res.json({
       success: true,
       message: "Bank card saved successfully!",
@@ -482,6 +541,86 @@ router.put("/bank", userAuth, async (req, res) => {
   } catch (e) {
     console.error("bank save error:", e.message);
     res.status(500).json({ success: false, message: "Failed to save bank card" });
+  }
+});
+
+/* ============ MY TEAM (invite/team page — REAL data) ============
+   Walks the L1/L2/L3 referral chain of the logged-in user and returns
+   per-member stats straight from the DB (recharge = the member's cumulative
+   successful recharges, withdrawal = their successful payout total,
+   refs = their own direct referral count). My commission comes from the
+   ledger (type "commission") — the single source of truth. Replaces the
+   old hardcoded demo table that showed the same fake members to everyone. */
+router.get("/team", userAuth, async (req, res) => {
+  try {
+    const TEAM_PROJ = "phone refId totalRecharge status createdAt";
+    const l1 = req.user.refId
+      ? await User.find({ refBy: req.user.refId }).select(TEAM_PROJ).sort({ createdAt: -1 }).limit(100).lean()
+      : [];
+    const l1Ids = l1.map((u) => u.refId).filter(Boolean);
+    const l2 = l1Ids.length
+      ? await User.find({ refBy: { $in: l1Ids } }).select(TEAM_PROJ).sort({ createdAt: -1 }).limit(100).lean()
+      : [];
+    const l2Ids = l2.map((u) => u.refId).filter(Boolean);
+    const l3 = l2Ids.length
+      ? await User.find({ refBy: { $in: l2Ids } }).select(TEAM_PROJ).sort({ createdAt: -1 }).limit(100).lean()
+      : [];
+
+    const all = [...l1, ...l2, ...l3];
+
+    /* per-member successful withdrawal totals — one aggregate for everyone */
+    const wdAgg = all.length
+      ? await Withdrawal.aggregate([
+          { $match: { user: { $in: all.map((m) => m._id) }, status: "Success" } },
+          { $group: { _id: "$user", s: { $sum: "$amount" } } },
+        ])
+      : [];
+    const wdByUser = Object.fromEntries(wdAgg.map((r) => [String(r._id), r.s]));
+
+    /* per-member referral counts (each member's own direct referrals) */
+    const memberRefIds = all.map((m) => m.refId).filter(Boolean);
+    const refAgg = memberRefIds.length
+      ? await User.aggregate([
+          { $match: { refBy: { $in: memberRefIds } } },
+          { $group: { _id: "$refBy", c: { $sum: 1 } } },
+        ])
+      : [];
+    const refsByRefId = Object.fromEntries(refAgg.map((r) => [r._id, r.c]));
+
+    /* my real team commission — the ledger is the truth */
+    const commAgg = await Transaction.aggregate([
+      { $match: { user: req.user._id, type: "commission" } },
+      { $group: { _id: null, s: { $sum: "$amount" } } },
+    ]);
+
+    /* phones are masked server-side — the raw number never leaves the API */
+    const shape = (list) =>
+      list.map((m) => ({
+        phone: String(m.phone || "").replace(/^(\d{3})\d{3}(\d{4})$/, "$1***$2"),
+        date: m.createdAt,
+        recharge: m.totalRecharge || 0,
+        withdrawal: wdByUser[String(m._id)] || 0,
+        refs: refsByRefId[m.refId] || 0,
+      }));
+
+    const levels = { 1: shape(l1), 2: shape(l2), 3: shape(l3) };
+    const teamRecharge = [1, 2, 3].reduce(
+      (s, lv) => s + levels[lv].reduce((a, m) => a + m.recharge, 0),
+      0
+    );
+
+    res.json({
+      success: true,
+      stats: {
+        commission: commAgg[0] ? commAgg[0].s : 0,
+        recharge: teamRecharge,
+        members: all.length,
+      },
+      levels,
+    });
+  } catch (e) {
+    console.error("team error:", e.message);
+    res.status(500).json({ success: false, message: "Failed to load team" });
   }
 });
 

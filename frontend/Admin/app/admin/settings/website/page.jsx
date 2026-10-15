@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import {
   Save,
   Type,
-  Megaphone,
   Link2,
   LogIn,
   Info,
@@ -24,7 +23,6 @@ import {
    Everything here is live on the client site:
    - Login / Register headings (login + register pages read the site context)
    - Home tagline → golden line under the brand name in the header
-   - Announcement → scrolling marquee bar under the home header (empty = hidden)
    - Telegram URL → home "Channel" quick-action button opens it in a new tab
    - Support / Download URLs are reserved links for header/profile buttons */
 
@@ -100,10 +98,10 @@ export default function WebsiteTextsPage() {
         <div className="mx-auto flex max-w-[860px] flex-col gap-3.5 sm:gap-5">
           {/* ===== INFO STRIP ===== */}
           <div className="admin-card flex items-start gap-3 p-4">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#f7e3e7] text-maroon-600">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--color-tint2)] text-brand-600">
               <Info size={17} />
             </div>
-            <p className="text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
+            <p className="text-[12.5px] font-medium leading-relaxed text-[#475569]">
               Control every client-site text and link from here. Saving updates
               all open pages instantly — no refresh needed. Leave a field blank
               to keep the built-in default text.
@@ -113,7 +111,7 @@ export default function WebsiteTextsPage() {
           {/* ===== LOGIN / REGISTER TEXTS ===== */}
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
-              <LogIn size={17} className="text-maroon-700" />
+              <LogIn size={17} className="text-brand-700" />
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Login & Register Headings
               </div>
@@ -158,7 +156,7 @@ export default function WebsiteTextsPage() {
           {/* ===== HOME TEXTS ===== */}
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
-              <Type size={17} className="text-maroon-700" />
+              <Type size={17} className="text-brand-700" />
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Home Page Texts
               </div>
@@ -175,32 +173,12 @@ export default function WebsiteTextsPage() {
                 maxLength={80}
               />
             </Field>
-
-            <Field
-              label="Announcement Bar"
-              hint="Scrolling marquee under the home header — leave blank to hide"
-            >
-              <TextInput
-                value={cfg.announcement}
-                onChange={(e) => set("announcement", e.target.value)}
-                placeholder="Recharge now and earn daily!"
-                maxLength={160}
-              />
-            </Field>
-            {cfg.announcement.trim() && (
-              <div className="flex items-center gap-2 overflow-hidden rounded-xl bg-[linear-gradient(90deg,#571224,#6b1830)] px-4 py-2.5">
-                <Megaphone size={13} className="shrink-0 text-gold" />
-                <span className="whitespace-nowrap text-[11.5px] font-semibold text-gold">
-                  {cfg.announcement}
-                </span>
-              </div>
-            )}
           </div>
 
           {/* ===== LINKS ===== */}
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
-              <Link2 size={17} className="text-maroon-700" />
+              <Link2 size={17} className="text-brand-700" />
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Action Links
               </div>
@@ -251,7 +229,7 @@ export default function WebsiteTextsPage() {
                       href={u}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-full bg-[#fbf1f3] px-3 py-1.5 text-[11.5px] font-bold text-maroon-700 transition-colors hover:bg-[#f7e3e7]"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-tint2)] px-3 py-1.5 text-[11.5px] font-bold text-brand-700 transition-colors hover:bg-[var(--color-tint2)]"
                     >
                       <ExternalLink size={12} />
                       Test {l}
@@ -265,7 +243,7 @@ export default function WebsiteTextsPage() {
           <div className="sticky bottom-3 flex justify-end sm:bottom-4">
             <button
               type="button"
-              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(79,70,229,0.35)] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >

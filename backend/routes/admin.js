@@ -2,6 +2,7 @@ const router = require("express").Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const mongoose = require("mongoose");
 const adminAuth = require("../middleware/adminAuth");
 const User = require("../models/User");
 const Plan = require("../models/Plan");
@@ -23,6 +24,7 @@ const {
   BANNER_DIR,
 } = require("../services/bannerCache");
 const { isLocalUpload, deleteUpload, saveDataUrl } = require("../services/fileStore");
+const audit = require("../services/audit");
 const fs = require("fs");
 const path = require("path");
 
@@ -53,6 +55,33 @@ const VALID_METHOD_ICONS = ["smartphone", "landmark", "wallet", "credit-card", "
 const num = (v) => {
   const n = Number(v);
   return isNaN(n) ? 0 : Math.max(0, Math.round(n));
+};
+
+/* Strict positive-number validator for money fields — rejects NaN,
+   negatives, zero and non-finite garbage so a typo'd plan can never
+   poison the aggregations or DEBIT users via the daily income job */
+const posNum = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/* Money setter for admin wallet edits — finite, non-negative, capped.
+   Returns null when the input is garbage so the caller can 400 cleanly
+   instead of silently zeroing the user's balance. */
+const moneyVal = (v, max = 1e9) => {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.min(n, max);
+};
+
+/* Defensive wallet debit — returns true only when the user actually had
+   the funds. Without the floor an admin-side refund reversal could push a
+   wallet negative (the user may already have spent the refund). */
+const debitUser = async (userId, field, amount) => {
+  const q = { _id: userId };
+  q[field] = { $gte: amount };
+  const r = await User.updateOne(q, { $inc: { [field]: -amount } });
+  return r.modifiedCount === 1;
 };
 
 /* ==================================================
@@ -118,7 +147,9 @@ router.get("/dashboard", async (req, res) => {
           { $group: { _id: null, amount: { $sum: "$amount" } } },
         ]),
         Withdrawal.aggregate([
-          { $match: { createdAt: { $gte: dayStart } } },
+          /* Success only — same basis as the recharge side. Without the filter
+             Pending/Rejected requests inflated "today's payouts" and charges. */
+          { $match: { status: "Success", createdAt: { $gte: dayStart } } },
           { $group: { _id: null, amount: { $sum: "$amount" }, charge: { $sum: "$charge" } } },
         ]),
         User.countDocuments({ createdAt: { $gte: dayStart } }),
@@ -256,22 +287,40 @@ router.get("/plans", async (req, res) => {
 router.post("/plans", async (req, res) => {
   try {
     const b = req.body || {};
-    if (!b.name || !b.price || !b.daily || !b.cycle || !b.total)
-      return res.status(400).json({ success: false, message: "Plan details missing" });
+    if (!b.name || String(b.name).trim().length === 0)
+      return res.status(400).json({ success: false, message: "Plan name is required" });
+    /* money fields must be real positive numbers — a negative "daily" would
+       make the income cron DEBIT every holder of this plan every day, and a
+       NaN poisons every dashboard $sum it touches */
+    for (const k of ["price", "daily", "cycle", "total"]) {
+      if (posNum(b[k]) === null)
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid " + k + " — enter a positive number" });
+    }
     const plan = await Plan.create({
-      name: String(b.name).trim(),
+      name: String(b.name).trim().slice(0, 60),
       vip: !!b.vip,
       image: String(b.image || "").trim().slice(0, 500),
-      price: Number(b.price),
-      daily: Number(b.daily),
-      cycle: Number(b.cycle),
-      total: Number(b.total),
-      limit: Number(b.limit) || 0,
+      price: posNum(b.price),
+      daily: posNum(b.daily),
+      cycle: posNum(b.cycle),
+      total: posNum(b.total),
+      limit: num(b.limit),
       presale: !!b.presale,
       active: b.active === undefined ? true : !!b.active,
       sort: Number(b.sort) || 0,
     });
     emitAll("plans:update", { action: "create" });
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: "plan.create",
+      category: "plan",
+      target: String(plan._id),
+      message: "Plan created — " + plan.name + " (\u20B9" + plan.price + ")",
+      detail: { name: plan.name, price: plan.price, daily: plan.daily, cycle: plan.cycle },
+    });
     res.json({ success: true, message: "Plan created", plan });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to create plan" });
@@ -289,18 +338,38 @@ router.put("/plans/:id", async (req, res) => {
       if (next !== plan.image && isLocalUpload(plan.image)) deleteUpload(plan.image);
       plan.image = next;
     }
-    if (b.name !== undefined) plan.name = String(b.name).trim();
+    if (b.name !== undefined) {
+      const nm = String(b.name).trim().slice(0, 60);
+      if (!nm) return res.status(400).json({ success: false, message: "Plan name cannot be empty" });
+      plan.name = nm;
+    }
     if (b.vip !== undefined) plan.vip = !!b.vip;
-    if (b.price !== undefined) plan.price = Number(b.price);
-    if (b.daily !== undefined) plan.daily = Number(b.daily);
-    if (b.cycle !== undefined) plan.cycle = Number(b.cycle);
-    if (b.total !== undefined) plan.total = Number(b.total);
-    if (b.limit !== undefined) plan.limit = Number(b.limit) || 0;
+    /* validate the money fields that are actually being changed */
+    for (const k of ["price", "daily", "cycle", "total"]) {
+      if (b[k] !== undefined) {
+        const v = posNum(b[k]);
+        if (v === null)
+          return res
+            .status(400)
+            .json({ success: false, message: "Invalid " + k + " — enter a positive number" });
+        plan[k] = v;
+      }
+    }
+    if (b.limit !== undefined) plan.limit = num(b.limit);
     if (b.presale !== undefined) plan.presale = !!b.presale;
     if (b.active !== undefined) plan.active = !!b.active;
     if (b.sort !== undefined) plan.sort = Number(b.sort) || 0;
     await plan.save();
     emitAll("plans:update", { action: "update" });
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: "plan.update",
+      category: "plan",
+      target: String(plan._id),
+      message: "Plan updated — " + plan.name,
+      detail: { name: plan.name, price: plan.price, active: plan.active },
+    });
     res.json({ success: true, message: "Plan updated", plan });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to update plan" });
@@ -314,6 +383,14 @@ router.delete("/plans/:id", async (req, res) => {
     /* delete-sync — remove the plan image file from the server too */
     deleteUpload(plan.image);
     emitAll("plans:update", { action: "delete" });
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: "plan.delete",
+      category: "plan",
+      target: String(plan._id),
+      message: "Plan deleted — " + plan.name,
+    });
     res.json({ success: true, message: "Plan deleted", image: plan.image });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to delete plan" });
@@ -367,9 +444,12 @@ router.post("/banners", async (req, res) => {
     const b = req.body || {};
     if (!b.image) return res.status(400).json({ success: false, message: "Banner image required" });
     const banner = await Banner.create({
-      title: String(b.title || "").trim(),
-      image: String(b.image).trim(),
-      link: String(b.link || "").trim(),
+      title: String(b.title || "").trim().slice(0, 80),
+      /* image is normally a short /uploads/... or /banners/... path (the
+         upload API returns one) — the clamp keeps a raw multi-MB data URI
+         sent straight at this route from bloating the document */
+      image: String(b.image).trim().slice(0, 500),
+      link: String(b.link || "").trim().slice(0, 500),
       active: b.active === undefined ? true : !!b.active,
       sort: Number(b.sort) || 0,
     });
@@ -377,6 +457,14 @@ router.post("/banners", async (req, res) => {
        client never depends on a slow host (optimizer 504s otherwise) */
     queueBannerCache(banner);
     emitAll("banners:update", { action: "create" });
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: "banner.create",
+      category: "banner",
+      target: String(banner._id),
+      message: "Banner created — " + (banner.title || banner._id),
+    });
     res.json({ success: true, message: "Banner created", banner });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to create banner" });
@@ -388,9 +476,9 @@ router.put("/banners/:id", async (req, res) => {
     const b = req.body || {};
     const banner = await Banner.findById(req.params.id);
     if (!banner) return res.status(404).json({ success: false, message: "Banner not found" });
-    if (b.title !== undefined) banner.title = String(b.title).trim();
+    if (b.title !== undefined) banner.title = String(b.title).trim().slice(0, 80);
     if (b.image !== undefined) {
-      const next = String(b.image).trim();
+      const next = String(b.image).trim().slice(0, 500);
       const prev = banner.image;
       if (next !== prev) {
         /* image changed — the old file must not orphan on the disk */
@@ -402,12 +490,20 @@ router.put("/banners/:id", async (req, res) => {
       if (isRemote(next) && next !== banner.originUrl) banner.originUrl = "";
       banner.image = next;
     }
-    if (b.link !== undefined) banner.link = String(b.link).trim();
+    if (b.link !== undefined) banner.link = String(b.link).trim().slice(0, 500);
     if (b.active !== undefined) banner.active = !!b.active;
     if (b.sort !== undefined) banner.sort = Number(b.sort) || 0;
     await banner.save();
     queueBannerCache(banner);
     emitAll("banners:update", { action: "update" });
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: "banner.update",
+      category: "banner",
+      target: String(banner._id),
+      message: "Banner updated — " + (banner.title || banner._id),
+    });
     res.json({ success: true, message: "Banner updated", banner });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to update banner" });
@@ -423,6 +519,14 @@ router.delete("/banners/:id", async (req, res) => {
     clearBannerFiles(banner._id);
     deleteUpload(banner.image);
     emitAll("banners:update", { action: "delete" });
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: "banner.delete",
+      category: "banner",
+      target: String(banner._id),
+      message: "Banner deleted — " + (banner.title || banner._id),
+    });
     res.json({ success: true, message: "Banner deleted", image: banner.image });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to delete banner" });
@@ -449,6 +553,15 @@ router.put("/commission", async (req, res) => {
     const s = await Setting.findOne({ key: "global" });
     s.commission = { level1: Number(b.level1), level2: Number(b.level2), level3: Number(b.level3) };
     await s.save();
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: "commission.update",
+      category: "settings",
+      target: "commission",
+      message: "Commission rates saved — L1 " + s.commission.level1 + "% / L2 " + s.commission.level2 + "% / L3 " + s.commission.level3 + "%",
+      detail: { commission: s.commission },
+    });
     res.json({ success: true, message: "Commission settings saved", commission: s.commission });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to save commission" });
@@ -496,24 +609,41 @@ router.get("/users/:id/details", async (req, res) => {
       ? await User.find({ refBy: { $in: l2Ids } }).select(TEAM_PROJ).sort({ createdAt: -1 }).lean()
       : [];
 
-    const [invests, deposits, withdrawals, transactions] = await Promise.all([
+    /* display lists (newest 50) + FULL-COLLECTION aggregates for the money
+       stats — the old reduce-over-50-rows silently truncated the totals of
+       any user with more than 50 records */
+    const [invests, deposits, withdrawals, transactions, depAgg, wdAgg, invAgg] = await Promise.all([
       Invest.find({ user: user._id }).sort({ createdAt: -1 }).limit(50).lean(),
       Deposit.find({ user: user._id }).sort({ createdAt: -1 }).limit(50).lean(),
       Withdrawal.find({ user: user._id }).sort({ createdAt: -1 }).limit(50).lean(),
       Transaction.find({ user: user._id }).sort({ createdAt: -1 }).limit(50).lean(),
+      Deposit.aggregate([
+        { $match: { user: user._id, status: "Success" } },
+        { $group: { _id: null, s: { $sum: "$amount" } } },
+      ]),
+      Withdrawal.aggregate([
+        { $match: { user: user._id, status: "Success" } },
+        { $group: { _id: null, s: { $sum: "$amount" } } },
+      ]),
+      Invest.aggregate([
+        { $match: { user: user._id } },
+        {
+          $group: {
+            _id: null,
+            s: { $sum: "$price" },
+            active: { $sum: { $cond: [{ $eq: ["$status", "Active"] }, 1, 0] } },
+          },
+        },
+      ]),
     ]);
 
-    /* quick money stats */
-    const sum = (arr, f) => arr.reduce((s, x) => s + (Number(f(x)) || 0), 0);
+    /* quick money stats — whole-collection truth (aggregations above) */
     const stats = {
-      totalDeposit: sum(deposits.filter((d) => d.status === "Success"), (d) => d.amount),
-      totalWithdraw: sum(
-        withdrawals.filter((w) => w.status !== "Rejected"),
-        (w) => w.amount
-      ),
-      totalInvest: sum(invests, (i) => i.price),
+      totalDeposit: depAgg[0] ? depAgg[0].s : 0,
+      totalWithdraw: wdAgg[0] ? wdAgg[0].s : 0,
+      totalInvest: invAgg[0] ? invAgg[0].s : 0,
       teamCount: l1.length + l2.length + l3.length,
-      activePlans: invests.filter((i) => i.status === "Active").length,
+      activePlans: invAgg[0] ? invAgg[0].active : 0,
     };
 
     res.json({
@@ -540,19 +670,48 @@ router.put("/users/:id", async (req, res) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
+    /* capture before-values — the audit trail records the exact money edit */
+    const before = {
+      phone: user.phone,
+      balance: user.balance,
+      rechargeBalance: user.rechargeBalance,
+      totalIncome: user.totalIncome,
+    };
+    let phoneChanged = false;
+
     if (b.phone !== undefined) {
       const p = String(b.phone).replace(/\D/g, "").replace(/^91/, "").replace(/^0/, "");
       if (!/^[6-9]\d{9}$/.test(p))
         return res.status(400).json({ success: false, message: "Invalid phone number" });
-      user.phone = p;
+      if (p !== user.phone) {
+        user.phone = p;
+        phoneChanged = true;
+      }
     }
-    if (b.name !== undefined) user.name = String(b.name).trim();
-    if (b.userid !== undefined) user.userid = String(b.userid).trim();
-    if (b.refId !== undefined) user.refId = String(b.refId).trim().toUpperCase();
-    if (b.refBy !== undefined) user.refBy = String(b.refBy).trim().toUpperCase();
-    if (b.balance !== undefined) user.balance = Number(b.balance) || 0;
-    if (b.rechargeBalance !== undefined) user.rechargeBalance = Number(b.rechargeBalance) || 0;
-    if (b.totalIncome !== undefined) user.totalIncome = Number(b.totalIncome) || 0;
+    if (b.name !== undefined) user.name = String(b.name).trim().slice(0, 40);
+    if (b.userid !== undefined) user.userid = String(b.userid).trim().slice(0, 20);
+    if (b.refId !== undefined) user.refId = String(b.refId).trim().toUpperCase().slice(0, 20);
+    if (b.refBy !== undefined) user.refBy = String(b.refBy).trim().toUpperCase().slice(0, 20);
+    /* wallet setters — validated (finite, non-negative, capped). The old
+       `Number(x) || 0` silently ZEROED the balance on a typo like "1,000". */
+    if (b.balance !== undefined) {
+      const v = moneyVal(b.balance);
+      if (v === null)
+        return res.status(400).json({ success: false, message: "Invalid balance value" });
+      user.balance = v;
+    }
+    if (b.rechargeBalance !== undefined) {
+      const v = moneyVal(b.rechargeBalance);
+      if (v === null)
+        return res.status(400).json({ success: false, message: "Invalid recharge balance value" });
+      user.rechargeBalance = v;
+    }
+    if (b.totalIncome !== undefined) {
+      const v = moneyVal(b.totalIncome);
+      if (v === null)
+        return res.status(400).json({ success: false, message: "Invalid total income value" });
+      user.totalIncome = v;
+    }
     if (b.status !== undefined && ["Active", "Banned"].includes(b.status)) user.status = b.status;
     if (b.password) {
       if (String(b.password).length < 6)
@@ -565,6 +724,36 @@ router.put("/users/:id", async (req, res) => {
       user.withdrawPassword = await bcrypt.hash(String(b.withdrawPassword), 10);
     }
     await user.save();
+
+    /* phone changed — sync the denormalized copies on the historical rows so
+       search and the realtime wallet pushes keep working for this user */
+    if (phoneChanged) {
+      await Promise.all([
+        Deposit.updateMany({ user: user._id }, { phone: user.phone }),
+        Withdrawal.updateMany({ user: user._id }, { phone: user.phone }),
+        Transaction.updateMany({ user: user._id }, { phone: user.phone }),
+      ]);
+    }
+
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: "user.update",
+      category: "user",
+      target: user.phone,
+      message: "User edited — " + user.phone + (b.password || b.withdrawPassword ? " (password reset)" : ""),
+      detail: {
+        fields: Object.keys(b || {}),
+        moneyEdit: !!(b.balance !== undefined || b.rechargeBalance !== undefined || b.totalIncome !== undefined),
+        before,
+        after: {
+          phone: user.phone,
+          balance: user.balance,
+          rechargeBalance: user.rechargeBalance,
+          totalIncome: user.totalIncome,
+        },
+      },
+    });
     res.json({ success: true, message: "User updated" });
   } catch (e) {
     if (e.code === 11000)
@@ -585,6 +774,14 @@ router.patch("/users/:id/status", async (req, res) => {
       { new: true }
     ).select("-password -withdrawPassword");
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: status === "Banned" ? "user.ban" : "user.unban",
+      category: "user",
+      target: user.phone,
+      message: (status === "Banned" ? "User BANNED — " : "User unbanned — ") + user.phone,
+    });
     res.json({ success: true, message: status === "Banned" ? "User banned" : "User unbanned", user });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to update status" });
@@ -607,6 +804,14 @@ router.post("/users/:id/onelogin", async (req, res) => {
       code,
       user: user._id,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: "user.onelogin",
+      category: "user",
+      target: user.phone,
+      message: "One-click login issued for " + user.phone,
     });
     res.json({ success: true, code, phone: user.phone, userid: user.userid });
   } catch (e) {
@@ -646,9 +851,15 @@ router.get("/deposits", async (req, res) => {
 router.post("/deposits", async (req, res) => {
   try {
     const { userId, amount, method, status } = req.body || {};
-    const amt = Number(amount);
-    if (!userId) return res.status(400).json({ success: false, message: "Select a user" });
-    if (!amt || amt <= 0) return res.status(400).json({ success: false, message: "Enter a valid amount" });
+    /* integer rupees only, hard-capped like every other money path — a
+       fat-fingered 1e15 must never mint phantom money into a wallet */
+    const amt = Math.round(Number(amount));
+    if (!userId || !mongoose.isValidObjectId(String(userId)))
+      return res.status(400).json({ success: false, message: "Select a user" });
+    if (!Number.isFinite(amt) || amt <= 0)
+      return res.status(400).json({ success: false, message: "Enter a valid amount" });
+    if (amt > 10000000)
+      return res.status(400).json({ success: false, message: "Amount too large" });
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
@@ -657,7 +868,7 @@ router.post("/deposits", async (req, res) => {
       userid: user.userid || "",
       phone: user.phone,
       amount: amt,
-      method: String(method || "Pay-T"),
+      method: String(method || "Pay-T").trim().slice(0, 30),
       status: status === "Success" ? "Success" : "Pending",
       note: "Added by admin",
     });
@@ -681,6 +892,16 @@ router.post("/deposits", async (req, res) => {
       amount: amt,
       status: deposit.status,
       refId: String(deposit._id),
+    });
+
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: "deposit.manual_add",
+      category: "deposit",
+      target: user.phone,
+      message: "Manual deposit \u20B9" + amt + " for " + user.phone + " (" + deposit.status + ")",
+      detail: { amount: amt, method: deposit.method, status: deposit.status },
     });
 
     res.json({ success: true, message: "Deposit added", deposit });
@@ -719,11 +940,27 @@ router.put("/deposits/:id", async (req, res) => {
         { _id: deposit.user },
         { $inc: { rechargeBalance: deposit.amount, totalRecharge: deposit.amount } }
       );
-    if (status !== "Success" && prev === "Success")
+    if (status !== "Success" && prev === "Success") {
+      /* revoke a credit — floor-checked so an already-spent recharge can
+         never drive the wallet negative. When the funds are gone the whole
+         transition is rolled back and the admin gets a clear error. */
+      const reverted = await debitUser(deposit.user, "rechargeBalance", deposit.amount);
+      if (!reverted) {
+        await Deposit.updateOne(
+          { _id: deposit._id, status },
+          { $set: { status: "Success", processedAt: new Date() } }
+        );
+        return res.status(409).json({
+          success: false,
+          message:
+            "Recharge balance already spent — cannot revoke \u20B9" + deposit.amount + " from this user",
+        });
+      }
       await User.updateOne(
         { _id: deposit.user },
-        { $inc: { rechargeBalance: -deposit.amount, totalRecharge: -deposit.amount } }
+        { $inc: { totalRecharge: -deposit.amount } }
       );
+    }
 
     /* keep the ledger entry in sync */
     await Transaction.updateMany({ refId: String(deposit._id) }, { status });
@@ -732,6 +969,18 @@ router.put("/deposits/:id", async (req, res) => {
     emitToUser(deposit.phone, "wallet:refresh", { reason: "deposit", status });
     /* pages push — /records, /transaction, /card reload their lists live */
     emitToUser(deposit.phone, "activity:update", { type: "recharge", status });
+
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: status === "Success" ? "deposit.approve" : "deposit." + String(status).toLowerCase(),
+      category: "deposit",
+      target: deposit.phone,
+      message:
+        "Deposit \u20B9" + deposit.amount + " for " + deposit.phone + " → " + status +
+        (status === "Success" ? " (balance credited)" : ""),
+      detail: { depositId: String(deposit._id), amount: deposit.amount, from: prev, to: status },
+    });
 
     const fresh = await Deposit.findById(deposit._id).lean();
     res.json({ success: true, message: "Deposit " + status.toLowerCase(), deposit: fresh });
@@ -756,7 +1005,17 @@ router.get("/withdrawals", async (req, res) => {
   }
 });
 
-/* Status change — refund the balance on Reject (atomic claim — race-safe) */
+/* Status change — refund the balance on Reject (atomic claim — race-safe).
+   LEGAL TRANSITIONS ONLY — Success is terminal (the money already left for
+   the bank; flipping it to Rejected would refund money the user received
+   twice), and Success → Pending would re-arm a second payout. */
+const ALLOWED_WD_TRANSITIONS = {
+  Pending: ["Processing", "Success", "Rejected"],
+  Processing: ["Success", "Rejected"],
+  Success: [], /* terminal */
+  Rejected: ["Pending"], /* re-open only (reverses the refund) */
+};
+
 router.put("/withdrawals/:id", async (req, res) => {
   try {
     const { status, note } = req.body || {};
@@ -766,6 +1025,13 @@ router.put("/withdrawals/:id", async (req, res) => {
     if (!wd) return res.status(404).json({ success: false, message: "Withdrawal not found" });
     if (wd.status === status)
       return res.json({ success: true, message: "No change", withdrawal: wd });
+    if (!(ALLOWED_WD_TRANSITIONS[wd.status] || []).includes(status))
+      return res.status(400).json({
+        success: false,
+        message:
+          "Illegal status change — this withdrawal is already " + wd.status +
+          (wd.status === "Success" ? " (payout already sent)" : ""),
+      });
 
     const prev = wd.status;
 
@@ -777,7 +1043,7 @@ router.put("/withdrawals/:id", async (req, res) => {
       {
         $set: {
           status,
-          note: note !== undefined ? String(note) : wd.note,
+          note: note !== undefined ? String(note).slice(0, 200) : wd.note,
           processedAt: new Date(),
         },
       }
@@ -791,9 +1057,22 @@ router.put("/withdrawals/:id", async (req, res) => {
     /* Reject → return the user's balance (refund from hold) */
     if (status === "Rejected" && prev !== "Rejected")
       await User.updateOne({ _id: wd.user }, { $inc: { balance: wd.amount } });
-    /* Was Rejected and moved back to Processing/Success → revoke the refund */
-    if (status !== "Rejected" && prev === "Rejected")
-      await User.updateOne({ _id: wd.user }, { $inc: { balance: -wd.amount } });
+    /* Was Rejected and moved back to Pending → revoke the refund, but never
+       below zero — if the user already spent it, roll the transition back */
+    if (status !== "Rejected" && prev === "Rejected") {
+      const reverted = await debitUser(wd.user, "balance", wd.amount);
+      if (!reverted) {
+        await Withdrawal.updateOne(
+          { _id: wd._id, status },
+          { $set: { status: "Rejected", processedAt: new Date() } }
+        );
+        return res.status(409).json({
+          success: false,
+          message:
+            "Refund already spent — \u20B9" + wd.amount + " cannot be debited from this user's balance",
+        });
+      }
+    }
 
     /* keep the ledger entry in sync */
     await Transaction.updateMany({ refId: String(wd._id) }, { status });
@@ -802,6 +1081,18 @@ router.put("/withdrawals/:id", async (req, res) => {
     emitToUser(wd.phone, "wallet:refresh", { reason: "withdraw", status });
     /* pages push — /records, /transaction, /withdrawal reload live */
     emitToUser(wd.phone, "activity:update", { type: "withdraw", status });
+
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: "withdraw." + String(status).toLowerCase(),
+      category: "withdraw",
+      target: wd.phone,
+      message:
+        "Withdrawal \u20B9" + wd.amount + " for " + wd.phone + " → " + status +
+        (status === "Rejected" && prev !== "Rejected" ? " (\u20B9" + wd.amount + " refunded)" : ""),
+      detail: { withdrawalId: String(wd._id), amount: wd.amount, from: prev, to: status },
+    });
 
     const fresh = await Withdrawal.findById(wd._id).lean();
     res.json({ success: true, message: "Withdrawal " + status.toLowerCase(), withdrawal: fresh });
@@ -878,6 +1169,31 @@ router.post("/withdrawals/:id/auto-pay", async (req, res) => {
       ? "WD" + wd._id + "X" + Date.now().toString(36)
       : "WD" + wd._id;
 
+    /* ATOMIC CLAIM BEFORE the gateway call — flips Pending/Processing →
+       Processing with the new payoutOrderId in one update. Two concurrent
+       auto-pay invocations (double-tap, two admins) can never both win, so
+       only ONE real payout order is ever submitted to the gateway. The
+       gateway cannot dedupe the retry-suffixed ids — this claim is the
+       only thing standing between a double-tap and a double bank payment. */
+    const claim = await Withdrawal.updateOne(
+      { _id: wd._id, status: { $in: ["Pending", "Processing"] } },
+      {
+        $set: {
+          status: "Processing",
+          autoPayout: true,
+          gateway: entry.id,
+          payoutOrderId,
+          processedAt: new Date(),
+          note: "Auto payout via " + entry.label + " — submitting",
+        },
+      }
+    );
+    if (claim.modifiedCount === 0)
+      return res.status(409).json({
+        success: false,
+        message: "Withdrawal was just updated — reload and try again",
+      });
+
     const r = await entry.createPayoutOrder(cfg, {
       amount: net,
       orderId: payoutOrderId,
@@ -890,23 +1206,46 @@ router.post("/withdrawals/:id/auto-pay", async (req, res) => {
     });
 
     if (!r.ok) {
-      /* 403 = server IP not whitelisted in the merchant dashboard — the most
-         common setup mistake, so surface a targeted hint */
+      /* REVERT the claim — back to Pending so the admin can retry. The
+         revert is guarded by payoutOrderId: if a webhook settled the order
+         meanwhile (impossible for a failed create, but safe anyway) it
+         never overwrites a terminal state. */
       const msg =
         r.code === 403
           ? "Gateway rejected the payout — add this server's IP to the whitelist in the " + entry.label + " dashboard"
           : r.message;
+      await Withdrawal.updateOne(
+        { _id: wd._id, status: "Processing", payoutOrderId },
+        {
+          $set: {
+            status: "Pending",
+            autoPayout: false,
+            gateway: "",
+            payoutOrderId: "",
+            processedAt: new Date(),
+            note: "Auto payout failed — " + msg,
+          },
+        }
+      );
       return res.status(502).json({ success: false, message: msg });
     }
 
-    wd.autoPayout = true;
-    wd.gateway = entry.id;
-    wd.payoutOrderId = payoutOrderId;
-    wd.gatewayOrderId = String(r.data.qwack_order_id || "");
-    if (wd.status === "Pending") wd.status = "Processing";
-    wd.note = "Auto payout via " + entry.label + (r.data.fee != null ? " (fee \u20B9" + r.data.fee + ")" : "");
-    wd.processedAt = new Date();
-    await wd.save();
+    /* gateway accepted — finalize with a GUARDED update (never a stale
+       full-document save(): if the webhook settled the order while
+       createPayoutOrder was in flight, this update no-ops instead of
+       resurrecting a settled/rejected record) */
+    const feeNote =
+      r.data.fee != null ? " (fee \u20B9" + r.data.fee + ")" : "";
+    await Withdrawal.updateOne(
+      { _id: wd._id, status: "Processing", payoutOrderId },
+      {
+        $set: {
+          gatewayOrderId: String(r.data.qwack_order_id || ""),
+          note: "Auto payout via " + entry.label + feeNote,
+          processedAt: new Date(),
+        },
+      }
+    );
 
     /* keep the ledger in sync — Pending entry now shows Processing */
     await Transaction.updateMany(
@@ -923,10 +1262,20 @@ router.post("/withdrawals/:id/auto-pay", async (req, res) => {
         "Auto payout initiated — \u20B9" + net + " to " + wd.phone + " via " + entry.label,
     });
 
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: "withdraw.auto_payout",
+      category: "gateway",
+      target: wd.phone,
+      message: "Auto payout \u20B9" + net + " via " + entry.label + " for " + wd.phone,
+      detail: { withdrawalId: String(wd._id), gateway: entry.id, payoutOrderId },
+    });
+
     res.json({
       success: true,
       message: "Auto payout submitted via " + entry.label + " — \u20B9" + net + " is being sent to the bank account",
-      withdrawal: wd,
+      withdrawal: await Withdrawal.findById(wd._id).lean(),
     });
   } catch (e) {
     console.error("auto-pay error:", e.message);
@@ -965,7 +1314,7 @@ router.post("/withdrawals/:id/payout-status", async (req, res) => {
 
     const g = String((r.data && r.data.status) || "").toLowerCase();
     if (g === "success" || g === "completed" || g === "paid") {
-      await Withdrawal.updateOne(
+      const settle = await Withdrawal.updateOne(
         { _id: wd._id, status: { $in: ["Pending", "Processing"] } },
         {
           $set: {
@@ -981,6 +1330,16 @@ router.post("/withdrawals/:id/payout-status", async (req, res) => {
       );
       emitToUser(wd.phone, "wallet:refresh", { reason: "withdraw", status: "Success" });
       emitToUser(wd.phone, "activity:update", { type: "withdraw", status: "Success" });
+      /* audit — gateway reconciliation moved real money; the trail must show it */
+      audit.log(req, {
+        actorType: "admin",
+        actor: { id: req.admin._id, label: req.admin.username },
+        action: "withdraw.payout_settled",
+        category: "withdraw",
+        target: wd.phone,
+        message: "Payout settled via gateway query — \u20B9" + wd.amount + " for " + wd.phone,
+        detail: { withdrawalId: String(wd._id), gatewayStatus: g, via: "payout-status" },
+      });
     } else if (g === "failed" || g === "rejected" || g === "cancelled") {
       /* atomic claim + guarded refund — the balance is returned ONLY when this
          call actually won the Pending/Processing → Rejected transition. A
@@ -995,8 +1354,18 @@ router.post("/withdrawals/:id/payout-status", async (req, res) => {
           },
         }
       );
-      if (claim.modifiedCount === 1)
+      if (claim.modifiedCount === 1) {
         await User.updateOne({ _id: wd.user }, { $inc: { balance: wd.amount } });
+        audit.log(req, {
+          actorType: "admin",
+          actor: { id: req.admin._id, label: req.admin.username },
+          action: "withdraw.payout_rejected",
+          category: "withdraw",
+          target: wd.phone,
+          message: "Payout failed at gateway — \u20B9" + wd.amount + " refunded to " + wd.phone,
+          detail: { withdrawalId: String(wd._id), gatewayStatus: g, via: "payout-status" },
+        });
+      }
       await Transaction.updateMany(
         { refId: String(wd._id), status: { $ne: "Rejected" } },
         { $set: { status: "Rejected" } }
@@ -1113,6 +1482,16 @@ router.post("/qwackpay/query-order", adminAuth, async (req, res) => {
         amount: paidAmount,
       });
       settled = credited ? "deposit-credited" : "already-settled";
+      if (credited)
+        audit.log(req, {
+          actorType: "admin",
+          actor: { id: req.admin._id, label: req.admin.username },
+          action: "gateway.order_credited",
+          category: "gateway",
+          target: deposit.phone,
+          message: "Payin \u20B9" + (paidAmount || deposit.amount) + " credited via order query for " + deposit.phone,
+          detail: { depositId: String(deposit._id), gatewayStatus: g, via: "query-order" },
+        });
     } else if (deposit && isFailed && deposit.status === "Pending") {
       await Deposit.updateOne(
         { _id: deposit._id, status: "Pending" },
@@ -1147,6 +1526,15 @@ router.post("/qwackpay/query-order", adminAuth, async (req, res) => {
       );
       emitToUser(wd.phone, "wallet:refresh", { reason: "withdraw", status: "Success" });
       emitToUser(wd.phone, "activity:update", { type: "withdraw", status: "Success" });
+      audit.log(req, {
+        actorType: "admin",
+        actor: { id: req.admin._id, label: req.admin.username },
+        action: "withdraw.payout_settled",
+        category: "withdraw",
+        target: wd.phone,
+        message: "Payout settled via order query — \u20B9" + wd.amount + " for " + wd.phone,
+        detail: { withdrawalId: String(wd._id), gatewayStatus: g, via: "query-order" },
+      });
       settled = "withdrawal-success";
     } else if (wd && isFailed && ["Pending", "Processing"].includes(wd.status)) {
       /* atomic claim + guarded refund (same rule as the payout webhook) */
@@ -1160,8 +1548,18 @@ router.post("/qwackpay/query-order", adminAuth, async (req, res) => {
           },
         }
       );
-      if (claim.modifiedCount === 1)
+      if (claim.modifiedCount === 1) {
         await User.updateOne({ _id: wd.user }, { $inc: { balance: wd.amount } });
+        audit.log(req, {
+          actorType: "admin",
+          actor: { id: req.admin._id, label: req.admin.username },
+          action: "withdraw.payout_rejected",
+          category: "withdraw",
+          target: wd.phone,
+          message: "Payout failed at gateway — \u20B9" + wd.amount + " refunded to " + wd.phone,
+          detail: { withdrawalId: String(wd._id), gatewayStatus: g, via: "query-order" },
+        });
+      }
       await Transaction.updateMany(
         { refId: String(wd._id), status: { $ne: "Rejected" } },
         { $set: { status: "Rejected" } }
@@ -1229,6 +1627,19 @@ router.post("/qwackpay/test", adminAuth, async (req, res) => {
   }
 });
 
+/* API keys never belong in a browser-readable response — the GET/PUT
+   settings payloads mask them (•••• + last4). The PUT handler below treats
+   any value containing the bullet char as "unchanged" so a round-tripped
+   mask never overwrites the real key. */
+const maskKey = (k) => (k ? "••••" + String(k).slice(-4) : "");
+const maskSettingsKeys = (s) => {
+  if (!s) return s;
+  const doc = JSON.parse(JSON.stringify(s));
+  if (doc.qwackpay) doc.qwackpay.apiKey = maskKey(doc.qwackpay.apiKey);
+  if (doc.okpay) doc.okpay.apiKey = maskKey(doc.okpay.apiKey);
+  return doc;
+};
+
 router.get("/settings", async (req, res) => {
   const s = await Setting.findOne({ key: "global" }).lean();
   /* Public URLs auto-detected from THIS request's proxy chain — the admin UI
@@ -1238,7 +1649,7 @@ router.get("/settings", async (req, res) => {
   const saved = (s && s.publicUrls) || {};
   res.json({
     success: true,
-    settings: s || { commission: {}, site: {} },
+    settings: s ? maskSettingsKeys(s) : { commission: {}, site: {} },
     detectedUrls: detected,
     effectiveUrls: {
       backendUrl: saved.backendUrl || detected.backendUrl || "",
@@ -1263,7 +1674,8 @@ router.put("/settings", async (req, res) => {
       "downloadUrl",
       "supportUrl",
     ];
-    for (const f of siteFields) if (b.site && b.site[f] !== undefined) s.site[f] = String(b.site[f]);
+    for (const f of siteFields)
+      if (b.site && b.site[f] !== undefined) s.site[f] = String(b.site[f]).slice(0, 500);
     if (b.site && b.site.minRecharge !== undefined)
       s.site.minRecharge = Math.max(0, Number(b.site.minRecharge) || 0);
     if (b.site && b.site.minWithdraw !== undefined)
@@ -1437,9 +1849,10 @@ router.put("/settings", async (req, res) => {
         s.qwackpay.displayName = String(q.displayName).trim().slice(0, 40) || "QwackPay";
       if (q.merchantId !== undefined)
         s.qwackpay.merchantId = String(q.merchantId).trim().slice(0, 40);
-      /* the API key (docking key) — stored verbatim so the admin can change it
-         anytime; it is never exposed on any public route */
-      if (q.apiKey !== undefined)
+      /* the API key (docking key) — stored verbatim when a new key is typed;
+         a round-tripped masked value (contains •) means UNCHANGED, so a
+         settings save from the panel can never overwrite the real key */
+      if (q.apiKey !== undefined && !String(q.apiKey).includes("\u2022"))
         s.qwackpay.apiKey = String(q.apiKey).trim().slice(0, 120);
       if (q.baseUrl !== undefined) {
         const base = String(q.baseUrl).trim().slice(0, 200);
@@ -1462,7 +1875,8 @@ router.put("/settings", async (req, res) => {
         s.okpay.displayName = String(q.displayName).trim().slice(0, 40) || "OKPay";
       if (q.mchId !== undefined)
         s.okpay.mchId = String(q.mchId).trim().slice(0, 40);
-      if (q.apiKey !== undefined)
+      /* same masked-value rule as the QwackPay key above */
+      if (q.apiKey !== undefined && !String(q.apiKey).includes("\u2022"))
         s.okpay.apiKey = String(q.apiKey).trim().slice(0, 120);
       if (q.baseUrl !== undefined) {
         const base = String(q.baseUrl).trim().slice(0, 200);
@@ -1520,9 +1934,66 @@ router.put("/settings", async (req, res) => {
     /* every settings save → client pages refetch (recharge UPI/QR, withdraw
        limits, popup text…) live without a manual refresh */
     emitAll("settings:update", { sections: Object.keys(b || {}) });
-    res.json({ success: true, message: "Settings saved", settings: s });
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: req.admin._id, label: req.admin.username },
+      action: "settings.update",
+      category: "settings",
+      target: Object.keys(b || {}).join(",").slice(0, 120),
+      message: "Settings saved — sections: " + Object.keys(b || {}).join(", "),
+      detail: { sections: Object.keys(b || {}) },
+    });
+    res.json({ success: true, message: "Settings saved", settings: maskSettingsKeys(s.toObject ? s.toObject() : s) });
   } catch (e) {
     res.status(500).json({ success: false, message: "Failed to save settings" });
+  }
+});
+
+/* ==================================================
+   AUDIT LOG (activity trail)
+================================================== */
+/* Paginated audit trail for the Admin → Audit Log page.
+   Filters: category, actorType, search (matches message/target/actorLabel/
+   action), plus page/limit. Newest first. Read-only — the trail is never
+   editable or deletable from the app. */
+router.get("/audit", async (req, res) => {
+  try {
+    const AuditLog = require("../models/AuditLog");
+    const q = {};
+    if (req.query.category && req.query.category !== "All")
+      q.category = String(req.query.category);
+    if (req.query.actorType && req.query.actorType !== "All")
+      q.actorType = String(req.query.actorType);
+    const search = searchQuery(req.query.search, [
+      "message",
+      "target",
+      "actorLabel",
+      "action",
+    ]);
+    const filter = { ...q, ...search };
+
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+    const page = Math.max(1, Number(req.query.page) || 1);
+
+    const [logs, total] = await Promise.all([
+      AuditLog.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      AuditLog.countDocuments(filter),
+    ]);
+
+    res.json({
+      success: true,
+      logs,
+      total,
+      page,
+      pages: Math.max(1, Math.ceil(total / limit)),
+    });
+  } catch (e) {
+    console.error("audit list error:", e.message);
+    res.status(500).json({ success: false, message: "Failed to load audit log" });
   }
 });
 

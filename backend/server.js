@@ -9,6 +9,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const { live } = require("./live");
+const { authRateLimit, moneyRateLimit } = require("./middleware/rateLimit");
 const authRoutes = require("./routes/auth");
 const adminAuthRoutes = require("./routes/adminAuth");
 const adminRoutes = require("./routes/admin");
@@ -31,6 +32,16 @@ const app = express();
    reflect the PUBLIC origin the browser used — this is what gateway
    webhook notify_url and the payment return_url are built from. */
 app.set("trust proxy", true);
+
+/* Security hardening — hide the framework banner, stop MIME sniffing,
+   never leak referrer URLs to third-party hosts. Cheap no-op headers,
+   applied to every response before any route runs. */
+app.disable("x-powered-by");
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  next();
+});
 
 /* ============ SOCKET.IO (realtime updates) ============
    Client/admin connect through the Next.js rewrite proxy
@@ -98,8 +109,8 @@ app.use(express.static(path.join(__dirname, "public")));
 // Health check
 app.get("/api/health", (req, res) => res.json({ ok: true, service: "zapto-api" }));
 
-// Auth routes
-app.use("/api/auth", authRoutes);
+// Auth routes — rate-limited (per-IP burst + per-phone brute-force lock)
+app.use("/api/auth", authRateLimit, authRoutes);
 
 // Admin auth (login)
 app.use("/api/admin/auth", adminAuthRoutes);
@@ -112,6 +123,9 @@ app.use("/api", publicRoutes);
 app.use("/api", walletRoutes);
 
 // QwackPay auto-gateway (create order / webhook notify / status poll)
+// NOTE: no limiter at mount level — the webhook notify routes are
+// unauthenticated and must stay reachable for gateway retries. The
+// authenticated create/status routes apply moneyRateLimit individually.
 app.use("/api/payments", paymentsRoutes);
 
 // 404 fallback for unknown api routes

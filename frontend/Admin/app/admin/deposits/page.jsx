@@ -13,6 +13,7 @@ import {
   Confirm,
   Loader,
   Toast,
+  Pagination,
   useToast,
 } from "../../../components/ui";
 
@@ -21,6 +22,8 @@ const TABS = ["All", "Pending", "Success", "Rejected"];
 export default function DepositsPage() {
   const [deposits, setDeposits] = useState(null);
   const [tab, setTab] = useState("All");
+  const [page, setPage] = useState(0);
+  const PER = 20;
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [addModal, setAddModal] = useState(false);
@@ -76,6 +79,14 @@ export default function DepositsPage() {
     counts[t] = (deposits || []).filter((d) => d.status === t).length;
 
   const filtered = (deposits || []).filter((d) => tab === "All" || d.status === tab);
+  const pages = Math.max(1, Math.ceil(filtered.length / PER));
+  const safePage = Math.min(page, pages - 1);
+  const rows = filtered.slice(safePage * PER, safePage * PER + PER);
+
+  const switchTab = (t) => {
+    setTab(t);
+    setPage(0); /* fresh filter — back to the first page */
+  };
 
   const openAdd = () => {
     setPicked(null);
@@ -136,10 +147,10 @@ export default function DepositsPage() {
 
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex min-w-[200px] flex-1 items-center gap-2.5 rounded-xl border border-line-rose bg-white px-3.5 py-2.5 sm:max-w-[320px]">
-          <Search size={16} className="shrink-0 text-icon-rose" />
+        <div className="flex min-w-[200px] flex-1 items-center gap-2.5 rounded-xl border border-line bg-white px-3.5 py-2.5 sm:max-w-[320px]">
+          <Search size={16} className="shrink-0 text-icon" />
           <input
-            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[16px] font-medium text-ink outline-none placeholder:text-[#c4a9b0] sm:text-[13.5px]"
+            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[16px] font-medium text-ink outline-none placeholder:text-muted sm:text-[13.5px]"
             placeholder="Search phone / userid..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -174,17 +185,17 @@ export default function DepositsPage() {
           <button
             key={t}
             type="button"
-            onClick={() => setTab(t)}
+            onClick={() => switchTab(t)}
             className={`flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[12.5px] font-extrabold transition-all duration-150 ${
               tab === t
-                ? "bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white shadow-[0_6px_16px_rgba(124,29,51,0.3)]"
-                : "border border-line-rose bg-white text-[#7d6a6e] hover:bg-[#fbf1f3]"
+                ? "brand-grad text-white shadow-[0_6px_16px_var(--s-btn,rgba(79,70,229,0.3))]"
+                : "border border-line bg-white text-[#475569] hover:bg-[var(--color-tint2)]"
             }`}
           >
             {t}
             <span
               className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold ${
-                tab === t ? "bg-white/20 text-white" : "bg-[#f7e3e7] text-maroon-700"
+                tab === t ? "bg-white/20 text-white" : "bg-[var(--color-tint2)] text-brand-700"
               }`}
             >
               {counts[t] || 0}
@@ -199,7 +210,7 @@ export default function DepositsPage() {
         <>
         {/* MOBILE — compact card list (table hidden below sm) */}
         <div className="flex flex-col gap-2.5 sm:hidden">
-          {filtered.map((d) => (
+          {rows.map((d) => (
             <div key={d._id} className="admin-card p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="min-w-0 truncate text-[13.5px] font-extrabold text-ink">
@@ -208,19 +219,19 @@ export default function DepositsPage() {
                 <Pill value={d.status} />
               </div>
               <div className="mt-2 flex items-end justify-between gap-2">
-                <div className="font-display text-[17px] font-extrabold leading-none text-maroon-700">
+                <div className="font-display text-[17px] font-extrabold leading-none text-brand-700">
                   {fmt0(d.amount)}
                 </div>
-                <div className="shrink-0 text-[10.5px] font-medium text-muted-rose">
+                <div className="shrink-0 text-[10.5px] font-medium text-muted">
                   {fmtD(d.createdAt)}
                 </div>
               </div>
-              <div className="mt-1.5 text-[11.5px] font-semibold text-[#7d6a6e]">
+              <div className="mt-1.5 text-[11.5px] font-semibold text-[#475569]">
                 {d.userid || "—"}
                 {d.method ? " · " + d.method : ""}
               </div>
               {d.status === "Pending" ? (
-                <div className="mt-2.5 flex gap-1.5 border-t border-line-rose/60 pt-2.5">
+                <div className="mt-2.5 flex gap-1.5 border-t border-line/60 pt-2.5">
                   <button
                     type="button"
                     onClick={() => setConfirm({ deposit: d, action: "Success" })}
@@ -239,14 +250,14 @@ export default function DepositsPage() {
                   </button>
                 </div>
               ) : (
-                <div className="mt-2.5 border-t border-line-rose/60 pt-2 text-[11.5px] font-semibold text-muted-rose">
+                <div className="mt-2.5 border-t border-line/60 pt-2 text-[11.5px] font-semibold text-muted">
                   {d.processedAt ? "Processed " + fmtD(d.processedAt) : "—"}
                 </div>
               )}
             </div>
           ))}
           {filtered.length === 0 && (
-            <div className="admin-card py-8 text-center text-[13px] font-medium text-muted-rose">
+            <div className="admin-card py-8 text-center text-[13px] font-medium text-muted">
               No deposits found
             </div>
           )}
@@ -268,12 +279,12 @@ export default function DepositsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((d) => (
+                {rows.map((d) => (
                   <tr key={d._id}>
-                    <td className="whitespace-nowrap font-medium text-[#7d6a6e]">{fmtD(d.createdAt)}</td>
+                    <td className="whitespace-nowrap font-medium text-[#475569]">{fmtD(d.createdAt)}</td>
                     <td className="whitespace-nowrap font-bold text-ink">+91 {d.phone}</td>
-                    <td className="font-semibold text-[#7d6a6e]">{d.userid || "—"}</td>
-                    <td className="font-extrabold text-maroon-700">{fmt0(d.amount)}</td>
+                    <td className="font-semibold text-[#475569]">{d.userid || "—"}</td>
+                    <td className="font-extrabold text-brand-700">{fmt0(d.amount)}</td>
                     <td className="font-semibold text-ink">{d.method}</td>
                     <td>
                       <Pill value={d.status} />
@@ -300,7 +311,7 @@ export default function DepositsPage() {
                             </button>
                           </>
                         ) : (
-                          <span className="text-[12px] font-semibold text-muted-rose">
+                          <span className="text-[12px] font-semibold text-muted">
                             {d.processedAt ? "Processed " + fmtD(d.processedAt) : "—"}
                           </span>
                         )}
@@ -310,7 +321,7 @@ export default function DepositsPage() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-10 text-center text-[13.5px] font-medium text-muted-rose">
+                    <td colSpan={7} className="py-10 text-center text-[13.5px] font-medium text-muted">
                       No deposits found
                     </td>
                   </tr>
@@ -319,6 +330,9 @@ export default function DepositsPage() {
             </table>
           </div>
         </div>
+
+        {/* PAGINATION */}
+        <Pagination page={safePage} pages={pages} onPage={setPage} total={filtered.length} />
         </>
       )}
 
@@ -342,17 +356,17 @@ export default function DepositsPage() {
         <div className="flex flex-col gap-4">
           <Field label="Select User" hint="Search by phone / userid / referral ID">
             {picked ? (
-              <div className="flex items-center justify-between rounded-xl border border-maroon-600/40 bg-[#fbf1f3] px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl border border-brand-600/40 bg-[var(--color-tint2)] px-4 py-3">
                 <div>
                   <div className="whitespace-nowrap text-[14px] font-bold text-ink">+91 {picked.phone}</div>
-                  <div className="text-[11.5px] font-semibold text-muted-rose">
+                  <div className="text-[11.5px] font-semibold text-muted">
                     {picked.userid || "No ID"} · Bal {fmt0(picked.rechargeBalance)}
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setPicked(null)}
-                  className="cursor-pointer text-[12px] font-extrabold text-maroon-700 hover:underline"
+                  className="cursor-pointer text-[12px] font-extrabold text-brand-700 hover:underline"
                 >
                   Change
                 </button>
@@ -365,7 +379,7 @@ export default function DepositsPage() {
                   placeholder="Search user..."
                 />
                 {userResults.length > 0 && (
-                  <div className="mt-2 overflow-hidden rounded-xl border border-line-rose">
+                  <div className="mt-2 overflow-hidden rounded-xl border border-line">
                     {userResults.map((u) => (
                       <button
                         key={u._id}
@@ -375,10 +389,10 @@ export default function DepositsPage() {
                           setUserResults([]);
                           setUserSearch("");
                         }}
-                        className="flex w-full cursor-pointer items-center justify-between border-b border-line-rose/60 bg-white px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-[#fbf1f3]"
+                        className="flex w-full cursor-pointer items-center justify-between border-b border-line/60 bg-white px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-[var(--color-tint2)]"
                       >
                         <span className="whitespace-nowrap text-[13.5px] font-bold text-ink">+91 {u.phone}</span>
-                        <span className="text-[11.5px] font-semibold text-muted-rose">
+                        <span className="text-[11.5px] font-semibold text-muted">
                           {u.userid || ""} {u.name ? "· " + u.name : ""}
                         </span>
                       </button>

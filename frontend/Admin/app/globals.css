@@ -1,24 +1,38 @@
 @import "tailwindcss";
 
 /* ==========================================
-   Master Admin — Maroon Gold Theme
+   Master Admin — Dynamic Theme
+   Default: modern indigo/violet SaaS look.
+   At runtime the theme engine (theme-engine.js,
+   inlined by layout.jsx) overrides these same
+   tokens with the client website's Font & Color
+   theme — so the admin panel always mirrors the
+   client. Default values below are the fallback
+   paint for the brief moment before the engine
+   runs.
    ========================================== */
 
 @theme {
-  /* Maroon scale */
-  --color-maroon-950: #42091a;
-  --color-maroon-900: #571224;
-  --color-maroon-800: #6b1830;
-  --color-maroon-700: #7c1d33; /* primary */
-  --color-maroon-600: #93293f;
-  --color-maroon-500: #a63b54;
+  /* Brand scale (indigo fallback) */
+  --color-brand-950: #171632;
+  --color-brand-900: #1e1b4b;
+  --color-brand-800: #312e81;
+  --color-brand-700: #4f46e5; /* primary */
+  --color-brand-600: #6366f1;
+  --color-brand-500: #818cf8;
 
-  /* Warm neutrals + accent */
-  --color-line-rose: #ecd6db;
-  --color-ink: #3d2229;
-  --color-muted-rose: #a08a8f;
-  --color-icon-rose: #b27583;
-  --color-gold: #d4a94f;
+  /* Neutrals + accent (slate fallback) */
+  --color-line: #e2e8f0;
+  --color-ink: #0f172a;
+  --color-muted: #94a3b8;
+  --color-icon: #94a3b8;
+  --color-accent: #fbbf24;
+
+  /* Surfaces — page bg, washes, row separators */
+  --color-page: #f1f4fa;
+  --color-tint: #f8fafc;
+  --color-tint2: #eef2ff;
+  --color-row: #f1f5f9;
 
   /* Fonts */
   --font-display: "Playfair Display", Georgia, serif;
@@ -36,7 +50,7 @@ body {
 body {
   font-family: var(--font-body);
   color: var(--color-ink);
-  background: #f6f0f1;
+  background: var(--color-page);
   min-height: 100dvh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -47,7 +61,7 @@ body {
 }
 
 ::selection {
-  background: rgba(124, 29, 51, 0.14);
+  background: color-mix(in srgb, var(--color-brand-700) 14%, transparent);
 }
 
 /* Lining figures — Playfair Display falls back to oldstyle digits in some
@@ -60,7 +74,7 @@ body {
 
 /* Consistent, accessible keyboard focus ring */
 :focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--color-maroon-500) 55%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--color-brand-500) 55%, transparent);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -77,24 +91,24 @@ a,
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 .admin-card:hover {
-  box-shadow: 0 8px 30px rgba(87, 18, 36, 0.1);
+  box-shadow: 0 8px 30px rgba(49, 46, 129, 0.1);
 }
 
-/* Premium scrollbar */
+/* Premium scrollbar — cool slate */
 ::-webkit-scrollbar {
   width: 9px;
   height: 9px;
 }
 ::-webkit-scrollbar-track {
-  background: #f3e6e9;
+  background: #eef2f7;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d9b8c0;
+  background: #cbd5e1;
   border-radius: 99px;
-  border: 2px solid #f3e6e9;
+  border: 2px solid #eef2f7;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #c493a0;
+  background: #94a3b8;
 }
 
 /* Modals / drawers */
@@ -129,8 +143,8 @@ a,
   }
 }
 
-/* Sidebar sidebar nav active shimmer */
-@keyframes gold-pulse {
+/* Accent pulse (kept for future sidebar shimmer effects) */
+@keyframes accent-pulse {
   0%,
   100% {
     opacity: 0.55;
@@ -143,15 +157,15 @@ a,
 /* Shared admin building blocks */
 .admin-card {
   border-radius: 18px;
-  border: 1px solid var(--color-line-rose);
+  border: 1px solid var(--color-line);
   background: #ffffff;
-  box-shadow: 0 4px 24px rgba(87, 18, 36, 0.07);
+  box-shadow: 0 4px 24px rgba(30, 27, 75, 0.07);
 }
 
 .admin-input {
   width: 100%;
   border-radius: 12px;
-  border: 1.5px solid var(--color-line-rose);
+  border: 1.5px solid var(--color-line);
   background: #ffffff;
   padding: 10px 14px;
   font-size: 14px;
@@ -161,11 +175,11 @@ a,
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .admin-input:focus {
-  border-color: var(--color-maroon-500);
-  box-shadow: 0 0 0 3.5px rgba(147, 41, 63, 0.12);
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--color-brand-600) 16%, transparent);
 }
 .admin-input::placeholder {
-  color: #c4a9b0;
+  color: var(--color-muted);
   font-weight: 400;
 }
 
@@ -183,9 +197,14 @@ a,
   white-space: nowrap;
 }
 .admin-btn-primary {
-  background: linear-gradient(135deg, #7c1d33 0%, #93293f 55%, #7c1d33 100%);
+  background: linear-gradient(
+    135deg,
+    var(--color-brand-700) 0%,
+    var(--color-brand-600) 55%,
+    var(--color-brand-700) 100%
+  );
   color: #fff;
-  box-shadow: 0 8px 20px rgba(124, 29, 51, 0.32);
+  box-shadow: 0 8px 20px var(--s-btn, rgba(79, 70, 229, 0.32));
 }
 .admin-btn-primary:hover {
   filter: brightness(1.08);
@@ -195,11 +214,11 @@ a,
 }
 .admin-btn-ghost {
   background: #ffffff;
-  border: 1.5px solid var(--color-line-rose);
-  color: var(--color-maroon-700);
+  border: 1.5px solid var(--color-line);
+  color: var(--color-brand-700);
 }
 .admin-btn-ghost:hover {
-  background: #fbf1f3;
+  background: var(--color-tint2);
 }
 .admin-btn-danger {
   background: #dc2626;
@@ -222,27 +241,109 @@ a,
   font-size: 13.5px;
 }
 .admin-table thead th {
-  background: #fbf3f4;
-  color: #8a6e75;
+  background: var(--color-tint);
+  color: var(--color-muted);
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   text-align: left;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--color-line-rose);
+  border-bottom: 1px solid var(--color-line);
   white-space: nowrap;
 }
 .admin-table tbody td {
   padding: 13px 16px;
-  border-bottom: 1px solid #f7ecef;
+  border-bottom: 1px solid var(--color-row);
   vertical-align: middle;
 }
 .admin-table tbody tr:hover td {
-  background: #fdf9fa;
+  background: var(--color-tint);
 }
 .admin-table tbody tr:last-child td {
   border-bottom: 0;
+}
+
+/* ==========================================
+   DYNAMIC THEME HELPERS
+   Gradient surfaces & chart fills built from the
+   live tokens — they follow the client theme too.
+========================================== */
+
+/* Sidebar (desktop + mobile drawer) */
+.admin-sidebar {
+  background: linear-gradient(
+    180deg,
+    var(--color-brand-950) 0%,
+    var(--color-brand-900) 45%,
+    var(--color-brand-800) 100%
+  );
+}
+
+/* Topbar avatar chip */
+.admin-avatar {
+  background: linear-gradient(135deg, var(--color-brand-700), var(--color-brand-600));
+}
+
+/* Live toast pill */
+.admin-toast {
+  background: linear-gradient(135deg, var(--color-brand-950), var(--color-brand-800));
+  box-shadow: 0 12px 30px var(--s-alert, rgba(30, 27, 75, 0.45));
+}
+
+/* Dashboard hero tile (Payout Liability) */
+.admin-hero {
+  background: linear-gradient(
+    150deg,
+    var(--color-brand-950) 0%,
+    var(--color-brand-800) 60%,
+    var(--color-brand-600) 100%
+  );
+  box-shadow: 0 8px 28px var(--s-alert, rgba(30, 27, 75, 0.35));
+}
+
+/* Login submit button */
+.admin-btn-hero {
+  background: linear-gradient(
+    135deg,
+    var(--color-brand-700) 0%,
+    var(--color-brand-600) 55%,
+    var(--color-brand-700) 100%
+  );
+  box-shadow: 0 14px 30px var(--s-btn, rgba(79, 70, 229, 0.32));
+}
+
+/* Active pagination chip */
+.page-active {
+  background: linear-gradient(135deg, var(--color-brand-700), var(--color-brand-600));
+  box-shadow: 0 4px 12px var(--s-btn, rgba(79, 70, 229, 0.3));
+}
+
+/* Chart bar fills — deposits (brand) vs withdrawals (accent mixed
+   with brand so even a white/near-white accent stays visible) */
+.bar-primary {
+  background: linear-gradient(180deg, var(--color-brand-600) 0%, var(--color-brand-700) 100%);
+}
+.bar-accent {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-accent) 72%, var(--color-brand-700)) 0%,
+    color-mix(in srgb, var(--color-accent) 42%, var(--color-brand-700)) 100%
+  );
+}
+/* New-users chart: hovering a day column flips bars to the accent tone */
+.chart-col:hover .bar-fill {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-accent) 72%, var(--color-brand-700)) 0%,
+    color-mix(in srgb, var(--color-accent) 42%, var(--color-brand-700)) 100%
+  );
+}
+
+/* Accent underline (login logo divider) — visible on light surfaces
+   even when the accent itself is very light */
+.accent-bar {
+  background: color-mix(in srgb, var(--color-accent) 62%, var(--color-brand-700));
 }
 
 /* ==========================================
@@ -280,6 +381,11 @@ a,
   /* Cards: softer radius + lighter shadow on small screens */
   .admin-card {
     border-radius: 13px;
-    box-shadow: 0 2px 14px rgba(87, 18, 36, 0.06);
+    box-shadow: 0 2px 14px rgba(30, 27, 75, 0.06);
   }
+}
+
+/* Generic brand gradient chip (active tabs, step circles, icon tiles) */
+.brand-grad {
+  background: linear-gradient(135deg, var(--color-brand-700), var(--color-brand-600));
 }

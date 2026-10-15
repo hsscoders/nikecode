@@ -20,13 +20,14 @@ import {
   Clock,
   Timer,
   Ban,
+  AlertTriangle,
 } from "lucide-react";
 import logo from "../../public/aramco-logo.png";
 import useLiveWallet from "../components/useLiveWallet";
 import useLive from "../components/useLive";
 import BottomNav from "../components/BottomNav";
 import { useSettings } from "../components/SettingsProvider";
-import { readCache, writeCache } from "../components/liveCache";
+import { readCache, writeCache, logoutUser } from "../components/liveCache";
 
 /* Fallback when the settings API fails — mirrors admin defaults */
 const DEFAULT_WITHDRAW = {
@@ -85,6 +86,38 @@ function CenterAlert({ message }) {
   );
 }
 
+/* ===== BIND BANK TOAST — warning card, slides down from the top.
+   Shown once when the user opens /withdrawal without a bound bank;
+   a spinner counts down to the auto-redirect to /card. ===== */
+function BindToast({ show }) {
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      className={`fixed left-1/2 top-4 z-[90] w-[calc(100%-32px)] max-w-[380px] -translate-x-1/2 transition-all duration-300 ease-out ${
+        show
+          ? "translate-y-0 scale-100 opacity-100"
+          : "pointer-events-none -translate-y-5 scale-95 opacity-0"
+      }`}
+    >
+      <div className="flex items-start gap-3 rounded-2xl border border-[#f3c4c4] bg-white px-4 py-3.5 shadow-[0_16px_40px_rgba(87,18,36,0.25)]">
+        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#fdf1f1]">
+          <AlertTriangle size={18} strokeWidth={2.3} className="text-[#dc2626]" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13.5px] font-extrabold leading-snug text-[#b91c1c]">
+            Please bind bank first
+          </div>
+          <div className="mt-0.5 text-[12px] font-medium leading-snug text-muted-rose">
+            Taking you to bank binding&hellip;
+          </div>
+        </div>
+        <span className="mt-2.5 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#f3c4c4] border-t-[#b3372f]" />
+      </div>
+    </div>
+  );
+}
+
 /* password field with an eye toggle — same as the login page */
 function PasswordField({ value, onChange, show, onToggle }) {
   return (
@@ -130,11 +163,15 @@ export default function WithdrawalPage() {
   const [alertMsg, setAlertMsg] = useState("");
   const [wallet, setWallet] = useState({ balance: 0 });
   const [doneToday, setDoneToday] = useState(0); /* withdrawals already requested today */
+  const [wdSubmitting, setWdSubmitting] = useState(false); /* request in flight */
   useLiveWallet(setWallet); /* realtime — withdrawal approval / refund lands here instantly */
   const [cfg, setCfg] = useState(() =>
     gs && gs.withdraw ? { ...DEFAULT_WITHDRAW, ...gs.withdraw } : DEFAULT_WITHDRAW
   );
   const alertTimer = useRef(null);
+  const bankToastShown = useRef(false); /* page-entry toast + redirect fire only once */
+  const bindRedirectTimer = useRef(null);
+  const [bindToast, setBindToast] = useState(false);
 
   /* token guard + bound card load + wallet balance */
   /* wallet + today-count refresh — used for BOTH the initial load and live pushes */
@@ -150,15 +187,18 @@ export default function WithdrawalPage() {
         if (d.success && d.wallet) {
           setWallet(d.wallet);
           /* bank card from the server — restores the bound card even when the
-             browser storage was cleared (the card lives on the user account) */
+             browser storage was cleared (the card lives on the user account);
+             the session-cache mirror is only for the next paint in THIS tab */
           const b = d.wallet.bank;
           if (b && b.account && b.ifsc) {
             setBankCard(b);
-            try {
-              localStorage.setItem("zapto_bank_card", JSON.stringify(b));
-            } catch (e) {}
-          } else if (!localStorage.getItem("zapto_bank_card")) {
-            router.replace("/card");
+            writeCache("bank", b);
+          } else if (!readCache("bank") && !bankToastShown.current) {
+            /* no bound bank — show the warning toast, then after 1s
+               continue to the bank-binding page automatically */
+            bankToastShown.current = true;
+            setBindToast(true);
+            bindRedirectTimer.current = setTimeout(() => router.push("/card"), 1000);
           }
         }
       } catch (e) {}
@@ -198,14 +238,9 @@ export default function WithdrawalPage() {
       router.replace("/login");
       return;
     }
-    /* bank card — instant from localStorage, then confirmed from the server.
-       No card anywhere → straight to /card until the bank is added. */
-    let saved = null;
-    try {
-      saved = JSON.parse(localStorage.getItem("zapto_bank_card") || "null");
-    } catch {
-      saved = null;
-    }
+    /* bank card — instant from the session cache, then confirmed from the
+       server. No card anywhere → toast + auto-forward to /card. */
+    const saved = readCache("bank");
     if (saved && saved.ifsc && saved.account) setBankCard(saved);
     /* INSTANT — today's withdrawal count from cache (no 0 flash) */
     const ct = readCache("wdToday");
@@ -220,6 +255,9 @@ export default function WithdrawalPage() {
   });
   /* LIVE — admin changed withdraw settings (switch/window/limits/charge) → re-read */
   useLive("settings:update", refreshData);
+
+  /* clear the pending bind-redirect if the page unmounts mid-toast */
+  useEffect(() => () => clearTimeout(bindRedirectTimer.current), []);
 
   const showAlert = (msg) => {
     clearTimeout(alertTimer.current);
@@ -256,22 +294,23 @@ export default function WithdrawalPage() {
     : "Daily withdrawal limit reached (" + dailyLimit + " per day)";
 
   const logout = () => {
-    localStorage.removeItem("zapto_token");
-    localStorage.removeItem("zapto_phone");
+    logoutUser();
     router.replace("/login");
   };
 
   const withdraw = async () => {
+    if (wdSubmitting) return; /* in-flight guard — no double submits */
     const minW = Number(cfg.minAmount) || 0;
     const maxW = Number(cfg.maxAmount) || 0;
     if (wdBlocked) return showAlert(blockReason);
-    if (!bankCard) return showAlert("Bind your bank card first");
+    if (!bankCard) return showAlert("Please bind bank first");
     if (!amount || Number(amount) <= 0) return showAlert("Enter the withdrawal amount");
     if (minW && Number(amount) < minW) return showAlert("Minimum withdrawal is ₹" + minW);
     if (maxW && Number(amount) > maxW) return showAlert("Maximum withdrawal is ₹" + maxW);
     if (!wpass) return showAlert("Enter the withdrawal password");
     /* withdraw request — server validates balance, appears as Pending in the admin panel */
     const token = localStorage.getItem("zapto_token");
+    setWdSubmitting(true);
     try {
       const res = await fetch("/api/withdraw", {
         method: "POST",
@@ -292,21 +331,16 @@ export default function WithdrawalPage() {
       }
       if (data.wallet) setWallet((w) => ({ ...w, ...data.wallet }));
     } catch (e) {
-      /* network fail — only a local txn record (offline demo) */
+      /* network fail — stop here. Recording a local "Pending" row and
+         showing success would lie to the user: the server never received
+         the request and no money left the balance. */
+      showAlert("Network error — please try again");
+      return;
+    } finally {
+      setWdSubmitting(false);
     }
-    /* withdraw txn record — offline fallback only (the server ledger is the
-       source of truth); stores the NET amount like the server does */
-    try {
-      const txns = JSON.parse(localStorage.getItem("zapto_transactions") || "[]");
-      txns.unshift({
-        id: "WD" + String(Date.now()).slice(-8),
-        type: "withdraw",
-        amount: netAmt,
-        at: new Date().toISOString(),
-        status: "Pending",
-      });
-      localStorage.setItem("zapto_transactions", JSON.stringify(txns));
-    } catch (e) {}
+    /* no local ledger copy — the server Transaction row (visible on
+       /transaction and in the admin panel) is the single history */
     showAlert("Withdrawal request submitted!");
     setAmount("");
     setWpass("");
@@ -432,14 +466,14 @@ export default function WithdrawalPage() {
           <button
             type="button"
             onClick={withdraw}
-            disabled={wdBlocked}
+            disabled={wdBlocked || wdSubmitting}
             className={`mt-4 w-full rounded-xl py-[14px] text-center font-display text-[16.5px] font-bold tracking-[0.4px] text-white transition-all duration-150 max-[360px]:py-[13px] ${
-              wdBlocked
+              wdBlocked || wdSubmitting
                 ? "cursor-not-allowed bg-[#c9b8bd] shadow-none"
                 : `cursor-pointer active:scale-[0.98] ${gradientBtn}`
             }`}
           >
-            {wdBlocked ? "Withdrawals Stopped" : "Withdraw"}
+            {wdSubmitting ? "Submitting..." : wdBlocked ? "Withdrawals Stopped" : "Withdraw"}
           </button>
 
           <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] font-medium text-muted-rose">
@@ -517,6 +551,9 @@ export default function WithdrawalPage() {
 
       {/* ===== CENTERED ALERT ===== */}
       <CenterAlert message={alertMsg} />
+
+      {/* ===== BIND BANK WARNING TOAST (auto-redirects to /card) ===== */}
+      <BindToast show={bindToast} />
     </div>
   );
 }

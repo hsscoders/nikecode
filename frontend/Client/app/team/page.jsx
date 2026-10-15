@@ -17,45 +17,20 @@ import {
 import logo from "../../public/aramco-logo.png";
 import teamBanner from "../../public/aramco-team-banner.png";
 import BottomNav from "../components/BottomNav";
-
-/* ================= DEMO DATA (the team API will take over later) ================= */
-
-const LEVEL_MEMBERS = {
-  1: [
-    { phone: "9876543210", date: "12 Sep 2025", recharge: 1100, withdrawal: 250, refs: 2 },
-    { phone: "9123456780", date: "28 Sep 2025", recharge: 600, withdrawal: 0, refs: 0 },
-    { phone: "9988776655", date: "03 Oct 2025", recharge: 2500, withdrawal: 900, refs: 1 },
-  ],
-  2: [
-    { phone: "9090909090", date: "18 Sep 2025", recharge: 600, withdrawal: 100, refs: 1 },
-    { phone: "9812345678", date: "01 Oct 2025", recharge: 1100, withdrawal: 0, refs: 0 },
-  ],
-  3: [],
-};
-
-/* Commission % — matches the invite page levels (25 / 3 / 2) */
-const LEVEL_COMMISSION = { 1: 0.25, 2: 0.03, 3: 0.02 };
-
-/* Derived stats — all calculated from the demo data */
-const lvRecharge = (lv) =>
-  (LEVEL_MEMBERS[lv] || []).reduce((s, m) => s + m.recharge, 0);
-
-const teamSize = Object.values(LEVEL_MEMBERS).reduce((s, l) => s + l.length, 0);
-const teamRecharge = [1, 2, 3].reduce((s, lv) => s + lvRecharge(lv), 0);
-const teamCommission = [1, 2, 3].reduce(
-  (s, lv) => s + lvRecharge(lv) * LEVEL_COMMISSION[lv],
-  0
-);
+import { logoutUser } from "../components/liveCache";
 
 /* ================= HELPERS ================= */
 
 const fmt2 = (n) =>
   "₹ " +
-  Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const maskPhone = (p) => (p && p.length >= 6 ? p.slice(0, 3) + "***" + p.slice(-3) : p);
+  Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const cardShadow = "shadow-[0_4px_24px_rgba(87,18,36,0.08)]";
+
+const fmtMemberDate = (iso) =>
+  iso
+    ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+    : "";
 
 /* ================= SMALL PARTS ================= */
 
@@ -87,14 +62,41 @@ export default function TeamPage() {
   }, []);
   const [level, setLevel] = useState(1);
   const [alertMsg, setAlertMsg] = useState("");
+  const [ready, setReady] = useState(false);
+  const [stats, setStats] = useState({ commission: 0, recharge: 0, members: 0 });
+  const [levels, setLevels] = useState({ 1: [], 2: [], 3: [] });
   const alertTimer = useRef(null);
 
-  /* token guard — /team stays locked without login */
+  /* token guard + REAL team load — the server walks the L1/L2/L3 chain
+     and returns per-member stats; the old demo table showed the same
+     invented members to every user */
   useEffect(() => {
     const token = localStorage.getItem("zapto_token");
     if (!token) {
       router.replace("/login");
+      return;
     }
+    (async () => {
+      try {
+        const r = await fetch("/api/team", {
+          headers: { Authorization: "Bearer " + token },
+        });
+        const d = await r.json();
+        if (r.status === 401) {
+          router.replace("/login");
+          return;
+        }
+        if (d.success) {
+          setStats(d.stats || { commission: 0, recharge: 0, members: 0 });
+          setLevels({
+            1: Array.isArray(d.levels && d.levels[1]) ? d.levels[1] : [],
+            2: Array.isArray(d.levels && d.levels[2]) ? d.levels[2] : [],
+            3: Array.isArray(d.levels && d.levels[3]) ? d.levels[3] : [],
+          });
+        }
+      } catch (e) {}
+      setReady(true);
+    })();
   }, [router]);
 
   const showAlert = (msg) => {
@@ -107,12 +109,13 @@ export default function TeamPage() {
   };
 
   const logout = () => {
-    localStorage.removeItem("zapto_token");
-    localStorage.removeItem("zapto_phone");
+    logoutUser();
     router.replace("/login");
   };
 
-  const members = LEVEL_MEMBERS[level] || [];
+  const lvRecharge = (lv) =>
+    (levels[lv] || []).reduce((s, m) => s + (Number(m.recharge) || 0), 0);
+  const members = levels[level] || [];
 
   return (
     <div className="mx-auto flex min-h-dvh w-full flex-col">
@@ -148,12 +151,12 @@ export default function TeamPage() {
           <div className="absolute inset-0 bg-[linear-gradient(to_top,var(--s-alert)_0%,transparent_60%)]" />
         </div>
 
-        {/* stats — Team Commission / Team Recharge / Team Members */}
+        {/* stats — Team Commission / Team Recharge / Team Members (live from the server) */}
         <div className="mt-3 grid grid-cols-3 gap-2 max-[360px]:gap-1.5">
           {[
-            { lbl: "Team Commission", val: fmt2(teamCommission) },
-            { lbl: "Team Recharge", val: fmt2(teamRecharge) },
-            { lbl: "Team Members", val: String(teamSize) },
+            { lbl: "Team Commission", val: fmt2(stats.commission) },
+            { lbl: "Team Recharge", val: fmt2(stats.recharge) },
+            { lbl: "Team Members", val: String(stats.members) },
           ].map(({ lbl, val }) => (
             <div
               key={lbl}
@@ -232,10 +235,10 @@ export default function TeamPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <div className="truncate text-[14px] font-bold tracking-[-0.2px] text-ink">
-                      {maskPhone(m.phone)}
+                      {m.phone}
                     </div>
                     <span className="shrink-0 rounded-full bg-[var(--c-tint)] px-2.5 py-1 text-[10px] font-bold text-maroon-700">
-                      {m.date}
+                      {fmtMemberDate(m.date)}
                     </span>
                   </div>
 

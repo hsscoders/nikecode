@@ -65,6 +65,13 @@ function TxnRow({ txn }) {
   const isDebit = kind === "withdraw";
   const isCommission = kind === "commission";
   const title = TYPE_LABELS[txn.type] || "Transaction";
+  /* withdraw rows: the ledger stores the NET (what the bank receives) —
+     the actual balance debit is the GROSS (net + charge). Show the gross so
+     "−₹200" matches the ₹200 that really left the wallet. */
+  const gross =
+    isDebit && (Number(txn.charge) || 0) > 0
+      ? (Number(txn.amount) || 0) + (Number(txn.charge) || 0)
+      : Number(txn.amount) || 0;
   return (
     <div
       className={`${card} flex items-center gap-3.5 p-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(87,18,36,0.12)] max-[360px]:p-3`}
@@ -95,7 +102,7 @@ function TxnRow({ txn }) {
             }`}
           >
             {isDebit ? "-" : "+"}
-            {fmt(txn.amount)}
+            {fmt(gross)}
           </span>
         </div>
         <div className="mt-1 flex items-center justify-between gap-2">
@@ -167,12 +174,9 @@ export default function TransactionPage() {
         return;
       }
     } catch (e) {}
-    /* fallback — offline/local records */
-    try {
-      setTxns(JSON.parse(localStorage.getItem("zapto_transactions") || "[]"));
-    } catch {
-      setTxns([]);
-    }
+    /* server unreachable — show nothing rather than fake local rows:
+       the DB ledger is the only truth, there is no offline copy anymore */
+    setTxns([]);
     setReady(true);
   }, []);
 

@@ -20,6 +20,7 @@ import {
   Gift,
   CreditCard,
   FileText,
+  ScrollText,
   LogOut,
   Menu,
   X,
@@ -28,6 +29,7 @@ import {
   Globe,
 } from "lucide-react";
 import { io } from "socket.io-client";
+import { api } from "../lib/api";
 import logo from "../public/admin-logo.png";
 
 const NAV = [
@@ -55,6 +57,7 @@ const NAV = [
   {
     section: "System",
     items: [
+      { label: "Audit Log", href: "/admin/audit", Icon: ScrollText },
       {
         label: "Settings",
         Icon: Settings,
@@ -80,7 +83,46 @@ export default function AdminShell({ title, sub, children }) {
   const [ready, setReady] = useState(false);
   const [openMenus, setOpenMenus] = useState({});
   const [liveMsg, setLiveMsg] = useState("");
+  const [clock, setClock] = useState("");
+  const [pending, setPending] = useState(null); /* pending deposits + withdrawals */
   const liveTimer = useRef(null);
+
+  /* live IST clock in the topbar (business timezone of the platform) */
+  useEffect(() => {
+    const tick = () =>
+      setClock(
+        new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Asia/Kolkata",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).format(new Date())
+      );
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  /* pending approvals count — initial load + every 90s refresh.
+     Realtime bumps come from the txns:new socket handler below. */
+  const loadPending = async () => {
+    try {
+      const d = await api("/api/admin/dashboard");
+      const s = d && d.stats;
+      if (s)
+        setPending(
+          (s.deposits?.Pending?.count || 0) + (s.withdrawals?.Pending?.count || 0)
+        );
+    } catch (e) {}
+  };
+  useEffect(() => {
+    if (!ready) return;
+    loadPending();
+    const t = setInterval(loadPending, 90000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   /* realtime — instant alert when a user submits a recharge / withdrawal */
   useEffect(() => {
@@ -98,6 +140,19 @@ export default function AdminShell({ title, sub, children }) {
         clearTimeout(liveTimer.current);
         setLiveMsg((d && d.message) || "New request");
         liveTimer.current = setTimeout(() => setLiveMsg(""), 5000);
+        /* a fresh deposit / withdrawal request arrived — bump the badge */
+        setPending((p) => (p === null ? null : p + 1));
+      });
+      /* Live theme sync — when the Font & Color theme is saved (by this
+         admin or another session), restyle the whole panel instantly */
+      sock.on("appearance:changed", (a) => {
+        if (!a) return;
+        try {
+          window.ZaptoTheme.applyTheme(a);
+        } catch (e) {}
+        try {
+          localStorage.setItem("zapto_appearance", JSON.stringify(a));
+        } catch (e) {}
       });
     } catch (e) {}
     return () => {
@@ -153,17 +208,17 @@ export default function AdminShell({ title, sub, children }) {
   };
 
   const SidebarBody = (
-    <div className="flex h-full flex-col bg-[linear-gradient(180deg,#42091a_0%,#571224_45%,#6b1830_100%)]">
+    <div className="admin-sidebar flex h-full flex-col">
       {/* LOGO */}
       <div className="flex items-center gap-3 px-5 pb-5 pt-6">
-        <div className="relative h-[42px] w-[42px] shrink-0 overflow-hidden rounded-full ring-2 ring-gold/70">
+        <div className="relative h-[42px] w-[42px] shrink-0 overflow-hidden rounded-full ring-2 ring-accent/70">
           <Image src={logo} alt="Admin logo" fill sizes="42px" className="object-cover" />
         </div>
         <div>
           <div className="font-display text-[19px] font-bold leading-none tracking-[0.5px] text-white">
             Admin Panel
           </div>
-          <div className="mt-1 text-[10px] font-bold uppercase tracking-[1.2px] text-gold">
+          <div className="mt-1 text-[10px] font-bold uppercase tracking-[1.2px] text-accent">
             Master Admin
           </div>
         </div>
@@ -197,18 +252,18 @@ export default function AdminShell({ title, sub, children }) {
                       }`}
                     >
                       {groupActive && (
-                        <span className="absolute left-0 top-1/2 h-[20px] w-[3px] -translate-y-1/2 rounded-r-full bg-gold" />
+                        <span className="absolute left-0 top-1/2 h-[20px] w-[3px] -translate-y-1/2 rounded-r-full bg-accent" />
                       )}
                       <item.Icon
                         size={18}
                         strokeWidth={groupActive ? 2.3 : 2}
-                        className={groupActive ? "text-gold" : "text-white/45 group-hover:text-white/70"}
+                        className={groupActive ? "text-accent" : "text-white/45 group-hover:text-white/70"}
                       />
                       <span className="flex-1 text-left">{item.label}</span>
                       <ChevronDown
                         size={15}
                         className={`transition-transform duration-200 ${
-                          isOpen ? "rotate-180 text-gold" : "text-white/45"
+                          isOpen ? "rotate-180 text-accent" : "text-white/45"
                         }`}
                       />
                     </button>
@@ -230,7 +285,7 @@ export default function AdminShell({ title, sub, children }) {
                               <CIcon
                                 size={15}
                                 strokeWidth={active ? 2.3 : 2}
-                                className={active ? "text-gold" : "text-white/40"}
+                                className={active ? "text-accent" : "text-white/40"}
                               />
                               {label}
                             </Link>
@@ -256,15 +311,15 @@ export default function AdminShell({ title, sub, children }) {
                   }`}
                 >
                   {active && (
-                    <span className="absolute left-0 top-1/2 h-[20px] w-[3px] -translate-y-1/2 rounded-r-full bg-gold" />
+                    <span className="absolute left-0 top-1/2 h-[20px] w-[3px] -translate-y-1/2 rounded-r-full bg-accent" />
                   )}
                   <Icon
                     size={18}
                     strokeWidth={active ? 2.3 : 2}
-                    className={active ? "text-gold" : "text-white/45 group-hover:text-white/70"}
+                    className={active ? "text-accent" : "text-white/45 group-hover:text-white/70"}
                   />
                   <span className="flex-1">{label}</span>
-                  {active && <ChevronRight size={14} className="text-gold" />}
+                  {active && <ChevronRight size={14} className="text-accent" />}
                 </Link>
               );
             })}
@@ -309,12 +364,12 @@ export default function AdminShell({ title, sub, children }) {
       {/* ===== MAIN ===== */}
       <div className="flex min-h-dvh flex-col lg:pl-[248px]">
         {/* TOPBAR */}
-        <header className="sticky top-0 z-30 flex items-center gap-2.5 border-b border-line-rose bg-white/90 px-3 py-3 backdrop-blur sm:gap-3 sm:px-4 sm:py-3.5 lg:px-7">
+        <header className="sticky top-0 z-30 flex items-center gap-2.5 border-b border-line bg-white/90 px-3 py-3 backdrop-blur sm:gap-3 sm:px-4 sm:py-3.5 lg:px-7">
           <button
             type="button"
             aria-label="Open menu"
             onClick={() => setDrawer(true)}
-            className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-xl border border-line-rose text-maroon-700 lg:hidden"
+            className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-xl border border-line text-brand-700 lg:hidden"
           >
             <Menu size={19} />
           </button>
@@ -322,10 +377,46 @@ export default function AdminShell({ title, sub, children }) {
             <h1 className="truncate font-display text-[17px] font-bold leading-tight text-ink sm:text-[19px]">
               {title}
             </h1>
-            {sub && <p className="mt-0.5 truncate text-[11px] font-medium text-muted-rose sm:text-[12px] sm:mt-0">{sub}</p>}
+            {sub && <p className="mt-0.5 truncate text-[11px] font-medium text-muted sm:text-[12px] sm:mt-0">{sub}</p>}
           </div>
-          <div className="hidden items-center gap-2 rounded-full border border-line-rose bg-white px-2 py-1.5 pr-3.5 sm:flex">
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-[12px] font-extrabold text-white">
+          {/* LIVE IST CLOCK (desktop) */}
+          <div className="hidden items-center gap-2 rounded-full border border-line bg-white px-3 py-1.5 md:flex">
+            <Clock3 size={13} className="text-brand-600" />
+            <span className="font-mono text-[12px] font-bold tabular-nums tracking-[0.5px] text-ink">
+              {clock}
+            </span>
+            <span className="text-[9px] font-extrabold uppercase tracking-[1px] text-muted">IST</span>
+          </div>
+          {/* PENDING APPROVALS BADGE — realtime, click to act */}
+          <button
+            type="button"
+            aria-label="Pending approvals"
+            title="Pending deposits + withdrawals — click to review"
+            onClick={() => router.push("/admin/withdrawals")}
+            className={`relative flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border px-2.5 text-[12.5px] font-extrabold transition-colors sm:h-9 sm:px-3.5 ${
+              pending
+                ? "border-[#f3c4c4] bg-[#fdf1f1] text-[#b91c1c] hover:bg-[#fdecec]"
+                : "border-line bg-white text-muted hover:bg-[var(--color-tint2)]"
+            }`}
+          >
+            <Bell size={15} strokeWidth={2.2} />
+            <span className="hidden sm:inline">Pending</span>
+            <span
+              className={`grid h-[19px] min-w-[19px] place-items-center rounded-full px-1 text-[10.5px] font-extrabold ${
+                pending ? "bg-[#b91c1c] text-white" : "bg-[var(--color-line)] text-muted"
+              }`}
+            >
+              {pending === null ? "—" : pending}
+            </span>
+            {pending ? (
+              <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#dc2626] opacity-75" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#dc2626]" />
+              </span>
+            ) : null}
+          </button>
+          <div className="hidden items-center gap-2 rounded-full border border-line bg-white px-2 py-1.5 pr-3.5 sm:flex">
+            <span className="grid h-7 w-7 place-items-center rounded-full brand-grad text-[12px] font-extrabold text-white">
               A
             </span>
             <span className="text-[12.5px] font-bold text-ink">Super Admin</span>
@@ -335,7 +426,7 @@ export default function AdminShell({ title, sub, children }) {
             aria-label="Go to Website"
             title="Open the client website"
             onClick={goSite}
-            className="flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-maroon-700/25 bg-white px-2.5 text-[12.5px] font-bold text-maroon-700 transition-colors hover:bg-[#fbf1f3] sm:h-9 sm:px-3.5"
+            className="flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-brand-700/25 bg-white px-2.5 text-[12.5px] font-bold text-brand-700 transition-colors hover:bg-[var(--color-tint2)] sm:h-9 sm:px-3.5"
           >
             <Globe size={15} strokeWidth={2.2} />
             <span className="hidden md:inline">Go to Website</span>
@@ -344,7 +435,7 @@ export default function AdminShell({ title, sub, children }) {
             type="button"
             aria-label="Logout"
             onClick={logout}
-            className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-xl border border-line-rose bg-white text-[#b27583] transition-colors hover:bg-[#fdecec] hover:text-[#dc2626] sm:h-9 sm:w-9"
+            className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-xl border border-line bg-white text-muted transition-colors hover:bg-[#fdecec] hover:text-[#dc2626] sm:h-9 sm:w-9"
           >
             <LogOut size={16} />
           </button>
@@ -357,19 +448,19 @@ export default function AdminShell({ title, sub, children }) {
         <div
           role="status"
           aria-live="polite"
-          className={`fixed left-1/2 top-4 z-[90] flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-2.5 rounded-full bg-[linear-gradient(135deg,#42091a,#6b1830)] px-5 py-2.5 text-[13px] font-bold text-white shadow-[0_12px_30px_rgba(66,9,26,0.45)] transition-all duration-200 ${
+          className={`admin-toast fixed left-1/2 top-4 z-[90] flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-2.5 rounded-full px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 ${
             liveMsg ? "scale-100 opacity-100" : "pointer-events-none scale-90 opacity-0"
           }`}
         >
           <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-gold" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
           </span>
           <span className="truncate">{liveMsg}</span>
         </div>
 
         {/* FOOTER */}
-        <footer className="px-4 pb-5 pt-2 text-center text-[11.5px] font-medium text-[#b9a5aa] lg:px-7">
+        <footer className="px-4 pb-5 pt-2 text-center text-[11.5px] font-medium text-muted lg:px-7">
           Master Admin Panel · v1.0
         </footer>
       </div>

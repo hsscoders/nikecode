@@ -117,7 +117,7 @@ function Chip({ on, onText, offText, tone = "green" }) {
       : tone === "blue"
       ? "bg-[#e8f0fe] text-[#2563eb]"
       : "bg-[#fdf6e4] text-[#8a6a1c]"
-    : "bg-[#f3eef0] text-[#9a8b90]";
+    : "bg-[var(--color-row)] text-muted";
   return (
     <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.4px] ${cls}`}>
       {on ? onText : offText}
@@ -130,10 +130,10 @@ function StepHead({ n, Icon, title, right }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex items-center gap-3">
-        <span className="font-display grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-[13px] font-extrabold text-white shadow-[0_4px_10px_rgba(124,29,51,0.3)] sm:h-8 sm:w-8 sm:text-[14px]">
+        <span className="font-display grid h-7 w-7 shrink-0 place-items-center rounded-full brand-grad text-[13px] font-extrabold text-white shadow-[0_4px_10px_var(--s-btn,rgba(79,70,229,0.3))] sm:h-8 sm:w-8 sm:text-[14px]">
           {n}
         </span>
-        <Icon size={17} className="h-4 w-4 text-maroon-700 sm:h-[17px] sm:w-[17px]" />
+        <Icon size={17} className="h-4 w-4 text-brand-700 sm:h-[17px] sm:w-[17px]" />
         <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">{title}</div>
       </div>
       {right}
@@ -355,7 +355,7 @@ export default function PaymentGatewayPage() {
   const setupState = (id) => {
     const c = cfgs[id];
     const credsOk = !!(c.merchantId.trim() && c.apiKey.trim());
-    if (!credsOk) return { key: "no-creds", text: "Credentials missing", cls: "bg-[#f3eef0] text-[#9a8b90]" };
+    if (!credsOk) return { key: "no-creds", text: "Credentials missing", cls: "bg-[var(--color-row)] text-muted" };
     if (!effBackend) return { key: "no-url", text: "Set Server URL", cls: "bg-[#fdf6e4] text-[#8a6a1c]" };
     return { key: "ok", text: "Connected", cls: "bg-[#eafaf0] text-[#16a34a]" };
   };
@@ -380,8 +380,8 @@ export default function PaymentGatewayPage() {
                 onClick={() => setTab(id)}
                 className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11.5px] font-extrabold transition-all duration-150 sm:justify-start sm:gap-2 sm:px-5 sm:py-3 sm:text-[13.5px] ${
                   tab === id
-                    ? "bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white shadow-[0_6px_16px_rgba(124,29,51,0.3)]"
-                    : "border border-line-rose bg-white text-[#7d6a6e] hover:bg-[#fbf1f3]"
+                    ? "brand-grad text-white shadow-[0_6px_16px_var(--s-btn,rgba(79,70,229,0.3))]"
+                    : "border border-line bg-white text-[#475569] hover:bg-[var(--color-tint2)]"
                 }`}
               >
                 <Icon size={16} className="h-[14px] w-[14px] sm:h-4 sm:w-4" />
@@ -400,7 +400,7 @@ export default function PaymentGatewayPage() {
               <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <Layers size={17} className="text-maroon-700" />
+                    <Layers size={17} className="text-brand-700" />
                     <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                       Choose a Gateway
                     </div>
@@ -428,20 +428,20 @@ export default function PaymentGatewayPage() {
                         onClick={() => setSelGw(meta.id)}
                         className={`flex cursor-pointer flex-col gap-2.5 rounded-xl border-2 p-3 text-left transition-all duration-150 sm:gap-3 sm:rounded-2xl sm:p-4 ${
                           active
-                            ? "border-maroon-700 bg-[#fbf1f3] shadow-[0_8px_20px_rgba(124,29,51,0.15)]"
-                            : "border-line-rose bg-white hover:border-maroon-700/40"
+                            ? "border-brand-700 bg-[var(--color-tint2)] shadow-[0_8px_20px_rgba(79,70,229,0.15)]"
+                            : "border-line bg-white hover:border-brand-700/40"
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl sm:h-11 sm:w-11 ${active ? "bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white" : "bg-[#f7e3e7] text-maroon-700"}`}>
+                          <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl sm:h-11 sm:w-11 ${active ? "brand-grad text-white" : "bg-[var(--color-tint2)] text-brand-700"}`}>
                             <CreditCard size={20} className="h-[18px] w-[18px] sm:h-5 sm:w-5" />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               <span className="text-[13.5px] font-extrabold text-ink sm:text-[15px]">{meta.label}</span>
-                              {active && <CheckCircle2 size={15} className="text-maroon-700" />}
+                              {active && <CheckCircle2 size={15} className="text-brand-700" />}
                             </div>
-                            <div className="truncate text-[11px] font-semibold text-[#9a8b90]">{meta.tag}</div>
+                            <div className="truncate text-[11px] font-semibold text-muted">{meta.tag}</div>
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -461,8 +461,8 @@ export default function PaymentGatewayPage() {
                   })}
                 </div>
 
-                <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
-                  <Info size={15} className="mt-0.5 shrink-0 text-maroon-600" />
+                <div className="flex items-start gap-3 rounded-xl bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#475569]">
+                  <Info size={15} className="mt-0.5 shrink-0 text-brand-600" />
                   <span>
                     Every gateway is set up the same 3-step way: connect the
                     credentials, turn recharge collection on, then turn automatic
@@ -492,10 +492,10 @@ export default function PaymentGatewayPage() {
                           </span>
                         }
                       />
-                      <div className="text-[12px] font-medium leading-relaxed text-muted-rose sm:text-[12.5px]">
+                      <div className="text-[12px] font-medium leading-relaxed text-muted sm:text-[12.5px]">
                         Paste the merchant ID and the key from the {meta.label}{" "}
                         merchant dashboard, then press{" "}
-                        <span className="font-bold text-maroon-700">Test Connection</span> — it
+                        <span className="font-bold text-brand-700">Test Connection</span> — it
                         talks to the live gateway and loads your merchant balance.
                       </div>
 
@@ -521,7 +521,7 @@ export default function PaymentGatewayPage() {
                               type="button"
                               aria-label={showKeys[meta.id] ? "Hide key" : "Show key"}
                               onClick={() => setShowKeys((s) => ({ ...s, [meta.id]: !s[meta.id] }))}
-                              className="absolute right-2.5 top-1/2 grid h-7 w-7 -translate-y-1/2 cursor-pointer place-items-center rounded-lg bg-[#fbf3f4] text-maroon-700"
+                              className="absolute right-2.5 top-1/2 grid h-7 w-7 -translate-y-1/2 cursor-pointer place-items-center rounded-lg bg-[var(--color-tint)] text-brand-700"
                             >
                               {showKeys[meta.id] ? <EyeOff size={14} /> : <Eye size={14} />}
                             </button>
@@ -541,7 +541,7 @@ export default function PaymentGatewayPage() {
                         </button>
                         <button
                           type="button"
-                          className="flex cursor-pointer items-center gap-1 text-[12px] font-bold text-maroon-700"
+                          className="flex cursor-pointer items-center gap-1 text-[12px] font-bold text-brand-700"
                           onClick={() => setAdvOpen((a) => ({ ...a, [meta.id]: !a[meta.id] }))}
                         >
                           <ChevronDown size={13} className={`transition-transform ${advOpen[meta.id] ? "rotate-180" : ""}`} />
@@ -577,25 +577,25 @@ export default function PaymentGatewayPage() {
                               {money(bal.frozen)}
                             </div>
                           </div>
-                          <div className="rounded-xl bg-[#f7e3e7] px-2.5 py-2.5 sm:px-4 sm:py-3.5">
-                            <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-maroon-700 sm:gap-1.5 sm:text-[11.5px]">
+                          <div className="rounded-xl bg-[var(--color-tint2)] px-2.5 py-2.5 sm:px-4 sm:py-3.5">
+                            <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-brand-700 sm:gap-1.5 sm:text-[11.5px]">
                               <Ban size={13} /> Total
                             </div>
-                            <div className="font-display mt-0.5 truncate text-[14px] font-extrabold text-maroon-700 sm:mt-1 sm:text-[20px]" title={money(bal.total)}>
+                            <div className="font-display mt-0.5 truncate text-[14px] font-extrabold text-brand-700 sm:mt-1 sm:text-[20px]" title={money(bal.total)}>
                               {money(bal.total)}
                             </div>
                           </div>
                         </div>
                       ) : (
                         !busy && (
-                          <div className="rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-center text-[12px] font-medium text-muted-rose">
+                          <div className="rounded-xl bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3 text-center text-[12px] font-medium text-muted">
                             Balance appears here after a successful Test Connection.
                           </div>
                         )
                       )}
 
-                      <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
-                        <ShieldCheck size={15} className="mt-0.5 shrink-0 text-maroon-600" />
+                      <div className="flex items-start gap-3 rounded-xl bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#475569]">
+                        <ShieldCheck size={15} className="mt-0.5 shrink-0 text-brand-600" />
                         <span>
                           The key is stored server-side only — it never reaches the browser
                           or any public API response. All signed gateway calls happen from
@@ -612,12 +612,12 @@ export default function PaymentGatewayPage() {
                         title="Recharge Collection"
                         right={<Chip on={c.enabled} onText="ON" offText="OFF" />}
                       />
-                      <div className="flex items-center justify-between gap-3 rounded-xl border border-line-rose bg-white p-3.5 sm:gap-4 sm:p-4">
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white p-3.5 sm:gap-4 sm:p-4">
                         <div className="min-w-0">
                           <div className="text-[13.5px] font-bold text-ink sm:text-[14px]">
                             Enable {meta.label} collection
                           </div>
-                          <div className="mt-1 text-[12px] font-medium leading-relaxed text-muted-rose sm:text-[12.5px]">
+                          <div className="mt-1 text-[12px] font-medium leading-relaxed text-muted sm:text-[12.5px]">
                             When ON, a payment method with an AUTO badge appears on the
                             client /recharge page under the display name below. Users pay on
                             the hosted UPI checkout and the wallet is credited automatically
@@ -660,13 +660,13 @@ export default function PaymentGatewayPage() {
                         title="Automatic Payout"
                         right={<Chip on={c.autoPayout} onText="ON" offText="OFF" tone="blue" />}
                       />
-                      <div className="flex items-center justify-between gap-3 rounded-xl border border-line-rose bg-white p-3.5 sm:gap-4 sm:p-4">
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white p-3.5 sm:gap-4 sm:p-4">
                         <div className="min-w-0">
                           <div className="text-[13.5px] font-bold text-ink sm:text-[14px]">
                             Enable {meta.label} payouts
                           </div>
-                          <div className="mt-1 text-[12px] font-medium leading-relaxed text-muted-rose sm:text-[12.5px]">
-                            When ON, <span className="font-bold text-maroon-700">Auto Pay</span>{" "}
+                          <div className="mt-1 text-[12px] font-medium leading-relaxed text-muted sm:text-[12.5px]">
+                            When ON, <span className="font-bold text-brand-700">Auto Pay</span>{" "}
                             becomes available on Admin → Withdrawals. One click sends the net
                             amount straight to the user&apos;s bank account — the signed
                             webhook settles the withdrawal automatically (failed payouts refund
@@ -681,13 +681,13 @@ export default function PaymentGatewayPage() {
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {meta.fees.map((f) => (
-                          <span key={f} className="rounded-full bg-[#f7e3e7] px-2.5 py-1 text-[11px] font-bold text-maroon-700">
+                          <span key={f} className="rounded-full bg-[var(--color-tint2)] px-2.5 py-1 text-[11px] font-bold text-brand-700">
                             {f}
                           </span>
                         ))}
                       </div>
-                      <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
-                        <Wallet size={15} className="mt-0.5 shrink-0 text-maroon-600" />
+                      <div className="flex items-start gap-3 rounded-xl bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#475569]">
+                        <Wallet size={15} className="mt-0.5 shrink-0 text-brand-600" />
                         <span>
                           Auto payouts spend the merchant balance loaded in Step 1 — keep it
                           funded before using Auto Pay. The gateway rejects payouts when the
@@ -703,7 +703,7 @@ export default function PaymentGatewayPage() {
               {/* — payout default (all gateways) — */}
               <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
                 <div className="flex items-center gap-2">
-                  <Landmark size={17} className="text-maroon-700" />
+                  <Landmark size={17} className="text-brand-700" />
                   <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                     Default Payout Gateway
                   </div>
@@ -727,7 +727,7 @@ export default function PaymentGatewayPage() {
                       )}
                     </Select>
                   </Field>
-                  <div className="rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
+                  <div className="rounded-xl bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#475569]">
                     On the Withdrawals page the admin picks the gateway per payout — this
                     default just saves one tap. New gateways appear in that menu
                     automatically once their payout is enabled.
@@ -745,7 +745,7 @@ export default function PaymentGatewayPage() {
               <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <Globe size={17} className="text-maroon-700" />
+                    <Globe size={17} className="text-brand-700" />
                     <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                       Public URLs
                     </div>
@@ -765,8 +765,8 @@ export default function PaymentGatewayPage() {
                   </button>
                 </div>
 
-                <div className="text-[12px] font-medium leading-relaxed text-muted-rose sm:text-[12.5px]">
-                  These two URLs are <span className="font-bold text-maroon-700">picked up
+                <div className="text-[12px] font-medium leading-relaxed text-muted sm:text-[12.5px]">
+                  These two URLs are <span className="font-bold text-brand-700">picked up
                   automatically from this server&apos;s domain</span> — no typing needed. They
                   are saved once and <span className="font-bold">every gateway reuses them</span>{" "}
                   for its payment callback and redirect. Edit only if the site runs behind a
@@ -840,20 +840,20 @@ export default function PaymentGatewayPage() {
               {/* webhook endpoints — computed from the effective backend URL */}
               <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
                 <div className="flex items-center gap-2">
-                  <PlugZap size={17} className="text-maroon-700" />
+                  <PlugZap size={17} className="text-brand-700" />
                   <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                     Webhook Endpoints
                   </div>
                 </div>
-                <div className="text-[12px] font-medium leading-relaxed text-muted-rose sm:text-[12.5px]">
+                <div className="text-[12px] font-medium leading-relaxed text-muted sm:text-[12.5px]">
                   If a gateway dashboard asks for a notify / webhook address, set the
                   matching endpoint below (collection = payments in, payout = withdrawals
                   out). Copy with one tap.
                 </div>
                 {GATEWAY_META.map((meta) => (
-                  <div key={meta.id} className="rounded-xl border border-line-rose bg-white p-4">
+                  <div key={meta.id} className="rounded-xl border border-line bg-white p-4">
                     <div className="mb-2 flex items-center gap-2">
-                      <CreditCard size={14} className="text-maroon-700" />
+                      <CreditCard size={14} className="text-brand-700" />
                       <span className="text-[13px] font-extrabold text-ink">{meta.label}</span>
                     </div>
                     {[
@@ -863,10 +863,10 @@ export default function PaymentGatewayPage() {
                       const full = effBackend + path;
                       return (
                         <div key={k} className="flex flex-wrap items-center justify-between gap-2 py-1">
-                          <span className="w-[60px] shrink-0 text-[10.5px] font-bold uppercase tracking-wide text-[#9a8b90] sm:w-[80px] sm:text-[11px]">
+                          <span className="w-[60px] shrink-0 text-[10.5px] font-bold uppercase tracking-wide text-muted sm:w-[80px] sm:text-[11px]">
                             {k}
                           </span>
-                          <span className="min-w-0 flex-1 truncate rounded-lg bg-[#fbf3f4] px-3 py-1.5 text-[11px] font-bold text-[#7d6a6e] sm:text-[11.5px]">
+                          <span className="min-w-0 flex-1 truncate rounded-lg bg-[var(--color-tint)] px-3 py-1.5 text-[11px] font-bold text-[#475569] sm:text-[11.5px]">
                             {full || "— set the Backend Public URL above —"}
                           </span>
                           <button
@@ -888,7 +888,7 @@ export default function PaymentGatewayPage() {
               {/* security — IP whitelist + key storage */}
               <div className="admin-card flex flex-col gap-2.5 p-3.5 sm:gap-3 sm:p-6">
                 <div className="flex items-center gap-2">
-                  <ShieldCheck size={17} className="text-maroon-700" />
+                  <ShieldCheck size={17} className="text-brand-700" />
                   <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                     Security Checklist
                   </div>
@@ -898,8 +898,8 @@ export default function PaymentGatewayPage() {
                   "Both URLs must start with https:// and be reachable from the internet — the gateways call them to settle payments.",
                   "API keys are stored server-side only and never appear in any public response; signed webhooks are verified before a single rupee is credited.",
                 ].map((t) => (
-                  <div key={t} className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
-                    <ShieldCheck size={15} className="mt-0.5 shrink-0 text-maroon-600" />
+                  <div key={t} className="flex items-start gap-3 rounded-xl bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3 text-[12px] font-medium leading-relaxed text-[#475569]">
+                    <ShieldCheck size={15} className="mt-0.5 shrink-0 text-brand-600" />
                     <span>{t}</span>
                   </div>
                 ))}
@@ -914,17 +914,17 @@ export default function PaymentGatewayPage() {
             <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Radar size={17} className="text-maroon-700" />
+                  <Radar size={17} className="text-brand-700" />
                   <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                     Order Status Query
                   </div>
                 </div>
-                <span className="rounded-full bg-[#fbf1f3] px-3 py-1 text-[11px] font-bold text-maroon-700">
+                <span className="rounded-full bg-[var(--color-tint2)] px-3 py-1 text-[11px] font-bold text-brand-700">
                   live gateway check
                 </span>
               </div>
 
-              <div className="text-[12px] font-medium leading-relaxed text-muted-rose sm:text-[12.5px]">
+              <div className="text-[12px] font-medium leading-relaxed text-muted sm:text-[12.5px]">
                 Ask the gateway directly for the live status of any order — recharge
                 order id, withdrawal id, payout order id (WD…) or the gateway&apos;s own
                 order id. If the gateway reports a final result, the local record is
@@ -946,10 +946,10 @@ export default function PaymentGatewayPage() {
                     </option>
                   ))}
                 </Select>
-                <div className="flex flex-1 items-center gap-2.5 rounded-xl bg-[#fbf3f4] px-3 py-2 focus-within:ring-[3px] focus-within:ring-maroon-600/15 sm:px-3.5 sm:py-2.5">
-                  <Search size={15} className="shrink-0 text-icon-rose" />
+                <div className="flex flex-1 items-center gap-2.5 rounded-xl bg-[var(--color-tint)] px-3 py-2 focus-within:ring-[3px] focus-within:ring-brand-600/15 sm:px-3.5 sm:py-2.5">
+                  <Search size={15} className="shrink-0 text-icon" />
                   <input
-                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13.5px] font-semibold text-ink outline-none placeholder:font-medium placeholder:text-[#bd9fa6]"
+                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13.5px] font-semibold text-ink outline-none placeholder:font-medium placeholder:text-muted"
                     value={qId}
                     onChange={(e) => setQId(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && runQuery()}
@@ -970,7 +970,7 @@ export default function PaymentGatewayPage() {
 
               {recents.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.4px] text-muted">
                     Recent:
                   </span>
                   {recents.map((r) => (
@@ -979,7 +979,7 @@ export default function PaymentGatewayPage() {
                       type="button"
                       title={r.id}
                       onClick={() => runQuery(r.id)}
-                      className="max-w-[240px] cursor-pointer truncate rounded-full border border-line-rose bg-white px-3 py-1.5 text-[11.5px] font-bold text-ink transition-colors hover:bg-[#fbf1f3]"
+                      className="max-w-[240px] cursor-pointer truncate rounded-full border border-line bg-white px-3 py-1.5 text-[11.5px] font-bold text-ink transition-colors hover:bg-[var(--color-tint2)]"
                     >
                       {r.label} · {r.sub}
                     </button>
@@ -995,7 +995,7 @@ export default function PaymentGatewayPage() {
               )}
 
               {qResult && (
-                <div className="flex flex-col gap-3 rounded-xl border border-line-rose bg-[#fdfafb] p-3 sm:p-4">
+                <div className="flex flex-col gap-3 rounded-xl border border-line bg-[#fdfafb] p-3 sm:p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <OrderStatusPill status={qResult.order.status} />
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -1011,28 +1011,28 @@ export default function PaymentGatewayPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-[12.5px] sm:grid-cols-3">
                     <div>
-                      <div className="text-[10.5px] font-bold uppercase tracking-wide text-[#9a8b90]">Amount</div>
+                      <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted">Amount</div>
                       <div className="font-display mt-0.5 text-[15px] font-extrabold text-ink">
                         {qResult.order.amount != null ? money(qResult.order.amount) : "—"}
                       </div>
                     </div>
                     <div>
-                      <div className="text-[10.5px] font-bold uppercase tracking-wide text-[#9a8b90]">UTR</div>
+                      <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted">UTR</div>
                       <div className="mt-0.5 break-all font-bold text-ink">{qResult.order.utr || "—"}</div>
                     </div>
                     <div>
-                      <div className="text-[10.5px] font-bold uppercase tracking-wide text-[#9a8b90]">Gateway Order</div>
+                      <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted">Gateway Order</div>
                       <div className="mt-0.5 break-all font-bold text-ink">
                         {qResult.order.gatewayOrderId || "—"}
                       </div>
                     </div>
                   </div>
-                  <div className="break-all rounded-lg bg-[#fbf3f4] px-3 py-2 text-[11.5px] font-bold text-[#7d6a6e]">
+                  <div className="break-all rounded-lg bg-[var(--color-tint)] px-3 py-2 text-[11.5px] font-bold text-[#475569]">
                     merchant order id: {qResult.order.merchantOrderId}
                   </div>
                   <button
                     type="button"
-                    className="flex cursor-pointer items-center gap-1 self-start text-[12px] font-bold text-maroon-700"
+                    className="flex cursor-pointer items-center gap-1 self-start text-[12px] font-bold text-brand-700"
                     onClick={() => setShowRaw((s) => !s)}
                   >
                     <ChevronDown
@@ -1053,13 +1053,13 @@ export default function PaymentGatewayPage() {
 
           {/* ===== STICKY SAVE — saves whichever tab you are on ===== */}
           <div className="sticky bottom-3 flex flex-wrap items-center justify-end gap-3 sm:bottom-4">
-            <div className="hidden items-center gap-2 rounded-xl border border-line-rose bg-white/95 px-4 py-2.5 text-[12px] font-semibold text-muted-rose shadow-[0_8px_20px_rgba(124,29,51,0.08)] backdrop-blur sm:flex">
-              <Zap size={13} className="text-maroon-600" />
+            <div className="hidden items-center gap-2 rounded-xl border border-line bg-white/95 px-4 py-2.5 text-[12px] font-semibold text-muted shadow-[0_8px_20px_rgba(79,70,229,0.08)] backdrop-blur sm:flex">
+              <Zap size={13} className="text-brand-600" />
               Saves gateways, public URLs and the payout default together
             </div>
             <button
               type="button"
-              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(79,70,229,0.35)] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >

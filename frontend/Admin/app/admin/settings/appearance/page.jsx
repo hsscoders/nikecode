@@ -330,7 +330,15 @@ export default function AppearancePage() {
           },
         }),
       });
-      showToast("Saved — new theme broadcast live to every online user");
+      /* Apply to THIS admin panel instantly + cache, so the panel
+         mirrors the client the moment the theme is saved. The realtime
+         "appearance:changed" socket push (AdminShell) re-applies it
+         everywhere else. */
+      try {
+        window.ZaptoTheme.applyTheme(cfg);
+        localStorage.setItem("zapto_appearance", JSON.stringify(cfg));
+      } catch (e) {}
+      showToast("Saved — theme applied to Admin & client instantly");
     } catch (e) {
       showToast(e.message, true);
     } finally {
@@ -343,7 +351,7 @@ export default function AppearancePage() {
   return (
     <AdminShell
       title="Font & Color"
-      sub="One-click theme — recolor and restyle the entire client website"
+      sub="One-click theme — restyles the client website AND this admin panel"
     >
       <Toast message={toast} isError={isError} />
 
@@ -354,20 +362,21 @@ export default function AppearancePage() {
           {/* ===== PRESETS ===== */}
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
-              <Palette size={17} className="text-maroon-700" />
+              <Palette size={17} className="text-brand-700" />
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">
                 Color Themes — one click
               </div>
-              <span className="ml-auto rounded-full bg-[#f6eef0] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.5px] text-maroon-700">
+              <span className="ml-auto rounded-full bg-[var(--color-tint2)] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.5px] text-brand-700">
                 12 presets
               </span>
             </div>
-            <div className="flex items-start gap-3 rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
-              <Info size={16} className="mt-0.5 shrink-0 text-maroon-600" />
+            <div className="flex items-start gap-3 rounded-xl bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-ink/70">
+              <Info size={16} className="mt-0.5 shrink-0 text-brand-600" />
               <span>
                 Tap a theme and press Save. Every shade (buttons, headers, cards,
-                badges, gradients, text tones) is professionally hand-tuned — and
-                the new look is pushed to all online users instantly, no reload.
+                badges, gradients, text tones) is professionally hand-tuned — the
+                new look is pushed to all online users instantly AND this admin
+                panel recolors itself to match. No reload needed.
               </span>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -381,8 +390,8 @@ export default function AppearancePage() {
                     onClick={() => pickPreset(p)}
                     className={`relative cursor-pointer overflow-hidden rounded-2xl border-2 p-3 text-left transition-all duration-150 active:scale-[0.97] ${
                       active
-                        ? "border-maroon-700 shadow-[0_8px_20px_rgba(124,29,51,0.25)]"
-                        : "border-line-rose hover:border-maroon-600/40"
+                        ? "border-brand-700 shadow-[0_8px_20px_var(--s-btn,rgba(79,70,229,0.25))]"
+                        : "border-line hover:border-brand-600/40"
                     }`}
                   >
                     <div className="flex h-9 overflow-hidden rounded-xl">
@@ -392,7 +401,7 @@ export default function AppearancePage() {
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-1">
                       <span className="truncate text-[12.5px] font-bold text-ink">{p.name}</span>
-                      {active && <Check size={14} className="shrink-0 text-maroon-700" />}
+                      {active && <Check size={14} className="shrink-0 text-brand-700" />}
                     </div>
                   </button>
                 );
@@ -405,7 +414,7 @@ export default function AppearancePage() {
             <div className="flex items-center justify-between gap-2">
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">Custom Brand Colors</div>
               {cfg.preset === "custom" && (
-                <span className="rounded-full bg-[#f6eef0] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.5px] text-maroon-700">
+                <span className="rounded-full bg-[var(--color-tint2)] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.5px] text-brand-700">
                   Custom active
                 </span>
               )}
@@ -415,22 +424,22 @@ export default function AppearancePage() {
                 { key: "primary", label: "Primary Color", hint: "Buttons, header, main brand" },
                 { key: "accent", label: "Accent / Gold Color", hint: "Highlights, pills, icons" },
               ].map(({ key, label, hint }) => (
-                <div key={key} className="flex flex-col gap-3 rounded-xl border border-line-rose bg-[#fdfafa] p-3.5">
+                <div key={key} className="flex flex-col gap-3 rounded-xl border border-line bg-[var(--color-tint)] p-3.5">
                   <div className="flex items-center gap-3">
                     <input
                       type="color"
                       value={cfg[key]}
                       onChange={(e) => setColor(key, e.target.value)}
-                      className="h-11 w-14 cursor-pointer rounded-lg border border-line-rose bg-white p-1"
+                      className="h-11 w-14 cursor-pointer rounded-lg border border-line bg-white p-1"
                       aria-label={label}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] font-bold text-ink">{label}</div>
-                      <div className="text-[11.5px] font-medium text-muted-rose">{hint}</div>
+                      <div className="text-[11.5px] font-medium text-muted">{hint}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold uppercase text-muted-rose">HEX</span>
+                    <span className="text-[11px] font-bold uppercase text-muted">HEX</span>
                     <input
                       type="text"
                       value={cfg[key]}
@@ -473,8 +482,8 @@ export default function AppearancePage() {
                     onClick={() => setCfg((c) => ({ ...c, bgTone: t.key }))}
                     className={`flex cursor-pointer items-center gap-3 rounded-2xl border-2 p-3 text-left transition-all duration-150 active:scale-[0.97] ${
                       active
-                        ? "border-maroon-700 shadow-[0_8px_20px_rgba(124,29,51,0.18)]"
-                        : "border-line-rose hover:border-maroon-600/40"
+                        ? "border-brand-700 shadow-[0_8px_20px_var(--s-btn,rgba(79,70,229,0.18))]"
+                        : "border-line hover:border-brand-600/40"
                     }`}
                   >
                     <span
@@ -486,9 +495,9 @@ export default function AppearancePage() {
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block text-[13px] font-bold text-ink">{t.name}</span>
-                      <span className="block truncate text-[11px] font-medium text-muted-rose">{t.sub}</span>
+                      <span className="block truncate text-[11px] font-medium text-muted">{t.sub}</span>
                     </span>
-                    {active && <Check size={15} className="shrink-0 text-maroon-700" />}
+                    {active && <Check size={15} className="shrink-0 text-brand-700" />}
                   </button>
                 );
               })}
@@ -498,14 +507,14 @@ export default function AppearancePage() {
           {/* ===== FONTS ===== */}
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
-              <Type size={17} className="text-maroon-700" />
+              <Type size={17} className="text-brand-700" />
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">Font Style</div>
-              <span className="ml-auto rounded-full bg-[#f6eef0] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.5px] text-maroon-700">
+              <span className="ml-auto rounded-full bg-[var(--color-tint2)] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.5px] text-brand-700">
                 12 + 10 fonts
               </span>
             </div>
             <div>
-              <div className="mb-2 text-[12.5px] font-bold uppercase tracking-[0.5px] text-muted-rose">
+              <div className="mb-2 text-[12.5px] font-bold uppercase tracking-[0.5px] text-muted">
                 Headings — titles & buttons
               </div>
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
@@ -517,13 +526,13 @@ export default function AppearancePage() {
                       type="button"
                       onClick={() => setCfg((c) => ({ ...c, fontHead: f.key }))}
                       className={`cursor-pointer rounded-xl border-2 px-3 py-2.5 text-left transition-all duration-150 active:scale-[0.97] ${
-                        active ? "border-maroon-700 bg-[#fbf3f4]" : "border-line-rose hover:border-maroon-600/40"
+                        active ? "border-brand-700 bg-[var(--color-tint)]" : "border-line hover:border-brand-600/40"
                       }`}
                     >
                       <div className="truncate text-[17px] font-bold text-ink" style={{ fontFamily: f.css }}>
                         Earn Daily
                       </div>
-                      <div className="mt-0.5 text-[10.5px] font-bold uppercase tracking-[0.5px] text-muted-rose">
+                      <div className="mt-0.5 text-[10.5px] font-bold uppercase tracking-[0.5px] text-muted">
                         {f.name}
                       </div>
                     </button>
@@ -532,7 +541,7 @@ export default function AppearancePage() {
               </div>
             </div>
             <div>
-              <div className="mb-2 text-[12.5px] font-bold uppercase tracking-[0.5px] text-muted-rose">
+              <div className="mb-2 text-[12.5px] font-bold uppercase tracking-[0.5px] text-muted">
                 Body Text — labels & content
               </div>
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
@@ -544,13 +553,13 @@ export default function AppearancePage() {
                       type="button"
                       onClick={() => setCfg((c) => ({ ...c, fontBody: f.key }))}
                       className={`cursor-pointer rounded-xl border-2 px-3 py-2.5 text-left transition-all duration-150 active:scale-[0.97] ${
-                        active ? "border-maroon-700 bg-[#fbf3f4]" : "border-line-rose hover:border-maroon-600/40"
+                        active ? "border-brand-700 bg-[var(--color-tint)]" : "border-line hover:border-brand-600/40"
                       }`}
                     >
                       <div className="truncate text-[14.5px] font-semibold text-ink" style={{ fontFamily: f.css }}>
                         Daily income ₹63.60
                       </div>
-                      <div className="mt-0.5 text-[10.5px] font-bold uppercase tracking-[0.5px] text-muted-rose">
+                      <div className="mt-0.5 text-[10.5px] font-bold uppercase tracking-[0.5px] text-muted">
                         {f.name}
                       </div>
                     </button>
@@ -564,7 +573,7 @@ export default function AppearancePage() {
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center justify-between gap-2">
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">Live Preview</div>
-              <span className="flex items-center gap-1.5 rounded-full bg-[#f6eef0] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.5px] text-maroon-700">
+              <span className="flex items-center gap-1.5 rounded-full bg-[var(--color-tint2)] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.5px] text-brand-700">
                 <Zap size={11} />
                 Exact client output
               </span>
@@ -577,14 +586,14 @@ export default function AppearancePage() {
             <button
               type="button"
               onClick={reset}
-              className="admin-btn w-full cursor-pointer items-center justify-center gap-2 rounded-[12px] border border-line-rose bg-white px-5 py-2.5 text-[13px] font-bold text-[#7d6a6e] transition-all hover:bg-[#fbf3f4] sm:w-auto sm:justify-start sm:py-3"
+              className="admin-btn w-full cursor-pointer items-center justify-center gap-2 rounded-[12px] border border-line bg-white px-5 py-2.5 text-[13px] font-bold text-ink/70 transition-all hover:bg-[var(--color-tint)] sm:w-auto sm:justify-start sm:py-3"
             >
               <RotateCcw size={15} />
               Reset to Default
             </button>
             <button
               type="button"
-              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_var(--s-btn,rgba(79,70,229,0.35))] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >
@@ -601,7 +610,7 @@ export default function AppearancePage() {
 /* Small inline sun icon (kept dependency-light) */
 function SunIcon() {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-maroon-700">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand-700">
       <circle cx="12" cy="12" r="4" />
       <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
     </svg>

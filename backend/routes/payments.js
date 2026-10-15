@@ -1,5 +1,7 @@
 const router = require("express").Router();
 const userAuth = require("../middleware/userAuth");
+const { moneyRateLimit } = require("../middleware/rateLimit");
+const audit = require("../services/audit");
 const Deposit = require("../models/Deposit");
 const Withdrawal = require("../models/Withdrawal");
 const Transaction = require("../models/Transaction");
@@ -68,6 +70,18 @@ async function creditPayinDeposit(deposit, { qwackOrderId = "", utr = "", amount
   });
   emitToUser(deposit.phone, "wallet:refresh", { reason: "deposit", status: "Success" });
   emitToUser(deposit.phone, "activity:update", { type: "recharge", status: "Success" });
+
+  /* audit — system actor: the gateway webhook credited real money */
+  audit.log(null, {
+    actorType: "system",
+    action: "gateway.payin_success",
+    category: "gateway",
+    target: deposit.phone,
+    message:
+      gwLabel + " credited \u20B9" + amt + " for " + deposit.phone +
+      (utr ? " (UTR " + utr + ")" : ""),
+    detail: { depositId: String(deposit._id), amount: amt, gateway: gwLabel, utr },
+  });
   return true;
 }
 
@@ -223,6 +237,16 @@ async function createPayinForGateway(req, res, gw) {
         "New " + gw.label + " order — \u20B9" + amount + " from " + req.user.phone,
     });
 
+    audit.log(req, {
+      actorType: "user",
+      actor: { id: req.user._id, label: req.user.phone },
+      action: "gateway.order_created",
+      category: "gateway",
+      target: req.user.phone,
+      message: gw.label + " payment order \u20B9" + amount + " started",
+      detail: { depositId: String(deposit._id), gateway: gw.id, amount },
+    });
+
     res.json({
       success: true,
       message: "Payment order created",
@@ -259,10 +283,10 @@ const CREATE_GWS = {
 };
 
 /* ============ CREATE ORDER (user) ============ */
-router.post("/qwackpay/create", userAuth, async (req, res) =>
+router.post("/qwackpay/create", userAuth, moneyRateLimit, async (req, res) =>
   createPayinForGateway(req, res, CREATE_GWS.qwackpay)
 );
-router.post("/okpay/create", userAuth, async (req, res) =>
+router.post("/okpay/create", userAuth, moneyRateLimit, async (req, res) =>
   createPayinForGateway(req, res, CREATE_GWS.okpay)
 );
 

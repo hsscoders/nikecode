@@ -5,6 +5,7 @@ const User = require("../models/User");
 const Setting = require("../models/Setting");
 const Transaction = require("../models/Transaction");
 const LoginCode = require("../models/LoginCode");
+const audit = require("../services/audit");
 
 /* Normalize the phone: strip +91 / 0 prefix and spaces, keep 10 digits */
 function cleanPhone(v) {
@@ -130,6 +131,20 @@ router.post("/register", async (req, res) => {
     }
 
     const token = signToken(user);
+
+    /* audit — the account now really exists (userid/refId assigned) */
+    audit.log(req, {
+      actorType: "user",
+      actor: { id: user._id, label: user.phone },
+      action: "user.register",
+      category: "auth",
+      target: user.phone,
+      message: refCode
+        ? "New registration via invite code " + refCode + " (ID " + user.userid + ")"
+        : "New registration (ID " + user.userid + ")",
+      detail: { refBy: refCode, userid: user.userid, refId: user.refId },
+    });
+
     return res.json({
       success: true,
       message: "Register successful",
@@ -182,12 +197,30 @@ router.post("/login", async (req, res) => {
     }
 
     const ok = await bcrypt.compare(String(password), user.password);
-    if (!ok)
+    if (!ok) {
+      audit.log(req, {
+        actorType: "user",
+        action: "user.login_failed",
+        category: "auth",
+        target: phone,
+        message: "Failed login — wrong password",
+      });
       return res
         .status(401)
         .json({ success: false, message: "Incorrect password" });
+    }
 
     const token = signToken(user);
+
+    audit.log(req, {
+      actorType: "user",
+      actor: { id: user._id, label: user.phone },
+      action: "user.login",
+      category: "auth",
+      target: user.phone,
+      message: "User signed in",
+    });
+
     return res.json({
       success: true,
       message: "Login successful",

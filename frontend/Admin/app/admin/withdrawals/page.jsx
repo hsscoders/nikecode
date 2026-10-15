@@ -20,6 +20,7 @@ import {
   Loader,
   Toast,
   useToast,
+  Pagination,
 } from "../../../components/ui";
 
 const TABS = ["All", "Pending", "Processing", "Success", "Rejected"];
@@ -33,6 +34,8 @@ const gwLabel = (id) => GW_LABEL[id] || (id ? id.charAt(0).toUpperCase() + id.sl
 export default function WithdrawalsPage() {
   const [wds, setWds] = useState(null);
   const [tab, setTab] = useState("All");
+  const [page, setPage] = useState(0);
+  const PER = 20;
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [view, setView] = useState(null);
@@ -81,6 +84,14 @@ export default function WithdrawalsPage() {
     counts[t] = (wds || []).filter((w) => w.status === t).length;
 
   const filtered = (wds || []).filter((w) => tab === "All" || w.status === tab);
+  const pages = Math.max(1, Math.ceil(filtered.length / PER));
+  const safePage = Math.min(page, pages - 1);
+  const rows = filtered.slice(safePage * PER, safePage * PER + PER);
+
+  const switchTab = (t) => {
+    setTab(t);
+    setPage(0); /* fresh filter — back to the first page */
+  };
 
   /* manual status actions (Approve / Reject / Processing) */
   const applyAction = async () => {
@@ -146,7 +157,7 @@ export default function WithdrawalsPage() {
         acts.push({
           key: "auto-pay",
           label: "Auto Pay",
-          cls: "bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white hover:brightness-110",
+          cls: "brand-grad text-white hover:brightness-110",
           Icon: Zap,
         });
       if (w.status === "Pending")
@@ -191,10 +202,10 @@ export default function WithdrawalsPage() {
 
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex min-w-[200px] flex-1 items-center gap-2.5 rounded-xl border border-line-rose bg-white px-3.5 py-2.5 sm:max-w-[320px]">
-          <Search size={16} className="shrink-0 text-icon-rose" />
+        <div className="flex min-w-[200px] flex-1 items-center gap-2.5 rounded-xl border border-line bg-white px-3.5 py-2.5 sm:max-w-[320px]">
+          <Search size={16} className="shrink-0 text-icon" />
           <input
-            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[16px] font-medium text-ink outline-none placeholder:text-[#c4a9b0] sm:text-[13.5px]"
+            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[16px] font-medium text-ink outline-none placeholder:text-muted sm:text-[13.5px]"
             placeholder="Search phone / userid..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -225,17 +236,17 @@ export default function WithdrawalsPage() {
           <button
             key={t}
             type="button"
-            onClick={() => setTab(t)}
+            onClick={() => switchTab(t)}
             className={`flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[12.5px] font-extrabold transition-all duration-150 ${
               tab === t
-                ? "bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white shadow-[0_6px_16px_rgba(124,29,51,0.3)]"
-                : "border border-line-rose bg-white text-[#7d6a6e] hover:bg-[#fbf1f3]"
+                ? "brand-grad text-white shadow-[0_6px_16px_var(--s-btn,rgba(79,70,229,0.3))]"
+                : "border border-line bg-white text-[#475569] hover:bg-[var(--color-tint2)]"
             }`}
           >
             {t}
             <span
               className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold ${
-                tab === t ? "bg-white/20 text-white" : "bg-[#f7e3e7] text-maroon-700"
+                tab === t ? "bg-white/20 text-white" : "bg-[var(--color-tint2)] text-brand-700"
               }`}
             >
               {counts[t] || 0}
@@ -250,7 +261,7 @@ export default function WithdrawalsPage() {
         <>
         {/* MOBILE — compact card list (table hidden below sm) */}
         <div className="flex flex-col gap-2.5 sm:hidden">
-          {filtered.map((w) => {
+          {rows.map((w) => {
             const acts = actionsFor(w);
             const canCheck = w.autoPayout && w.status === "Processing";
             return (
@@ -262,14 +273,14 @@ export default function WithdrawalsPage() {
                   <Pill value={w.status} />
                 </div>
                 <div className="mt-2 flex items-end justify-between gap-2">
-                  <div className="font-display text-[17px] font-extrabold leading-none text-maroon-700">
+                  <div className="font-display text-[17px] font-extrabold leading-none text-brand-700">
                     {fmt0(w.netAmount ?? w.amount)}
                   </div>
-                  <div className="shrink-0 text-[10.5px] font-medium text-muted-rose">
+                  <div className="shrink-0 text-[10.5px] font-medium text-muted">
                     {fmtD(w.createdAt)}
                   </div>
                 </div>
-                <div className="mt-1.5 text-[11.5px] font-semibold text-[#7d6a6e]">
+                <div className="mt-1.5 text-[11.5px] font-semibold text-[#475569]">
                   {w.userid || "—"}
                   {w.charge ? " · Req " + fmt0(w.amount) + " · Fee " + fmt0(w.charge) : ""}
                 </div>
@@ -277,7 +288,7 @@ export default function WithdrawalsPage() {
                   <button
                     type="button"
                     onClick={() => setView(w)}
-                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line-rose bg-white px-2.5 py-1.5 text-[11.5px] font-bold text-maroon-700 transition-colors hover:bg-[#fbf1f3]"
+                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1.5 text-[11.5px] font-bold text-brand-700 transition-colors hover:bg-[var(--color-tint2)]"
                   >
                     <Eye size={12} />
                     {w.bankName || "View"}
@@ -288,13 +299,13 @@ export default function WithdrawalsPage() {
                     </span>
                   )}
                   {w.autoPayout && w.utr && (
-                    <span className="text-[9.5px] font-bold text-muted-rose">
+                    <span className="text-[9.5px] font-bold text-muted">
                       UTR {String(w.utr).slice(0, 10)}
                     </span>
                   )}
                 </div>
                 {acts || canCheck ? (
-                  <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-line-rose/60 pt-2.5">
+                  <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-line/60 pt-2.5">
                     {acts &&
                       acts.map(({ key, label, cls, Icon }) => (
                         <button
@@ -320,7 +331,7 @@ export default function WithdrawalsPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="mt-2.5 border-t border-line-rose/60 pt-2 text-[11.5px] font-semibold text-muted-rose">
+                  <div className="mt-2.5 border-t border-line/60 pt-2 text-[11.5px] font-semibold text-muted">
                     {w.processedAt ? "Processed " + fmtD(w.processedAt) : "—"}
                   </div>
                 )}
@@ -328,7 +339,7 @@ export default function WithdrawalsPage() {
             );
           })}
           {filtered.length === 0 && (
-            <div className="admin-card py-8 text-center text-[13px] font-medium text-muted-rose">
+            <div className="admin-card py-8 text-center text-[13px] font-medium text-muted">
               No withdrawals found
             </div>
           )}
@@ -350,16 +361,16 @@ export default function WithdrawalsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((w) => (
+                {rows.map((w) => (
                   <tr key={w._id}>
-                    <td className="whitespace-nowrap font-medium text-[#7d6a6e]">{fmtD(w.createdAt)}</td>
+                    <td className="whitespace-nowrap font-medium text-[#475569]">{fmtD(w.createdAt)}</td>
                     <td className="whitespace-nowrap font-bold text-ink">+91 {w.phone}</td>
-                    <td className="font-semibold text-[#7d6a6e]">{w.userid || "—"}</td>
+                    <td className="font-semibold text-[#475569]">{w.userid || "—"}</td>
                     <td className="whitespace-nowrap">
-                      <div className="font-extrabold text-maroon-700">
+                      <div className="font-extrabold text-brand-700">
                         {fmt0(w.netAmount ?? w.amount)}
                       </div>
-                      <div className="text-[11px] font-semibold text-[#7d6a6e]">
+                      <div className="text-[11px] font-semibold text-[#475569]">
                         Req {fmt0(w.amount)}
                         {w.charge ? " · Fee " + fmt0(w.charge) : ""}
                       </div>
@@ -368,7 +379,7 @@ export default function WithdrawalsPage() {
                       <button
                         type="button"
                         onClick={() => setView(w)}
-                        className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line-rose bg-white px-2.5 py-1.5 text-[12px] font-bold text-maroon-700 transition-colors hover:bg-[#fbf1f3]"
+                        className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1.5 text-[12px] font-bold text-brand-700 transition-colors hover:bg-[var(--color-tint2)]"
                       >
                         <Eye size={13} />
                         {w.bankName || "View"}
@@ -382,7 +393,7 @@ export default function WithdrawalsPage() {
                             <Zap size={9} /> Auto · {gwLabel(w.gateway)}
                           </span>
                           {w.utr && (
-                            <span className="text-[9.5px] font-bold text-muted-rose">
+                            <span className="text-[9.5px] font-bold text-muted">
                               UTR {String(w.utr).slice(0, 10)}
                             </span>
                           )}
@@ -404,7 +415,7 @@ export default function WithdrawalsPage() {
                             </button>
                           ))
                         ) : (
-                          <span className="text-[12px] font-semibold text-muted-rose">
+                          <span className="text-[12px] font-semibold text-muted">
                             {w.processedAt ? "Processed " + fmtD(w.processedAt) : "—"}
                           </span>
                         )}
@@ -425,7 +436,7 @@ export default function WithdrawalsPage() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-10 text-center text-[13.5px] font-medium text-muted-rose">
+                    <td colSpan={7} className="py-10 text-center text-[13.5px] font-medium text-muted">
                       No withdrawals found
                     </td>
                   </tr>
@@ -434,6 +445,9 @@ export default function WithdrawalsPage() {
             </table>
           </div>
         </div>
+
+        {/* PAGINATION */}
+        <Pagination page={safePage} pages={pages} onPage={setPage} total={filtered.length} />
         </>
       )}
 
@@ -467,8 +481,8 @@ export default function WithdrawalsPage() {
               { lbl: "Processed At", val: view.processedAt ? fmtD(view.processedAt) : "—" },
               ...(view.note ? [{ lbl: "Note", val: view.note }] : []),
             ].map(({ lbl, val }) => (
-              <div key={lbl} className="flex items-start justify-between gap-4 border-b border-line-rose/60 pb-2.5 last:border-b-0">
-                <span className="shrink-0 text-[12.5px] font-semibold text-muted-rose">{lbl}</span>
+              <div key={lbl} className="flex items-start justify-between gap-4 border-b border-line/60 pb-2.5 last:border-b-0">
+                <span className="shrink-0 text-[12.5px] font-semibold text-muted">{lbl}</span>
                 <span className="break-all text-right text-[13.5px] font-bold text-ink">{val || "—"}</span>
               </div>
             ))}
@@ -486,10 +500,10 @@ export default function WithdrawalsPage() {
         {payDlg && (
           <div className="flex flex-col gap-4">
             {/* beneficiary summary */}
-            <div className="rounded-xl bg-[#fbf3f4] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#7d6a6e]">
+            <div className="rounded-xl bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3 text-[12.5px] font-medium leading-relaxed text-[#475569]">
               <div className="flex items-center justify-between gap-3">
                 <span className="font-bold text-ink">{payDlg.wd.realName || "Beneficiary"}</span>
-                <span className="font-display text-[15px] font-extrabold text-maroon-700">
+                <span className="font-display text-[15px] font-extrabold text-brand-700">
                   {fmt0(payDlg.wd.netAmount ?? payDlg.wd.amount)}
                 </span>
               </div>
@@ -502,7 +516,7 @@ export default function WithdrawalsPage() {
 
             {/* gateway picker — clickable chips, same style as the toolbar */}
             <div>
-              <label className="mb-1.5 block text-[12px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">
+              <label className="mb-1.5 block text-[12px] font-bold uppercase tracking-[0.4px] text-muted">
                 Pay via Gateway
               </label>
               <div className="flex flex-wrap gap-2">
@@ -515,11 +529,11 @@ export default function WithdrawalsPage() {
                       onClick={() => setPayGw(g.id)}
                       className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-3 py-2 text-[12.5px] font-extrabold sm:px-4 sm:py-2.5 sm:text-[13px] transition-all duration-150 ${
                         active
-                          ? "border-maroon-700 bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white shadow-[0_6px_16px_rgba(124,29,51,0.3)]"
-                          : "border-line-rose bg-white text-ink hover:border-maroon-700/40"
+                          ? "border-brand-700 brand-grad text-white shadow-[0_6px_16px_var(--s-btn,rgba(79,70,229,0.3))]"
+                          : "border-line bg-white text-ink hover:border-brand-700/40"
                       }`}
                     >
-                      {active ? <CheckCircle2 size={15} /> : <Zap size={14} className="text-maroon-600" />}
+                      {active ? <CheckCircle2 size={15} /> : <Zap size={14} className="text-brand-600" />}
                       {g.label}
                       {g.balance ? (
                         <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${active ? "bg-white/20 text-white" : "bg-[#eafaf0] text-[#16a34a]"}`}>
@@ -530,7 +544,7 @@ export default function WithdrawalsPage() {
                   );
                 })}
               </div>
-              <div className="mt-1.5 text-[11.5px] font-medium text-muted-rose">
+              <div className="mt-1.5 text-[11.5px] font-medium text-muted">
                 The gateway settles the payout automatically through its signed
                 webhook and refunds the user instantly if it fails.
               </div>
@@ -603,7 +617,7 @@ export default function WithdrawalsPage() {
           </>
         }
       >
-        <p className="text-[14px] leading-relaxed text-[#7d6a6e]">
+        <p className="text-[14px] leading-relaxed text-[#475569]">
           {confirm
             ? `${fmt0(confirm.wd.netAmount ?? confirm.wd.amount)} withdrawal of +91 ${confirm.wd.phone} — ${
                 confirm.action === "Success"

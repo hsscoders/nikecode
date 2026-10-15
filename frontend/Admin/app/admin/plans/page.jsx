@@ -34,14 +34,14 @@ const EMPTY = {
 function MiniField({ label, value, onChange, placeholder }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">
+      <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.4px] text-muted">
         {label}
       </span>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-[10px] border border-line-rose bg-white px-2.5 py-2 text-[16px] font-semibold text-ink outline-none transition-colors placeholder:font-normal placeholder:text-[#c4a9b0] focus:border-maroon-500 sm:py-[7px] sm:text-[13px]"
+        className="w-full rounded-[10px] border border-line bg-white px-2.5 py-2 text-[16px] font-semibold text-ink outline-none transition-colors placeholder:font-normal placeholder:text-muted focus:border-brand-500 sm:py-[7px] sm:text-[13px]"
       />
     </label>
   );
@@ -232,10 +232,10 @@ export default function PlansPage() {
 
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex min-w-[220px] flex-1 items-center gap-2.5 rounded-xl border border-line-rose bg-white px-3.5 py-2.5 sm:max-w-[340px]">
-          <Search size={16} className="shrink-0 text-icon-rose" />
+        <div className="flex min-w-[220px] flex-1 items-center gap-2.5 rounded-xl border border-line bg-white px-3.5 py-2.5 sm:max-w-[340px]">
+          <Search size={16} className="shrink-0 text-icon" />
           <input
-            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[16px] font-medium text-ink outline-none placeholder:text-[#c4a9b0] sm:text-[13.5px]"
+            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[16px] font-medium text-ink outline-none placeholder:text-muted sm:text-[13.5px]"
             placeholder="Search plans by name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -251,14 +251,14 @@ export default function PlansPage() {
       <div className="admin-card mb-4 p-3 sm:p-4">
         <div className="mb-2.5 flex items-center justify-between gap-3 sm:mb-3">
           <div className="flex min-w-0 items-center gap-2">
-            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#f7e3e7]">
-              <Type size={14} className="text-maroon-700" />
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[var(--color-tint2)]">
+              <Type size={14} className="text-brand-700" />
             </div>
             <div className="min-w-0">
               <div className="font-display text-[14px] font-bold leading-tight text-ink">
                 Home Page Texts
               </div>
-              <div className="truncate text-[10.5px] font-medium text-muted-rose">
+              <div className="truncate text-[10.5px] font-medium text-muted">
                 Tab labels &amp; buy buttons on /home
                 <span className="hidden sm:inline"> — empty = default</span>
               </div>
@@ -269,7 +269,7 @@ export default function PlansPage() {
               type="button"
               onClick={saveTexts}
               disabled={savingTexts}
-              className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-[#7c1d33] to-[#93293f] px-3.5 py-2 text-[12.5px] font-bold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-55 sm:py-[7px]"
+              className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[10px] brand-grad px-3.5 py-2 text-[12.5px] font-bold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-55 sm:py-[7px]"
             >
               <Save size={13} />
               {savingTexts ? "Saving..." : "Save"}
@@ -277,7 +277,7 @@ export default function PlansPage() {
           )}
         </div>
         {!texts ? (
-          <div className="py-1 text-[11.5px] font-medium text-muted-rose">Loading…</div>
+          <div className="py-1 text-[11.5px] font-medium text-muted">Loading…</div>
         ) : (
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
             <MiniField
@@ -320,7 +320,7 @@ export default function PlansPage() {
                 <div
                   title={p.name}
                   className={`grid h-[46px] w-[46px] shrink-0 place-items-center overflow-hidden rounded-[12px] ${
-                    p.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[#f7e3e7] text-maroon-600"
+                    p.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[var(--color-tint2)] text-brand-600"
                   }`}
                 >
                   {p.image ? (
@@ -341,7 +341,7 @@ export default function PlansPage() {
                 </div>
                 <span
                   className={`shrink-0 rounded-full px-2.5 py-1 text-[10.5px] font-extrabold uppercase ${
-                    p.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[#f7e3e7] text-maroon-700"
+                    p.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[var(--color-tint2)] text-brand-700"
                   }`}
                 >
                   {p.vip ? "VIP" : "Daily"}
@@ -350,34 +350,34 @@ export default function PlansPage() {
 
               <div className="mt-2.5 flex items-end justify-between gap-2">
                 <div>
-                  <div className="text-[9.5px] font-bold uppercase tracking-[0.5px] text-[#8a6e75]">Price</div>
-                  <div className="mt-0.5 font-display text-[18px] font-extrabold leading-none text-maroon-700">
+                  <div className="text-[9.5px] font-bold uppercase tracking-[0.5px] text-muted">Price</div>
+                  <div className="mt-0.5 font-display text-[18px] font-extrabold leading-none text-brand-700">
                     {fmt0(p.price)}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11.5px] font-bold text-[#7d6a6e]">{p.active ? "Active" : "Off"}</span>
+                  <span className="text-[11.5px] font-bold text-[#475569]">{p.active ? "Active" : "Off"}</span>
                   <Switch checked={p.active} onChange={() => toggleActive(p)} />
                 </div>
               </div>
 
-              <div className="mt-2.5 grid grid-cols-3 gap-1.5 rounded-xl bg-[#fdf7f8] p-2">
+              <div className="mt-2.5 grid grid-cols-3 gap-1.5 rounded-xl bg-[var(--color-tint)] p-2">
                 <div>
-                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">Daily</div>
+                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-muted">Daily</div>
                   <div className="mt-0.5 text-[12.5px] font-extrabold text-[#16a34a]">{fmt0(p.daily)}</div>
                 </div>
                 <div>
-                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">Cycle</div>
+                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-muted">Cycle</div>
                   <div className="mt-0.5 text-[12.5px] font-extrabold text-ink">{p.cycle}d</div>
                 </div>
                 <div>
-                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75]">Return</div>
+                  <div className="text-[9px] font-bold uppercase tracking-[0.4px] text-muted">Return</div>
                   <div className="mt-0.5 text-[12.5px] font-extrabold text-[#a9791c]">{fmt0(p.total)}</div>
                 </div>
               </div>
 
-              <div className="mt-2 flex items-center justify-between border-t border-line-rose/60 pt-2">
-                <span className="text-[10.5px] font-semibold text-muted-rose">
+              <div className="mt-2 flex items-center justify-between border-t border-line/60 pt-2">
+                <span className="text-[10.5px] font-semibold text-muted">
                   Limit: {p.limit > 0 ? p.limit + "/user" : "Unlimited"}
                 </span>
                 <div className="flex gap-1.5">
@@ -385,7 +385,7 @@ export default function PlansPage() {
                     type="button"
                     aria-label="Edit plan"
                     onClick={() => openEdit(p)}
-                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line-rose bg-white px-3 py-1.5 text-[11.5px] font-extrabold text-maroon-700 transition-colors hover:bg-[#fbf1f3]"
+                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-[11.5px] font-extrabold text-brand-700 transition-colors hover:bg-[var(--color-tint2)]"
                   >
                     <Pencil size={12} />
                     Edit
@@ -394,7 +394,7 @@ export default function PlansPage() {
                     type="button"
                     aria-label="Delete plan"
                     onClick={() => setDel(p)}
-                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line-rose bg-white px-3 py-1.5 text-[11.5px] font-extrabold text-[#dc2626] transition-colors hover:bg-[#fdecec]"
+                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-[11.5px] font-extrabold text-[#dc2626] transition-colors hover:bg-[#fdecec]"
                   >
                     <Trash2 size={12} />
                     Delete
@@ -404,7 +404,7 @@ export default function PlansPage() {
             </div>
           ))}
           {filtered.length === 0 && (
-            <div className="admin-card py-8 text-center text-[13px] font-medium text-muted-rose">
+            <div className="admin-card py-8 text-center text-[13px] font-medium text-muted">
               No plans found
             </div>
           )}
@@ -435,7 +435,7 @@ export default function PlansPage() {
                         <div
                           title={p.name}
                           className={`grid h-[48px] w-[48px] shrink-0 place-items-center overflow-hidden rounded-[13px] ${
-                            p.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[#f7e3e7] text-maroon-600"
+                            p.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[var(--color-tint2)] text-brand-600"
                           }`}
                         >
                           {p.image ? (
@@ -463,7 +463,7 @@ export default function PlansPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="font-bold text-maroon-700">{fmt0(p.price)}</td>
+                    <td className="font-bold text-brand-700">{fmt0(p.price)}</td>
                     <td className="font-bold text-[#16a34a]">{fmt0(p.daily)}</td>
                     <td className="font-semibold text-ink">{p.cycle} Days</td>
                     <td className="font-bold text-[#a9791c]">{fmt0(p.total)}</td>
@@ -471,7 +471,7 @@ export default function PlansPage() {
                     <td>
                       <span
                         className={`rounded-full px-2.5 py-1 text-[10.5px] font-extrabold uppercase ${
-                          p.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[#f7e3e7] text-maroon-700"
+                          p.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[var(--color-tint2)] text-brand-700"
                         }`}
                       >
                         {p.vip ? "VIP" : "Daily"}
@@ -486,7 +486,7 @@ export default function PlansPage() {
                           type="button"
                           aria-label="Edit plan"
                           onClick={() => openEdit(p)}
-                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line-rose bg-white text-maroon-700 transition-colors hover:bg-[#fbf1f3]"
+                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line bg-white text-brand-700 transition-colors hover:bg-[var(--color-tint2)]"
                         >
                           <Pencil size={14} />
                         </button>
@@ -494,7 +494,7 @@ export default function PlansPage() {
                           type="button"
                           aria-label="Delete plan"
                           onClick={() => setDel(p)}
-                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line-rose bg-white text-[#dc2626] transition-colors hover:bg-[#fdecec]"
+                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line bg-white text-[#dc2626] transition-colors hover:bg-[#fdecec]"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -504,7 +504,7 @@ export default function PlansPage() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-10 text-center text-[13.5px] font-medium text-muted-rose">
+                    <td colSpan={9} className="py-10 text-center text-[13.5px] font-medium text-muted">
                       No plans found
                     </td>
                   </tr>
@@ -550,7 +550,7 @@ export default function PlansPage() {
             >
               <div className="flex items-center gap-3">
                 {form.image ? (
-                  <div className="relative h-[76px] w-[76px] shrink-0 overflow-hidden rounded-xl border border-line-rose bg-white">
+                  <div className="relative h-[76px] w-[76px] shrink-0 overflow-hidden rounded-xl border border-line bg-white">
                     <Image
                       src={form.image}
                       alt="Plan image"
@@ -562,8 +562,8 @@ export default function PlansPage() {
                   </div>
                 ) : (
                   <div
-                    className={`grid h-[76px] w-[76px] shrink-0 place-items-center rounded-xl border border-dashed border-line-rose bg-[#fdf7f8] ${
-                      form.vip ? "text-[#a9791c]" : "text-maroon-600"
+                    className={`grid h-[76px] w-[76px] shrink-0 place-items-center rounded-xl border border-dashed border-line bg-[var(--color-tint)] ${
+                      form.vip ? "text-[#a9791c]" : "text-brand-600"
                     }`}
                   >
                     {form.vip ? <Crown size={26} strokeWidth={1.6} /> : <Gem size={26} strokeWidth={1.6} />}
@@ -618,18 +618,18 @@ export default function PlansPage() {
           <Field label="Sort Order" hint="Lower numbers appear first">
             <TextInput type="number" value={form.sort} onChange={(e) => set("sort", e.target.value)} placeholder="0" />
           </Field>
-          <div className="flex items-center justify-between rounded-xl border border-line-rose bg-[#fdfafa] px-3 py-2.5 sm:px-4 sm:py-3">
+          <div className="flex items-center justify-between rounded-xl border border-line bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3">
             <div className="text-[13.5px] font-bold text-ink">VIP Plan</div>
             <Switch checked={form.vip} onChange={(v) => set("vip", v)} />
           </div>
-          <div className="flex items-center justify-between rounded-xl border border-line-rose bg-[#fdfafa] px-3 py-2.5 sm:px-4 sm:py-3">
+          <div className="flex items-center justify-between rounded-xl border border-line bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3">
             <div className="text-[13.5px] font-bold text-ink">Pre Sale</div>
             <Switch checked={form.presale} onChange={(v) => set("presale", v)} />
           </div>
-          <div className="flex items-center justify-between rounded-xl border border-line-rose bg-[#fdfafa] px-3 py-2.5 sm:px-4 sm:py-3 sm:col-span-2">
+          <div className="flex items-center justify-between rounded-xl border border-line bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3 sm:col-span-2">
             <div>
               <div className="text-[13.5px] font-bold text-ink">Active</div>
-              <div className="text-[11.5px] font-medium text-muted-rose">
+              <div className="text-[11.5px] font-medium text-muted">
                 Inactive plans will not be visible on the client
               </div>
             </div>

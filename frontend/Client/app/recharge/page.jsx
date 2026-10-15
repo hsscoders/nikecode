@@ -24,6 +24,7 @@ import {
 import logo from "../../public/aramco-logo.png";
 import useLiveWallet from "../components/useLiveWallet";
 import BottomNav from "../components/BottomNav";
+import { logoutUser } from "../components/liveCache";
 import { useSettings } from "../components/SettingsProvider";
 
 /* ================= DATA (live from admin recharge settings) ================= */
@@ -138,6 +139,7 @@ export default function RechargePage() {
   const [cfg, setCfg] = useState(() => mergeRecharge(gs && gs.recharge));
   const [autoGws, setAutoGws] = useState([]); // enabled auto gateways [{id, name}]
   const [qwLoading, setQwLoading] = useState(false); // create-order in flight
+  const [depSubmitting, setDepSubmitting] = useState(false); // manual deposit in flight
   const [paidBanner, setPaidBanner] = useState(""); // ?paid=<orderId> return banner
   const [manualOpen, setManualOpen] = useState(false);
   const autoGwsRef = useRef([]); // sync inside async fetch without re-running it
@@ -223,8 +225,7 @@ export default function RechargePage() {
   };
 
   const logout = () => {
-    localStorage.removeItem("zapto_token");
-    localStorage.removeItem("zapto_phone");
+    logoutUser();
     router.replace("/login");
   };
 
@@ -239,8 +240,12 @@ export default function RechargePage() {
   const activeMethods = cfg.methods.filter((m) => m.active);
   const selectedMethod = activeMethods.find((m) => m.name === method);
 
-  /* deposit request — appears as Pending in the admin panel, credited on approval */
+  /* deposit request — appears as Pending in the admin panel, credited on approval.
+     No local ledger copy: the server Transaction record IS the history
+     (the /transaction page reads it straight from the DB). */
   const submitDeposit = async () => {
+    if (depSubmitting) return false; /* in-flight guard — no double submits */
+    setDepSubmitting(true);
     const token = localStorage.getItem("zapto_token");
     const methodLabel = method || "Pay-T";
     try {
@@ -260,20 +265,9 @@ export default function RechargePage() {
     } catch (e) {
       showAlert("Network error — please try again");
       return false;
+    } finally {
+      setDepSubmitting(false);
     }
-    /* recharge txn record — shows up in transaction history */
-    try {
-      const txns = JSON.parse(localStorage.getItem("zapto_transactions") || "[]");
-      txns.unshift({
-        id: "RC" + String(Date.now()).slice(-8),
-        type: "recharge",
-        amount: Number(amount),
-        method: methodLabel.toUpperCase(),
-        at: new Date().toISOString(),
-        status: "Pending",
-      });
-      localStorage.setItem("zapto_transactions", JSON.stringify(txns));
-    } catch (e) {}
     showAlert("Recharge request submitted!");
     setAmount("");
     return true;
@@ -526,7 +520,7 @@ export default function RechargePage() {
                 </button>
               );
             })}
-            {activeMethods.length === 0 && !qwEnabled && (
+            {activeMethods.length === 0 && autoGws.length === 0 && (
               <div className="rounded-xl border border-dashed border-line-rose py-6 text-center text-[13px] font-semibold text-muted-rose">
                 No payment methods available right now
               </div>
@@ -640,13 +634,16 @@ export default function RechargePage() {
               </button>
               <button
                 type="button"
+                disabled={depSubmitting}
                 onClick={async () => {
                   const ok = await submitDeposit();
                   if (ok) setManualOpen(false);
                 }}
-                className={`flex-[2] cursor-pointer rounded-[14px] py-3.5 text-[15px] font-extrabold text-white ${gradientBtn}`}
+                className={`flex-[2] rounded-[14px] py-3.5 text-[15px] font-extrabold text-white ${
+                  depSubmitting ? "opacity-60" : "cursor-pointer " + gradientBtn
+                }`}
               >
-                I Have Paid →
+                {depSubmitting ? "Submitting..." : "I Have Paid →"}
               </button>
             </div>
           </div>

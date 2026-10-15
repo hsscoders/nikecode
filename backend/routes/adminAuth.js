@@ -2,9 +2,14 @@ const router = require("express").Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const Admin = require("../models/Admin");
+const { authRateLimit } = require("../middleware/rateLimit");
+const audit = require("../services/audit");
 
-/* ============ ADMIN LOGIN ============ */
-router.post("/login", async (req, res) => {
+/* ============ ADMIN LOGIN ============
+   Rate-limited like the user auth routes (per-IP burst + per-identity
+   lockout — the identity here is the username) and fully audited: every
+   attempt, success or fail, lands in the activity trail. */
+router.post("/login", authRateLimit, async (req, res) => {
   try {
     const { username, password } = req.body || {};
     if (!username || !password)
@@ -15,18 +20,43 @@ router.post("/login", async (req, res) => {
     const admin = await Admin.findOne({
       username: String(username).trim().toLowerCase(),
     });
-    if (!admin)
+    if (!admin) {
+      audit.log(req, {
+        actorType: "system",
+        action: "admin.login_failed",
+        category: "auth",
+        target: String(username).slice(0, 60),
+        message: "Failed admin login — unknown username",
+      });
       return res.status(401).json({ success: false, message: "Invalid credentials" });
+    }
 
     const ok = await bcrypt.compare(String(password), admin.password);
-    if (!ok)
+    if (!ok) {
+      audit.log(req, {
+        actorType: "system",
+        action: "admin.login_failed",
+        category: "auth",
+        target: admin.username,
+        message: "Failed admin login — wrong password",
+      });
       return res.status(401).json({ success: false, message: "Invalid credentials" });
+    }
 
     const token = jwt.sign(
       { id: admin._id, role: "admin" },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
+
+    audit.log(req, {
+      actorType: "admin",
+      actor: { id: admin._id, label: admin.username },
+      action: "admin.login",
+      category: "auth",
+      target: admin.username,
+      message: "Admin signed in to the panel",
+    });
 
     res.json({
       success: true,

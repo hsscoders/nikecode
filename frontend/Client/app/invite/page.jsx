@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import logo from "../../public/aramco-logo.png";
 import BottomNav from "../components/BottomNav";
-import { readCache, writeCache } from "../components/liveCache";
+import { readCache, writeCache, logoutUser } from "../components/liveCache";
 
 /* ================= HELPERS ================= */
 
@@ -192,8 +192,7 @@ export default function InvitePage() {
   };
 
   const logout = () => {
-    localStorage.removeItem("zapto_token");
-    localStorage.removeItem("zapto_phone");
+    logoutUser();
     router.replace("/login");
   };
 

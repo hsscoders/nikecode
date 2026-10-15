@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import logo from "../../public/aramco-logo.png";
 import BottomNav from "../components/BottomNav";
-import { readCache, clearUserSession } from "../components/liveCache";
+import { readCache, logoutUser } from "../components/liveCache";
 
 /* menu — Plan Record / Bank Settings / Txn History / Team / Invite / Support / Download / Logout */
 const MENU_ITEMS = [
@@ -42,16 +42,9 @@ const fmt = (n) =>
   "₹ " +
   Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/* type-wise amount sum from localStorage zapto_transactions */
-const sumByType = (type) => {
-  try {
-    return (JSON.parse(localStorage.getItem("zapto_transactions") || "[]"))
-      .filter((t) => t.type === type)
-      .reduce((s, t) => s + (Number(t.amount) || 0), 0);
-  } catch {
-    return 0;
-  }
-};
+/* All totals (recharge / income) come from the SERVER wallet — the DB is
+   the single source of truth. No local fallback sums: without the API the
+   honest answer is 0 until the network returns. */
 
 /* ================= SMALL PARTS ================= */
 
@@ -147,25 +140,16 @@ export default function ProfilePage() {
           setRechargeBalance(d.wallet.rechargeBalance || 0);
           setIncomeTotal(d.wallet.totalIncome || 0);
           setBalance(d.wallet.balance || 0);
-          if (d.wallet.userid) {
-            setUid(d.wallet.userid);
-            localStorage.setItem("zapto_uid", d.wallet.userid);
-          }
+          if (d.wallet.userid) setUid(d.wallet.userid);
           return;
         }
       } catch (e) {}
-      /* fallback */
-      setRechargeTotal(sumByType("recharge"));
-      setIncomeTotal(sumByType("income"));
+      /* server unreachable — zeros stay until the retry/live push arrives */
     })();
 
-    /* unique user ID — use the localStorage one if the server doesn't provide it */
-    let id = localStorage.getItem("zapto_uid");
-    if (!id) {
-      id = "ZP" + Math.floor(100000 + Math.random() * 900000);
-      localStorage.setItem("zapto_uid", id);
-    }
-    setUid(id);
+    /* instant userid from the session wallet cache (server value wins) */
+    const cachedWallet = readCache("wallet");
+    if (cachedWallet && cachedWallet.userid) setUid(cachedWallet.userid);
   }, [router]);
 
   /* INSTANT + LIVE — balance shows from cache instantly (no ₹0 flash), plus
@@ -179,7 +163,9 @@ export default function ProfilePage() {
       setBalance(w.balance || 0);
       if (w.userid) {
         setUid(w.userid);
-        localStorage.setItem("zapto_uid", w.userid);
+        /* legacy zapto_uid key removed — nothing reads it and it leaked the
+           userid past logout (clearUserSession scrubs it, but this page
+           resurrected it on every wallet push) */
       }
     };
     const c = readCache("wallet");
@@ -224,9 +210,7 @@ export default function ProfilePage() {
   };
 
   const logout = () => {
-    /* full session wipe — the next account on this device must not see this
-       user's balance, transactions, orders, invite code or bank card */
-    clearUserSession();
+    logoutUser();
     router.replace("/login");
   };
 

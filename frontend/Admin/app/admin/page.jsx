@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Users,
   ShoppingBag,
@@ -16,6 +17,8 @@ import {
   IndianRupee,
   Trophy,
   CalendarDays,
+  ChevronRight,
+  BellRing,
 } from "lucide-react";
 import AdminShell from "../../components/AdminShell";
 import { api, fmt0, fmtD } from "../../lib/api";
@@ -23,21 +26,32 @@ import { Pill, Loader, Toast, useToast } from "../../components/ui";
 
 export default function AdminDashboard() {
   const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [lastUp, setLastUp] = useState(null);
   const { toast, showToast, isError } = useToast();
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    setBusy(true);
     try {
       const d = await api("/api/admin/dashboard");
       setData(d);
+      setLastUp(new Date());
     } catch (e) {
       showToast(e.message, true);
+    } finally {
+      setBusy(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [load]);
+
+  /* auto-refresh every 30s — the panel stays current without manual reloads */
+  useEffect(() => {
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [load]);
 
   const st = data?.stats;
   const maxChart = data ? Math.max(1, ...data.chart.map((c) => c.count)) : 1;
@@ -45,7 +59,7 @@ export default function AdminDashboard() {
 
   const cards = st
     ? [
-        { lbl: "Total Users", val: st.totalUsers, sub: "+" + st.newUsers + " this week", Icon: Users, tile: "bg-[#f7e3e7] text-maroon-600" },
+        { lbl: "Total Users", val: st.totalUsers, sub: "+" + st.newUsers + " this week", Icon: Users, tile: "bg-[var(--color-tint2)] text-brand-600" },
         { lbl: "Total Purchases", val: st.totalPurchases, sub: fmt0(st.investedAmount) + " invested", Icon: ShoppingBag, tile: "bg-[#fdf6e4] text-[#a9791c]" },
         { lbl: "Approved Withdrawals", val: st.withdrawals.Success.count, sub: fmt0(st.withdrawals.Success.amount), Icon: CircleCheck, tile: "bg-[#eafaf0] text-[#16a34a]" },
         { lbl: "Pending Withdrawals", val: st.withdrawals.Pending.count, sub: fmt0(st.withdrawals.Pending.amount), Icon: Clock3, tile: "bg-[#fdf3e0] text-[#a9791c]" },
@@ -64,11 +78,73 @@ export default function AdminDashboard() {
         <Loader />
       ) : (
         <div className="flex flex-col gap-3.5 sm:gap-5">
+          {/* ===== TOOLBAR — refresh + last updated ===== */}
+          <div className="flex items-center justify-between">
+            <div className="text-[11.5px] font-semibold text-muted">
+              {lastUp
+                ? "Updated " +
+                  new Intl.DateTimeFormat("en-GB", {
+                    timeZone: "Asia/Kolkata",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    hour12: false,
+                  }).format(lastUp) +
+                  " IST · auto-refreshes every 30s"
+                : ""}
+            </div>
+            <button
+              type="button"
+              aria-label="Refresh dashboard"
+              onClick={load}
+              disabled={busy}
+              className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-line bg-white px-3 py-2 text-[12.5px] font-extrabold text-brand-700 transition-colors hover:bg-[var(--color-tint2)] disabled:opacity-60"
+            >
+              <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+              Refresh
+            </button>
+          </div>
+
+          {/* ===== PENDING APPROVALS — one-tap action strip ===== */}
+          {(st.deposits?.Pending?.count > 0 || st.withdrawals?.Pending?.count > 0) && (
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-4">
+              {[
+                { href: "/admin/deposits", lbl: "Pending Deposits", val: st.deposits?.Pending?.count || 0, amt: st.deposits?.Pending?.amount || 0, tile: "border-[#f3e2b5] bg-[#fdf6e4]", chip: "bg-[#a9791c]", Icon: ArrowDownToLine },
+                { href: "/admin/withdrawals", lbl: "Pending Withdrawals", val: st.withdrawals?.Pending?.count || 0, amt: st.withdrawals?.Pending?.amount || 0, tile: "border-[#f3c4c4] bg-[#fdf1f1]", chip: "bg-[#b91c1c]", Icon: ArrowUpFromLine },
+              ]
+                .filter((q) => q.val > 0)
+                .map((q) => (
+                  <Link
+                    key={q.lbl}
+                    href={q.href}
+                    className={`group flex items-center gap-3.5 rounded-[16px] border px-4 py-3.5 shadow-[0_6px_18px_rgba(49,46,129,0.08)] transition-all duration-150 hover:-translate-y-0.5 sm:px-5 ${q.tile}`}
+                  >
+                    <span className={`relative grid h-[42px] w-[42px] shrink-0 place-items-center rounded-[13px] bg-white ${q.chip === "bg-[#a9791c]" ? "text-[#a9791c]" : "text-[#b91c1c]"}`}>
+                      <BellRing size={19} strokeWidth={2.1} />
+                      <span className={`absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[10px] font-extrabold text-white ${q.chip}`}>
+                        {q.val}
+                      </span>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-display text-[15px] font-bold text-ink">{q.lbl}</span>
+                      <span className="mt-0.5 block text-[12px] font-semibold text-muted">
+                        {fmt0(q.amt)} awaiting your action
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1 text-[12.5px] font-extrabold text-brand-700">
+                      Review
+                      <ChevronRight size={15} className="transition-transform duration-150 group-hover:translate-x-0.5" />
+                    </span>
+                  </Link>
+                ))}
+            </div>
+          )}
+
           {/* ===== TODAY STRIP — IST business day ===== */}
           <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4">
             {[
               { lbl: "Recharge Today", val: fmt0(st.today.recharge), Icon: ArrowDownToLine, tile: "bg-[#eafaf0] text-[#16a34a]" },
-              { lbl: "Withdraw Today", val: fmt0(st.today.withdrawals), Icon: ArrowUpFromLine, tile: "bg-[#f7e3e7] text-maroon-600" },
+              { lbl: "Withdraw Today", val: fmt0(st.today.withdrawals), Icon: ArrowUpFromLine, tile: "bg-[var(--color-tint2)] text-brand-600" },
               { lbl: "New Users Today", val: st.today.users, Icon: Users, tile: "bg-[#fdf6e4] text-[#a9791c]" },
               { lbl: "Income Paid Today", val: fmt0(st.today.income), Icon: IndianRupee, tile: "bg-[#fdf3e0] text-[#a9791c]" },
             ].map(({ lbl, val, Icon, tile }) => (
@@ -77,7 +153,7 @@ export default function AdminDashboard() {
                   <Icon className="h-[17px] w-[17px] sm:h-5 sm:w-5" strokeWidth={2.1} />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1 truncate text-[9px] font-bold uppercase tracking-[0.4px] text-[#8a6e75] sm:text-[10px] sm:tracking-[0.5px]">
+                  <div className="flex items-center gap-1 truncate text-[9px] font-bold uppercase tracking-[0.4px] text-muted sm:text-[10px] sm:tracking-[0.5px]">
                     <CalendarDays className="h-[10px] w-[10px] sm:h-[11px] sm:w-[11px]" />
                     {lbl}
                   </div>
@@ -98,13 +174,13 @@ export default function AdminDashboard() {
                   <Icon className="h-[18px] w-[18px] sm:h-6 sm:w-6" strokeWidth={2} />
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate text-[9.5px] font-bold uppercase tracking-[0.3px] text-[#8a6e75] sm:text-[11px] sm:tracking-[0.5px]">
+                  <div className="truncate text-[9.5px] font-bold uppercase tracking-[0.3px] text-muted sm:text-[11px] sm:tracking-[0.5px]">
                     {lbl}
                   </div>
                   <div className="mt-0.5 font-display text-[17px] font-bold leading-none text-ink sm:text-[26px]">
                     {val}
                   </div>
-                  <div className="mt-0.5 truncate text-[10px] font-semibold text-muted-rose sm:mt-1 sm:text-[11.5px]">{sub}</div>
+                  <div className="mt-0.5 truncate text-[10px] font-semibold text-muted sm:mt-1 sm:text-[11.5px]">{sub}</div>
                 </div>
               </div>
             ))}
@@ -119,35 +195,35 @@ export default function AdminDashboard() {
                   <div className="font-display text-[17px] font-bold text-ink">
                     New Users — Last 7 Days
                   </div>
-                  <div className="mt-0.5 text-[12px] font-medium text-muted-rose">
+                  <div className="mt-0.5 text-[12px] font-medium text-muted">
                     Daily registrations trend
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 rounded-full bg-[#f7e3e7] px-3 py-1.5 text-[12px] font-extrabold text-maroon-700">
+                <div className="flex items-center gap-1.5 rounded-full bg-[var(--color-tint2)] px-3 py-1.5 text-[12px] font-extrabold text-brand-700">
                   <TrendingUp size={14} />
                   {st.newUsers} total
                 </div>
               </div>
               <div className="mt-5 flex h-[170px] items-end gap-2.5 sm:gap-4">
                 {data.chart.map((c) => (
-                  <div key={c.day} className="group flex flex-1 flex-col items-center gap-2">
-                    <div className="text-[11px] font-extrabold text-maroon-700 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div key={c.day} className="chart-col group flex flex-1 flex-col items-center gap-2">
+                    <div className="text-[11px] font-extrabold text-brand-700 opacity-0 transition-opacity group-hover:opacity-100">
                       {c.count}
                     </div>
                     <div
-                      className="w-full max-w-[46px] rounded-t-[8px] bg-[linear-gradient(180deg,#93293f_0%,#7c1d33_100%)] transition-all duration-300 group-hover:bg-[linear-gradient(180deg,#d4a94f_0%,#a9791c_100%)]"
+                      className="bar-fill bar-primary w-full max-w-[46px] rounded-t-[8px] transition-all duration-300"
                       style={{ height: Math.max(6, (c.count / maxChart) * 120) + "px" }}
                     />
-                    <div className="text-[10.5px] font-bold text-muted-rose">{c.day}</div>
+                    <div className="text-[10.5px] font-bold text-muted">{c.day}</div>
                   </div>
                 ))}
               </div>
             </div>
 
             {/* Wallet snapshot */}
-            <div className="relative overflow-hidden rounded-[18px] bg-[linear-gradient(150deg,#42091a_0%,#6b1830_60%,#93293f_100%)] p-5 shadow-[0_8px_28px_rgba(66,9,26,0.35)]">
-              <div className="pointer-events-none absolute -right-10 -top-10 h-[140px] w-[140px] rounded-full bg-gold/15 blur-2xl" />
-              <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[1px] text-gold">
+            <div className="admin-hero relative overflow-hidden rounded-[18px] p-5">
+              <div className="pointer-events-none absolute -right-10 -top-10 h-[140px] w-[140px] rounded-full bg-accent/15 blur-2xl" />
+              <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[1px] text-accent">
                 <Wallet size={14} />
                 Payout Liability
               </div>
@@ -187,16 +263,16 @@ export default function AdminDashboard() {
                   <div className="font-display text-[17px] font-bold text-ink">
                     Money Flow — Last 7 Days
                   </div>
-                  <div className="mt-0.5 text-[12px] font-medium text-muted-rose">
+                  <div className="mt-0.5 text-[12px] font-medium text-muted">
                     Successful deposits vs successful withdrawals
                   </div>
                 </div>
                 <div className="flex items-center gap-3.5 text-[11px] font-bold">
-                  <span className="flex items-center gap-1.5 text-maroon-700">
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#7c1d33]" /> Deposits
+                  <span className="flex items-center gap-1.5 text-brand-700">
+                    <span className="h-2.5 w-2.5 rounded-full bg-brand-700" /> Deposits
                   </span>
                   <span className="flex items-center gap-1.5 text-[#a9791c]">
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#d4a94f]" /> Withdrawals
+                    <span className="h-2.5 w-2.5 rounded-full bg-accent" /> Withdrawals
                   </span>
                 </div>
               </div>
@@ -205,17 +281,17 @@ export default function AdminDashboard() {
                   <div key={f.day} className="group flex flex-1 flex-col items-center gap-2">
                     <div className="flex h-[120px] w-full max-w-[52px] items-end justify-center gap-1">
                       <div
-                        className="w-[45%] rounded-t-[6px] bg-[linear-gradient(180deg,#93293f_0%,#7c1d33_100%)] transition-all duration-300"
+                        className="bar-fill bar-primary w-[45%] rounded-t-[6px] transition-all duration-300"
                         style={{ height: Math.max(4, (f.deposit / maxFlow) * 120) + "px" }}
                         title={"Deposits " + fmt0(f.deposit)}
                       />
                       <div
-                        className="w-[45%] rounded-t-[6px] bg-[linear-gradient(180deg,#d4a94f_0%,#a9791c_100%)] transition-all duration-300"
+                        className="bar-fill bar-accent w-[45%] rounded-t-[6px] transition-all duration-300"
                         style={{ height: Math.max(4, (f.withdraw / maxFlow) * 120) + "px" }}
                         title={"Withdrawals " + fmt0(f.withdraw)}
                       />
                     </div>
-                    <div className="text-[10.5px] font-bold text-muted-rose">{f.day}</div>
+                    <div className="text-[10.5px] font-bold text-muted">{f.day}</div>
                   </div>
                 ))}
               </div>
@@ -223,7 +299,7 @@ export default function AdminDashboard() {
 
             {/* Top investors */}
             <div className="admin-card overflow-hidden">
-              <div className="flex items-center justify-between border-b border-line-rose bg-[#fbf3f4] px-5 py-3.5">
+              <div className="flex items-center justify-between border-b border-line bg-[var(--color-tint)] px-5 py-3.5">
                 <div className="flex items-center gap-2">
                   <Trophy size={16} className="text-[#a9791c]" />
                   <div className="font-display text-[15.5px] font-bold text-ink">Top Investors</div>
@@ -233,7 +309,7 @@ export default function AdminDashboard() {
                 </span>
               </div>
               {data.topUsers.length === 0 ? (
-                <div className="px-5 py-8 text-center text-[13px] font-medium text-muted-rose">
+                <div className="px-5 py-8 text-center text-[13px] font-medium text-muted">
                   No investors yet
                 </div>
               ) : (
@@ -241,13 +317,13 @@ export default function AdminDashboard() {
                   {data.topUsers.map((u, i) => (
                     <div
                       key={u.phone || i}
-                      className="flex items-center gap-3 border-b border-[#f7ecef] px-5 py-3 last:border-b-0"
+                      className="flex items-center gap-3 border-b border-row px-5 py-3 last:border-b-0"
                     >
                       <div
                         className={`grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-[12px] font-extrabold ${
                           i === 0
-                            ? "bg-[linear-gradient(135deg,#d4a94f,#a9791c)] text-white"
-                            : "bg-[#f7e3e7] text-maroon-700"
+                            ? "bg-[linear-gradient(135deg,#fbbf24,#a9791c)] text-white"
+                            : "bg-[var(--color-tint2)] text-brand-700"
                         }`}
                       >
                         {i + 1}
@@ -255,13 +331,13 @@ export default function AdminDashboard() {
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[13px] font-bold text-ink">
                           {u.name || u.phone}
-                          {u.name ? <span className="font-semibold text-muted-rose"> · {u.phone}</span> : ""}
+                          {u.name ? <span className="font-semibold text-muted"> · {u.phone}</span> : ""}
                         </div>
-                        <div className="text-[11px] font-medium text-muted-rose">
+                        <div className="text-[11px] font-medium text-muted">
                           {u.userid || "—"} · {u.plans} plan{u.plans > 1 ? "s" : ""}
                         </div>
                       </div>
-                      <div className="text-[13.5px] font-extrabold text-maroon-700">{fmt0(u.invested)}</div>
+                      <div className="text-[13.5px] font-extrabold text-brand-700">{fmt0(u.invested)}</div>
                     </div>
                   ))}
                 </div>
@@ -273,14 +349,14 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {/* Recent invests */}
             <div className="admin-card overflow-hidden">
-              <div className="flex items-center justify-between border-b border-line-rose bg-[#fbf3f4] px-5 py-3.5">
+              <div className="flex items-center justify-between border-b border-line bg-[var(--color-tint)] px-5 py-3.5">
                 <div className="font-display text-[15.5px] font-bold text-ink">Recent Purchases</div>
-                <span className="rounded-full bg-[#f7e3e7] px-2.5 py-1 text-[10.5px] font-extrabold text-maroon-700">
+                <span className="rounded-full bg-[var(--color-tint2)] px-2.5 py-1 text-[10.5px] font-extrabold text-brand-700">
                   {data.recentInvests.length}
                 </span>
               </div>
               {data.recentInvests.length === 0 ? (
-                <div className="px-5 py-8 text-center text-[13px] font-medium text-muted-rose">
+                <div className="px-5 py-8 text-center text-[13px] font-medium text-muted">
                   No purchases yet
                 </div>
               ) : (
@@ -288,19 +364,19 @@ export default function AdminDashboard() {
                   {data.recentInvests.map((inv) => (
                     <div
                       key={inv._id}
-                      className="flex items-center gap-3 border-b border-[#f7ecef] px-5 py-3 last:border-b-0"
+                      className="flex items-center gap-3 border-b border-row px-5 py-3 last:border-b-0"
                     >
-                      <div className={`grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[12px] ${inv.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[#f7e3e7] text-maroon-600"}`}>
+                      <div className={`grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[12px] ${inv.vip ? "bg-[#fdf6e4] text-[#a9791c]" : "bg-[var(--color-tint2)] text-brand-600"}`}>
                         {inv.vip ? <Crown size={18} /> : <ShoppingBag size={18} />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[13.5px] font-bold text-ink">
-                          {inv.planName} <span className="font-semibold text-muted-rose">· {inv.phone}</span>
+                          {inv.planName} <span className="font-semibold text-muted">· {inv.phone}</span>
                         </div>
-                        <div className="text-[11.5px] font-medium text-muted-rose">{fmtD(inv.createdAt)}</div>
+                        <div className="text-[11.5px] font-medium text-muted">{fmtD(inv.createdAt)}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-[14px] font-extrabold text-maroon-700">{fmt0(inv.price)}</div>
+                        <div className="text-[14px] font-extrabold text-brand-700">{fmt0(inv.price)}</div>
                         <div className="text-[10.5px] font-semibold text-[#16a34a]">{fmt0(inv.daily)}/day</div>
                       </div>
                     </div>
@@ -311,14 +387,14 @@ export default function AdminDashboard() {
 
             {/* Recent withdrawals */}
             <div className="admin-card overflow-hidden">
-              <div className="flex items-center justify-between border-b border-line-rose bg-[#fbf3f4] px-5 py-3.5">
+              <div className="flex items-center justify-between border-b border-line bg-[var(--color-tint)] px-5 py-3.5">
                 <div className="font-display text-[15.5px] font-bold text-ink">Recent Withdrawals</div>
                 <span className="rounded-full bg-[#fdf3e0] px-2.5 py-1 text-[10.5px] font-extrabold text-[#a9791c]">
                   {data.recentWithdrawals.length}
                 </span>
               </div>
               {data.recentWithdrawals.length === 0 ? (
-                <div className="px-5 py-8 text-center text-[13px] font-medium text-muted-rose">
+                <div className="px-5 py-8 text-center text-[13px] font-medium text-muted">
                   No withdrawals yet
                 </div>
               ) : (
@@ -326,16 +402,16 @@ export default function AdminDashboard() {
                   {data.recentWithdrawals.map((w) => (
                     <div
                       key={w._id}
-                      className="flex items-center gap-3 border-b border-[#f7ecef] px-5 py-3 last:border-b-0"
+                      className="flex items-center gap-3 border-b border-row px-5 py-3 last:border-b-0"
                     >
                       <div className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[12px] bg-[#eafaf0] text-[#16a34a]">
                         <ArrowUpFromLine size={18} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[13.5px] font-bold text-ink">
-                          {w.phone} <span className="font-semibold text-muted-rose">· {w.bankName}</span>
+                          {w.phone} <span className="font-semibold text-muted">· {w.bankName}</span>
                         </div>
-                        <div className="text-[11.5px] font-medium text-muted-rose">{fmtD(w.createdAt)}</div>
+                        <div className="text-[11.5px] font-medium text-muted">{fmtD(w.createdAt)}</div>
                       </div>
                       <div className="flex items-center gap-2.5">
                         <div className="text-[14px] font-extrabold text-ink">{fmt0(w.amount)}</div>

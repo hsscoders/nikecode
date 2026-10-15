@@ -128,14 +128,14 @@ export default function PopupSettingsPage() {
         <div className="mx-auto flex max-w-[860px] flex-col gap-3.5 sm:gap-5">
           {/* ===== STATUS CARD ===== */}
           <div className="admin-card flex flex-wrap items-center gap-3 p-4 sm:gap-4 sm:p-5">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white shadow-[0_6px_16px_rgba(124,29,51,0.3)]">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl brand-grad text-white shadow-[0_6px_16px_var(--s-btn,rgba(79,70,229,0.3))]">
               <Power size={19} />
             </div>
             <div className="min-w-[200px] flex-1">
               <div className="font-display text-[15.5px] font-bold text-ink">
                 Popup Visibility
               </div>
-              <div className="mt-0.5 text-[12.5px] font-medium leading-relaxed text-muted-rose">
+              <div className="mt-0.5 text-[12.5px] font-medium leading-relaxed text-muted">
                 {cfg.enabled
                   ? "Popup is ON — it opens automatically on the client home page."
                   : "Popup is OFF — hidden from all users until you enable it again."}
@@ -158,7 +158,7 @@ export default function PopupSettingsPage() {
           {/* ===== CONTENT CARD ===== */}
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-4 sm:p-6">
             <div className="flex items-center gap-2">
-              <MessageSquareText size={17} className="text-maroon-700" />
+              <MessageSquareText size={17} className="text-brand-700" />
               <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">Popup Content</div>
             </div>
 
@@ -204,21 +204,21 @@ export default function PopupSettingsPage() {
           <div className="admin-card flex flex-col gap-3 p-3.5 sm:gap-3.5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Type size={17} className="text-maroon-700" />
+                <Type size={17} className="text-brand-700" />
                 <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">Text Bullets</div>
               </div>
-              <span className="rounded-full bg-[#fbf1f3] px-3 py-1 text-[11.5px] font-bold text-maroon-700">
+              <span className="rounded-full bg-[var(--color-tint2)] px-3 py-1 text-[11.5px] font-bold text-brand-700">
                 {cfg.bullets.length} / {MAX_BULLETS}
               </span>
             </div>
 
-            <div className="rounded-xl bg-[#fbf3f4] px-4 py-2.5 text-[12px] font-medium leading-relaxed text-[#7d6a6e]">
+            <div className="rounded-xl bg-[var(--color-tint)] px-4 py-2.5 text-[12px] font-medium leading-relaxed text-[#475569]">
               These lines appear inside the home page popup. Click the icon to change it,
               type the text, then press Save. Changes reflect on the client instantly.
             </div>
 
             {cfg.bullets.length === 0 && (
-              <div className="rounded-xl border border-dashed border-line-rose py-8 text-center text-[13px] font-semibold text-muted-rose">
+              <div className="rounded-xl border border-dashed border-line py-8 text-center text-[13px] font-semibold text-muted">
                 No text bullets yet — add your first line below
               </div>
             )}
@@ -228,7 +228,7 @@ export default function PopupSettingsPage() {
               return (
                 <div
                   key={i}
-                  className="flex items-center gap-2.5 rounded-xl border border-line-rose bg-white p-2.5"
+                  className="flex items-center gap-2.5 rounded-xl border border-line bg-white p-2.5"
                 >
                   {/* Icon button + picker */}
                   <div className="relative shrink-0">
@@ -236,7 +236,7 @@ export default function PopupSettingsPage() {
                       type="button"
                       title="Change icon"
                       onClick={() => setPick(pick === i ? null : i)}
-                      className="grid h-10 w-10 cursor-pointer place-items-center rounded-[10px] border border-line-rose bg-[#fbf1f3] text-maroon-600 transition-colors hover:bg-[#f7e3e7]"
+                      className="grid h-10 w-10 cursor-pointer place-items-center rounded-[10px] border border-line bg-[var(--color-tint2)] text-brand-600 transition-colors hover:bg-[var(--color-tint2)]"
                     >
                       <CurIcon size={17} />
                     </button>
@@ -244,7 +244,7 @@ export default function PopupSettingsPage() {
                     {pick === i && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setPick(null)} />
-                        <div className="absolute left-0 top-12 z-20 grid w-[188px] grid-cols-4 gap-1.5 rounded-xl border border-line-rose bg-white p-2 shadow-[0_16px_40px_rgba(66,9,26,0.25)]">
+                        <div className="absolute left-0 top-12 z-20 grid w-[188px] grid-cols-4 gap-1.5 rounded-xl border border-line bg-white p-2 shadow-[0_16px_40px_rgba(30,27,75,0.25)]">
                           {ICONS.map(({ key, Icon: OIcon }) => (
                             <button
                               key={key}
@@ -256,8 +256,8 @@ export default function PopupSettingsPage() {
                               }}
                               className={`grid h-9 w-9 cursor-pointer place-items-center rounded-[9px] transition-all ${
                                 b.icon === key
-                                  ? "bg-[linear-gradient(135deg,#7c1d33,#93293f)] text-white"
-                                  : "bg-[#fbf1f3] text-maroon-600 hover:bg-[#f7e3e7]"
+                                  ? "brand-grad text-white"
+                                  : "bg-[var(--color-tint2)] text-brand-600 hover:bg-[var(--color-tint2)]"
                               }`}
                             >
                               <OIcon size={16} />
@@ -292,7 +292,7 @@ export default function PopupSettingsPage() {
               type="button"
               onClick={addBullet}
               disabled={cfg.bullets.length >= MAX_BULLETS}
-              className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-maroon-600/40 bg-[#fdf7f8] py-3 text-[13.5px] font-extrabold text-maroon-700 transition-all hover:bg-[#fbf1f3] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-brand-600/40 bg-[var(--color-tint)] py-3 text-[13.5px] font-extrabold text-brand-700 transition-all hover:bg-[var(--color-tint2)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus size={17} />
               Add New Text
@@ -303,7 +303,7 @@ export default function PopupSettingsPage() {
           <div className="sticky bottom-3 flex justify-end sm:bottom-4">
             <button
               type="button"
-              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(124,29,51,0.35)] sm:w-auto sm:px-8"
+              className="admin-btn admin-btn-primary w-full px-6 shadow-[0_10px_26px_rgba(79,70,229,0.35)] sm:w-auto sm:px-8"
               onClick={save}
               disabled={saving}
             >

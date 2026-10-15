@@ -158,6 +158,8 @@ export default function LoginPage() {
       clearUserSession();
       localStorage.setItem("zapto_token", data.token);
       localStorage.setItem("zapto_phone", (data.user && data.user.phone) || "");
+      /* live pushes — re-auth the shared socket with the fresh token */
+      if (window.__zaptoSocketRefreshAuth) window.__zaptoSocketRefreshAuth();
       router.replace("/home");
     } catch (err) {
       setError("Network error — please check your connection and try again");

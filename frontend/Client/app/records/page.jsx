@@ -20,7 +20,7 @@ import {
 import logo from "../../public/aramco-logo.png";
 import planDaily from "../../public/plan-daily.png";
 import planVip from "../../public/plan-vip.png";
-import { clearUserSession, readCache, writeCache } from "../components/liveCache";
+import { logoutUser, readCache, writeCache } from "../components/liveCache";
 import BottomNav from "../components/BottomNav";
 import useLive from "../components/useLive";
 
@@ -207,12 +207,6 @@ export default function OrderedPage() {
     const cached = readCache("invests");
     if (Array.isArray(cached) && cached.length) {
       setOrders(cached);
-    } else {
-      try {
-        setOrders(JSON.parse(localStorage.getItem("zapto_orders") || "[]"));
-      } catch {
-        setOrders([]);
-      }
     }
     setReady(true);
     (async () => {
@@ -224,19 +218,29 @@ export default function OrderedPage() {
         if (d.success && Array.isArray(d.invests)) {
           setOrders(d.invests);
           writeCache("invests", d.invests);
-          try {
-            localStorage.setItem("zapto_orders", JSON.stringify(d.invests));
-          } catch (e) {}
         }
       } catch (e) {}
     })();
   }, [router]);
 
-  /* LIVE — a new plan purchase (from this or another tab) → list refreshes
-     instantly from the refreshed orders cache, without a reload */
+  /* LIVE — a new plan purchase (from this or another tab) → refetch from the
+     server. The cache read alone was dead here: sessionStorage is per-tab and
+     nothing on this page rewrote it, so push-driven updates never appeared. */
   useLive("activity:update", () => {
-    const cached = readCache("invests");
-    if (Array.isArray(cached) && cached.length) setOrders(cached);
+    (async () => {
+      try {
+        const token = localStorage.getItem("zapto_token");
+        if (!token) return;
+        const r = await fetch("/api/invests", {
+          headers: { Authorization: "Bearer " + token },
+        });
+        const d = await r.json();
+        if (d.success && Array.isArray(d.invests)) {
+          setOrders(d.invests);
+          writeCache("invests", d.invests);
+        }
+      } catch (e) {}
+    })();
   });
 
   /* Centered alert — 2s auto-hide */
@@ -250,9 +254,7 @@ export default function OrderedPage() {
   };
 
   const logout = () => {
-    /* full session wipe — the next account on this device must not see this
-       user's data (balance / orders / bank card / caches) */
-    clearUserSession();
+    logoutUser();
     router.replace("/login");
   };
 

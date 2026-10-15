@@ -143,7 +143,7 @@ export default function BannersPage() {
       <Toast message={toast} isError={isError} />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="text-[13px] font-medium text-muted-rose">
+        <div className="text-[13px] font-medium text-muted">
           {banners ? `${banners.length} banner(s) total` : "Loading..."}
         </div>
         <button type="button" className="admin-btn admin-btn-primary" onClick={openAdd}>
@@ -156,11 +156,11 @@ export default function BannersPage() {
         <Loader />
       ) : banners.length === 0 ? (
         <div className="admin-card flex flex-col items-center justify-center py-16">
-          <div className="grid h-[64px] w-[64px] place-items-center rounded-[20px] bg-[#f7e3e7] text-maroon-600">
+          <div className="grid h-[64px] w-[64px] place-items-center rounded-[20px] bg-[var(--color-tint2)] text-brand-600">
             <ImagePlus size={30} />
           </div>
           <div className="mt-4 font-display text-[17px] font-bold text-ink">No banners yet</div>
-          <p className="mt-1 text-[13px] font-medium text-muted-rose">
+          <p className="mt-1 text-[13px] font-medium text-muted">
             Add your first slider banner
           </p>
         </div>
@@ -169,7 +169,7 @@ export default function BannersPage() {
           {banners.map((b) => (
             <div key={b._id} className="admin-card overflow-hidden">
               {/* PREVIEW */}
-              <div className="relative h-[150px] bg-[#fbf1f3]">
+              <div className="relative h-[150px] bg-[var(--color-tint2)]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={bannerSrc(b.image)}
@@ -181,7 +181,7 @@ export default function BannersPage() {
                 />
                 {!b.active && (
                   <div className="absolute inset-0 grid place-items-center bg-black/45">
-                    <span className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.5px] text-maroon-800">
+                    <span className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.5px] text-brand-800">
                       Inactive
                     </span>
                   </div>
@@ -196,14 +196,14 @@ export default function BannersPage() {
                 <div className="truncate text-[14px] font-bold text-ink">
                   {b.title || "Untitled banner"}
                 </div>
-                <div className="mt-1 flex items-center gap-1.5 truncate text-[11.5px] font-medium text-muted-rose">
+                <div className="mt-1 flex items-center gap-1.5 truncate text-[11.5px] font-medium text-muted">
                   <Link2 size={12} className="shrink-0" />
                   {b.image}
                 </div>
-                <div className="mt-3 flex items-center justify-between border-t border-line-rose/70 pt-3">
+                <div className="mt-3 flex items-center justify-between border-t border-line/70 pt-3">
                   <div className="flex items-center gap-2">
                     <Switch checked={b.active} onChange={() => toggleActive(b)} />
-                    <span className="text-[12px] font-bold text-[#7d6a6e]">
+                    <span className="text-[12px] font-bold text-[#475569]">
                       {b.active ? "Active" : "Hidden"}
                     </span>
                   </div>
@@ -212,7 +212,7 @@ export default function BannersPage() {
                       type="button"
                       aria-label="Edit banner"
                       onClick={() => openEdit(b)}
-                      className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line-rose bg-white text-maroon-700 transition-colors hover:bg-[#fbf1f3]"
+                      className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line bg-white text-brand-700 transition-colors hover:bg-[var(--color-tint2)]"
                     >
                       <Pencil size={14} />
                     </button>
@@ -220,7 +220,7 @@ export default function BannersPage() {
                       type="button"
                       aria-label="Delete banner"
                       onClick={() => setDel(b)}
-                      className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line-rose bg-white text-[#dc2626] transition-colors hover:bg-[#fdecec]"
+                      className="grid h-8 w-8 cursor-pointer place-items-center rounded-[10px] border border-line bg-white text-[#dc2626] transition-colors hover:bg-[#fdecec]"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -267,11 +267,11 @@ export default function BannersPage() {
               type="button"
               disabled={uploading}
               onClick={() => fileRef.current && fileRef.current.click()}
-              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line-rose bg-[#fdfafa] px-4 py-6 text-[13px] font-bold text-maroon-700 transition-colors hover:bg-[#fbf1f3] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line bg-[var(--color-tint)] px-4 py-6 text-[13px] font-bold text-brand-700 transition-colors hover:bg-[var(--color-tint2)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {uploading ? (
                 <>
-                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-maroon-600 border-t-transparent" />
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
                   Uploading...
                 </>
               ) : (
@@ -289,7 +289,7 @@ export default function BannersPage() {
             />
           </Field>
           {form.image && (
-            <div className="h-[120px] overflow-hidden rounded-xl border border-line-rose bg-[#fbf1f3]">
+            <div className="h-[120px] overflow-hidden rounded-xl border border-line bg-[var(--color-tint2)]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={bannerSrc(form.image)}
@@ -308,7 +308,7 @@ export default function BannersPage() {
             <Field label="Sort Order">
               <TextInput type="number" value={form.sort} onChange={(e) => set("sort", e.target.value)} placeholder="1" />
             </Field>
-            <div className="flex items-center justify-between rounded-xl border border-line-rose bg-[#fdfafa] px-3 py-2.5 sm:px-4 sm:py-3">
+            <div className="flex items-center justify-between rounded-xl border border-line bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3">
               <div className="text-[13.5px] font-bold text-ink">Active</div>
               <Switch checked={form.active} onChange={(v) => set("active", v)} />
             </div>

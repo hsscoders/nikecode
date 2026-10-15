@@ -12,7 +12,7 @@ const LEVELS = [
     label: "Level 1 Commission",
     desc: "Direct referral — earned on every plan purchase by users registered with your invite code",
     Icon: Users,
-    tile: "bg-[#f7e3e7] text-maroon-600",
+    tile: "bg-[var(--color-tint2)] text-brand-600",
     example: 250,
   },
   {
@@ -96,21 +96,21 @@ export default function CommissionPage() {
                   </div>
                   <div className="font-display text-[15px] font-bold text-ink sm:text-[16px]">{label}</div>
                 </div>
-                <p className="mt-3 min-h-[38px] text-[12.5px] font-medium leading-relaxed text-muted-rose">
+                <p className="mt-3 min-h-[38px] text-[12.5px] font-medium leading-relaxed text-muted">
                   {desc}
                 </p>
-                <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-line-rose bg-[#fdfafa] px-3 py-2.5 sm:px-4 sm:py-3 focus-within:border-maroon-500 focus-within:ring-[3px] focus-within:ring-maroon-600/10">
+                <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-line bg-[var(--color-tint)] px-3 py-2.5 sm:px-4 sm:py-3 focus-within:border-brand-500 focus-within:ring-[3px] focus-within:ring-brand-600/10">
                   <input
                     type="number"
                     min="0"
                     max="100"
-                    className="min-w-0 flex-1 border-0 bg-transparent p-0 font-display text-[22px] font-bold text-maroon-700 sm:text-[26px] outline-none"
+                    className="min-w-0 flex-1 border-0 bg-transparent p-0 font-display text-[22px] font-bold text-brand-700 sm:text-[26px] outline-none"
                     value={form[key]}
                     onChange={(e) => set(key, e.target.value)}
                   />
-                  <Percent size={22} className="shrink-0 text-icon-rose" />
+                  <Percent size={22} className="shrink-0 text-icon" />
                 </div>
-                <div className="mt-2.5 text-[11.5px] font-semibold text-[#8a6e75]">
+                <div className="mt-2.5 text-[11.5px] font-semibold text-muted">
                   On ₹1,000 invest → <span className="font-extrabold text-[#16a34a]">{fmt0(example)}</span>{" "}
                   commission
                 </div>
@@ -129,9 +129,9 @@ export default function CommissionPage() {
               ].map((t, i) => (
                 <div
                   key={i}
-                  className="flex items-start gap-2.5 rounded-xl border border-line-rose bg-[#fbf1f3] px-3.5 py-3 text-[12.5px] font-medium text-ink"
+                  className="flex items-start gap-2.5 rounded-xl border border-line bg-[var(--color-tint2)] px-3.5 py-3 text-[12.5px] font-medium text-ink"
                 >
-                  <span className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-maroon-700 text-[11px] font-extrabold text-white">
+                  <span className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-brand-700 text-[11px] font-extrabold text-white">
                     {i + 1}
                   </span>
                   {t}
