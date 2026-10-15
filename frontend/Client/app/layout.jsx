@@ -4,6 +4,7 @@ import "./globals.css";
 import GlobalAuthGuard from "./components/GlobalAuthGuard";
 import AppearanceProvider from "./components/AppearanceProvider";
 import SettingsProvider from "./components/SettingsProvider";
+import { BACKEND_ORIGIN } from "../lib/backend";
 
 export const metadata = {
   title: "SAUDI ARAMCO",
@@ -29,7 +30,7 @@ try {
    client API fetch fallback. */
 async function getSettings() {
   try {
-    const r = await fetch("http://127.0.0.1:3030/api/settings", {
+    const r = await fetch(BACKEND_ORIGIN + "/api/settings", {
       next: { revalidate: 15 },
     });
     const d = await r.json();

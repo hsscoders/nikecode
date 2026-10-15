@@ -36,11 +36,27 @@ app.set("trust proxy", true);
    Client/admin connect through the Next.js rewrite proxy
    (/api/socket.io -> backend). Transport: long-polling first, the
    upgrade to websocket is attempted automatically when possible. */
+
+/* Allowed browser origins — comma-separated list in backend/.env
+   (CORS_ORIGINS=https://domain.com,https://www.domain.com).
+   Empty/unset = allow all (local development). Requests without an
+   Origin header (curl, payment webhooks, server-to-server) pass anyway. */
+const CORS_ORIGINS = String(process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const corsOriginCheck = (origin, cb) => {
+  if (!origin || CORS_ORIGINS.length === 0 || CORS_ORIGINS.includes(origin))
+    return cb(null, true);
+  return cb(null, false);
+};
+
 const server = http.createServer(app);
 const io = new Server(server, {
   path: "/api/socket.io",
   addTrailingSlash: false, /* Next.js rewrite 308-strips the trailing slash */
-  cors: { origin: true, credentials: true },
+  cors: { origin: corsOriginCheck, credentials: true },
   pingInterval: 25000,
   pingTimeout: 60000,
 });
@@ -69,7 +85,7 @@ io.on("connection", (socket) => {
    Files are stored locally in backend/public/uploads (ImgBB removed). */
 app.use("/api/admin/upload", express.json({ limit: "36mb" }));
 
-app.use(cors());
+app.use(cors({ origin: corsOriginCheck, credentials: true }));
 app.use(express.json());
 /* OKPay (wpay.one) posts its payin/payout callbacks as
    application/x-www-form-urlencoded — without this parser req.body is empty
@@ -103,11 +119,28 @@ app.use("/api", (req, res) =>
   res.status(404).json({ success: false, message: "API route not found" })
 );
 
+/* Global error handler — keeps internal details (stack, driver errors) out
+   of API responses in production while logging them server-side. */
+app.use((err, req, res, _next) => {
+  const status = err && err.status ? err.status : 500;
+  console.error("API error:", req.method, req.originalUrl, "-", err.message);
+  if (status >= 500) console.error(err.stack || err);
+  if (res.headersSent) return;
+  res.status(status).json({
+    success: false,
+    message: status >= 500 ? "Internal server error" : err.message,
+  });
+});
+
 const PORT = process.env.PORT || 3030;
 const MONGO_URI = process.env.MONGODB_URI;
 
 if (!MONGO_URI) {
   console.error("❌ MONGODB_URI missing in backend/.env");
+  process.exit(1);
+}
+if (!process.env.JWT_SECRET) {
+  console.error("❌ JWT_SECRET missing in backend/.env");
   process.exit(1);
 }
 
@@ -271,3 +304,23 @@ mongoose
   });
 
 server.listen(PORT, () => console.log(`🚀 ZAPTO API ready on :${PORT} (socket.io on /api/socket.io)`));
+
+/* ============ GRACEFUL SHUTDOWN (cPanel / Passenger restarts) ============
+   Passenger sends SIGTERM on redeploy — finish in-flight requests, close
+   MongoDB cleanly, then exit so the replacement process starts fresh. */
+function shutdown(signal) {
+  console.log(`\n${signal} received — shutting down gracefully…`);
+  server.close(() => {
+    mongoose
+      .disconnect()
+      .catch(() => {})
+      .finally(() => process.exit(0));
+  });
+  /* hard exit if something hangs — Passenger will restart us anyway */
+  setTimeout(() => process.exit(0), 10000).unref();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("unhandledRejection", (reason) =>
+  console.error("unhandledRejection:", reason && reason.message ? reason.message : reason)
+);

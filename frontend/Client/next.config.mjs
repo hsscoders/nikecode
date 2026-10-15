@@ -1,4 +1,19 @@
 /** @type {import('next').NextConfig} */
+
+/* ============================================================
+   Proxy targets — server-side only (browser always talks to THIS
+   origin, the rewrites forward /api, /admin, /banners, /uploads).
+
+   Set on the server (cPanel → Setup Node.js App → Environment
+   variables) or in frontend/Client/.env for local dev:
+     API_ORIGIN   = https://api.yourdomain.com   (backend app)
+     ADMIN_ORIGIN = https://admin.yourdomain.com (admin app)
+   Defaults keep the local development setup (localhost ports).
+   Changing these needs an app restart, NOT a rebuild.
+   ============================================================ */
+const API_ORIGIN = process.env.API_ORIGIN || "http://127.0.0.1:3030";
+const ADMIN_ORIGIN = process.env.ADMIN_ORIGIN || "http://127.0.0.1:3001";
+
 const nextConfig = {
   images: {
     remotePatterns: [
@@ -11,19 +26,19 @@ const nextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: "http://127.0.0.1:3030/api/:path*",
+        destination: `${API_ORIGIN}/api/:path*`,
       },
       {
         source: "/admin/:path*",
-        destination: "http://127.0.0.1:3001/admin/:path*",
+        destination: `${ADMIN_ORIGIN}/admin/:path*`,
       },
       {
         source: "/banners/:path*",
-        destination: "http://127.0.0.1:3030/banners/:path*",
+        destination: `${API_ORIGIN}/banners/:path*`,
       },
       {
         source: "/uploads/:path*",
-        destination: "http://127.0.0.1:3030/uploads/:path*",
+        destination: `${API_ORIGIN}/uploads/:path*`,
       },
     ];
   },

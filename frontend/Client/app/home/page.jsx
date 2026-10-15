@@ -1,4 +1,5 @@
 import HomeClient from "./HomeClient";
+import { BACKEND_ORIGIN } from "../../lib/backend";
 
 /* ============ /home — SSR-SEEDED FOR INSTANT PAINT ============
    Banners + plans SERVER-SIDE fetch hoke ISR HTML me bake ho jate
@@ -9,7 +10,7 @@ import HomeClient from "./HomeClient";
 
 export const revalidate = 15;
 
-const BACKEND = "http://127.0.0.1:3030";
+const BACKEND = BACKEND_ORIGIN;
 
 async function getJSON(path) {
   try {
