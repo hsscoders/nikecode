@@ -1,0 +1,137 @@
+# cPanel deployment — Luveedu Cloud-3 shared hosting.
+# See DEPLOYMENT.md for one-time server setup + required secrets.
+
+name: Deploy to cPanel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # manual redeploy / rollback from the Actions tab
+
+# Never run two deployments at once — a second push QUEUES (does not
+# cancel) so every commit lands in order and the app dirs can't get
+# corrupted by two overlapping syncs.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  # SSH_PORT defaults to 22; override with a secret if Luveedu uses
+  # a custom SSH port.
+  SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/Client/package-lock.json
+            frontend/Admin/package-lock.json
+
+      # ---- Build on the runner (shared cPanel CPUs are too weak for
+      # `next build` and often hit memory limits). Artifacts + deps are
+      # then synced to the server. Lockfiles drive npm ci everywhere. ----
+      - name: Build Client (Next.js)
+        working-directory: frontend/Client
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build Admin (Next.js)
+        working-directory: frontend/Admin
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install backend production deps
+        working-directory: backend
+        run: npm ci --omit=dev
+
+      # ---- SSH key setup. SSH_KNOWN_HOSTS is optional; without it we
+      # keyscan on the fly (accept-new is still safe against downgrade). ----
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ -n "${{ secrets.SSH_KNOWN_HOSTS }}" ]; then
+            echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$SSH_PORT" ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+
+      # ---- Sync to cPanel. Full-state tar-over-ssh (works on every
+      # cPanel host, no rsync dependency). Excludes: git history, real
+      # .env files (the server keeps its own!), user uploads, cache. ----
+      - name: Sync backend
+        run: |
+          tar -czf - \
+            --exclude='./.git' \
+            --exclude='./.env' \
+            --exclude='./public/uploads/*' \
+            -C backend . |
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" \
+            -o StrictHostKeyChecking=accept-new \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "mkdir -p '${{ secrets.CPANEL_PATH }}/backend' && tar -xzf - -C '${{ secrets.CPANEL_PATH }}/backend'"
+
+      - name: Sync client
+        run: |
+          tar -czf - \
+            --exclude='./.git' \
+            --exclude='./.env' \
+            --exclude='./.next/cache' \
+            -C frontend/Client . |
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "mkdir -p '${{ secrets.CPANEL_PATH }}/client' && tar -xzf - -C '${{ secrets.CPANEL_PATH }}/client'"
+
+      - name: Sync admin
+        run: |
+          tar -czf - \
+            --exclude='./.git' \
+            --exclude='./.env' \
+            --exclude='./.next/cache' \
+            -C frontend/Admin . |
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "mkdir -p '${{ secrets.CPANEL_PATH }}/admin' && tar -xzf - -C '${{ secrets.CPANEL_PATH }}/admin'"
+
+      # ---- Passenger restart: touching tmp/restart.txt is the official
+      # cPanel Node.js app restart mechanism (no cPanel API needed). ----
+      - name: Restart all three Node.js apps
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "for app in backend client admin; do
+               mkdir -p '${{ secrets.CPANEL_PATH }}/'\$app'/tmp'
+               touch '${{ secrets.CPANEL_PATH }}/'\$app'/tmp/restart.txt'
+             done
+             echo 'restart.txt touched — Passenger will respawn the apps'"
+
+      # ---- Health checks with retries (Passenger cold start is slow). ----
+      - name: Health check (API + site)
+        run: |
+          ok=0
+          for i in $(seq 1 12); do
+            sleep 15
+            api=$(curl -s -o /dev/null -m 20 -w '%{http_code}' "${{ secrets.PROD_URL }}/api/health" || true)
+            site=$(curl -s -o /dev/null -m 20 -w '%{http_code}' "${{ secrets.PROD_URL }}/" || true)
+            echo "try $i → api/health:$api  site:$site"
+            if [ "$api" = "200" ] && [ "$site" = "200" ]; then ok=1; break; fi
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::Health check failed after 3 minutes — inspect cPanel stderr logs (see DEPLOYMENT.md → Logs)"
+            exit 1
+          fi
+          echo "Deployment healthy"
