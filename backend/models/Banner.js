@@ -1,17 +1,18 @@
-const mongoose = require("mongoose");
+const { sequelize, Sequelize } = require("../db");
 
-const BannerSchema = new mongoose.Schema(
+const Banner = sequelize.define(
+  "Banner",
   {
-    title: { type: String, default: "", trim: true },
-    image: { type: String, required: true, trim: true },
-    /* original remote URL kept when the image is cached locally
-       (backend/public/banners) — lets us re-download and detect changes */
-    originUrl: { type: String, default: "", trim: true },
-    link: { type: String, default: "", trim: true },
-    active: { type: Boolean, default: true },
-    sort: { type: Number, default: 0 },
+    id: { type: Sequelize.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
+    legacyId: { type: Sequelize.CHAR(24), field: "legacy_id" },
+    title: { type: Sequelize.STRING(80), defaultValue: "" },
+    image: { type: Sequelize.STRING(500) },
+    originUrl: { type: Sequelize.STRING(500), defaultValue: "", field: "origin_url" },
+    link: { type: Sequelize.STRING(500), defaultValue: "" },
+    active: { type: Sequelize.BOOLEAN, defaultValue: true },
+    sort: { type: Sequelize.INTEGER, defaultValue: 0 },
   },
-  { timestamps: true }
+  { tableName: "banners", underscored: true }
 );
 
-module.exports = mongoose.model("Banner", BannerSchema);
+module.exports = Banner;

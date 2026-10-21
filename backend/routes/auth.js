@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { Op, inc } = require("../db");
 const User = require("../models/User");
 const Setting = require("../models/Setting");
 const Transaction = require("../models/Transaction");
@@ -17,7 +18,7 @@ function cleanPhone(v) {
 
 function signToken(user) {
   return jwt.sign(
-    { id: user._id, phone: user.phone, role: "user" },
+    { id: user.id, phone: user.phone, role: "user" },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );
@@ -30,7 +31,9 @@ async function uniqueIds() {
     const userid = "ZP" + Math.floor(100000 + Math.random() * 900000);
     let ref = "ZP";
     for (let j = 0; j < 8; j++) ref += chars[Math.floor(Math.random() * chars.length)];
-    const clash = await User.findOne({ $or: [{ userid }, { refId: ref }] });
+    const clash = await User.findOne({
+      where: { [Op.or]: [{ userid }, { refId: ref }] },
+    });
     if (!clash) return { userid, refId: ref };
   }
   throw new Error("id generation failed");
@@ -72,7 +75,7 @@ router.post("/register", async (req, res) => {
         message: "Withdraw password cannot be same as login password",
       });
 
-    const exists = await User.findOne({ phone });
+    const exists = await User.findOne({ where: { phone } });
     if (exists)
       return res.status(409).json({
         success: false,
@@ -82,7 +85,7 @@ router.post("/register", async (req, res) => {
     /* Invite code validation — only accept a valid refId (ZP+8), otherwise a clear error */
     const refCode = String(ref_by || "").trim().toUpperCase();
     if (refCode) {
-      const refUser = await User.findOne({ refId: refCode });
+      const refUser = await User.findOne({ where: { refId: refCode } });
       if (!refUser)
         return res
           .status(400)
@@ -107,16 +110,16 @@ router.post("/register", async (req, res) => {
        user sees it in the transaction history. Fail-safe: a bonus problem
        never fails the registration. */
     try {
-      const s = await Setting.findOne({ key: "global" }).lean();
+      const s = await Setting.getGlobal();
       const rb = s && s.registerBonus;
       const amt = Math.round(Number(rb && rb.amount) * 100) / 100;
       if (rb && rb.enabled === true && amt > 0) {
-        await User.updateOne(
-          { _id: user._id },
-          { $inc: { rechargeBalance: amt } }
+        await User.update(
+          { rechargeBalance: inc("recharge_balance", amt) },
+          { where: { id: user.id } }
         );
         await Transaction.create({
-          user: user._id,
+          user: user.id,
           userid: user.userid,
           phone: user.phone,
           type: "bonus",
@@ -135,7 +138,7 @@ router.post("/register", async (req, res) => {
     /* audit — the account now really exists (userid/refId assigned) */
     audit.log(req, {
       actorType: "user",
-      actor: { id: user._id, label: user.phone },
+      actor: { id: user.id, label: user.phone },
       action: "user.register",
       category: "auth",
       target: user.phone,
@@ -152,6 +155,11 @@ router.post("/register", async (req, res) => {
       user: { phone: user.phone, refBy: user.refBy, userid: user.userid, refId: user.refId },
     });
   } catch (e) {
+    if (e && (e.name === "SequelizeUniqueConstraintError" || e.parent && e.parent.code === "ER_DUP_ENTRY"))
+      return res.status(409).json({
+        success: false,
+        message: "This mobile number is already registered. Please login.",
+      });
     console.error("register error:", e.message);
     return res
       .status(500)
@@ -171,7 +179,7 @@ router.post("/login", async (req, res) => {
         message: "Enter valid phone number and password",
       });
 
-    const user = await User.findOne({ phone });
+    const user = await User.findOne({ where: { phone } });
     if (!user)
       return res.status(401).json({
         success: false,
@@ -214,7 +222,7 @@ router.post("/login", async (req, res) => {
 
     audit.log(req, {
       actorType: "user",
-      actor: { id: user._id, label: user.phone },
+      actor: { id: user.id, label: user.phone },
       action: "user.login",
       category: "auth",
       target: user.phone,
@@ -253,7 +261,7 @@ router.post("/auto-login", async (req, res) => {
         .status(400)
         .json({ success: false, message: "Invalid login link" });
 
-    const lc = await LoginCode.findOne({ code });
+    const lc = await LoginCode.findOne({ where: { code } });
     if (!lc || lc.expiresAt < new Date())
       return res.status(400).json({
         success: false,
@@ -261,19 +269,19 @@ router.post("/auto-login", async (req, res) => {
       });
 
     /* ATOMIC single-use claim — the used flag is flipped with a guarded
-       updateOne, so two tabs opening the same link at the same moment can
-       never both redeem it (the old read-check-save race let both through). */
-    const claim = await LoginCode.updateOne(
-      { _id: lc._id, used: false },
-      { $set: { used: true, usedAt: new Date() } }
+       update, so two tabs opening the same link at the same moment can
+       never both redeem it. */
+    const [claimed] = await LoginCode.update(
+      { used: true, usedAt: new Date() },
+      { where: { id: lc.id, used: false } }
     );
-    if (claim.modifiedCount === 0)
+    if (claimed === 0)
       return res.status(400).json({
         success: false,
         message: "This login link has already been used",
       });
 
-    const user = await User.findById(lc.user);
+    const user = await User.findByPk(lc.user);
     if (!user)
       return res
         .status(404)

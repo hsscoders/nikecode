@@ -1,5 +1,6 @@
 # cPanel deployment — Luveedu Cloud-3 shared hosting.
 # See DEPLOYMENT.md for one-time server setup + required secrets.
+# Database: MySQL (schema applied by backend/db/migrate.js during deploy).
 
 name: Deploy to cPanel
 
@@ -108,7 +109,15 @@ jobs:
             "mkdir -p '${{ secrets.CPANEL_PATH }}/admin' && tar -xzf - -C '${{ secrets.CPANEL_PATH }}/admin'"
 
       # ---- Passenger restart: touching tmp/restart.txt is the official
-      # cPanel Node.js app restart mechanism (no cPanel API needed). ----
+      # cPanel Node.js app restart mechanism (no cPanel API needed).
+      # MySQL schema migrations run FIRST (idempotent — _migrations table
+      # tracks applied files; reads DB_* from backend/.env on the server). ----
+      - name: Apply MySQL schema migrations
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "cd '${{ secrets.CPANEL_PATH }}/backend' && node db/migrate.js"
+
       - name: Restart all three Node.js apps
         run: |
           ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" \
@@ -131,7 +140,7 @@ jobs:
             if [ "$api" = "200" ] && [ "$site" = "200" ]; then ok=1; break; fi
           done
           if [ "$ok" != "1" ]; then
-            echo "::error::Health check failed after 3 minutes — inspect cPanel stderr logs (see DEPLOYMENT.md → Logs)"
+            echo "::error::Health check failed after 3 minutes — inspect cPanel stderr logs (see DEPLOYMENT.md → Logs). For MySQL issues: verify DB_* in backend/.env, that the MySQL user may connect from localhost/127.0.0.1, and run 'node db/migrate.js' manually."
             exit 1
           fi
           echo "Deployment healthy"

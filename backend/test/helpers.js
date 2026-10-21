@@ -1,49 +1,90 @@
 /* ============================================================
-   TEST HARNESS — isolated MongoDB (mongodb-memory-server) +
-   a minimal Express assembly mirroring server.js's middleware
-   stack. No production database, no real gateway network: the
-   gateway is mocked with a local http server.
-
-   Each test file runs in its own node:test process and gets a
-   fresh memory DB + fresh app. Collections are wiped between
-   tests — the memory instance is dropped with the process.
+   TEST HARNESS — MySQL edition.
+   Runs against a disposable MySQL database (nikecode_test) on the
+   local test server (see /home/z/my-project/scripts/boot-mysql.sh):
+     DB_HOST=127.0.0.1, DB_PORT=3307, user `app`
+   Override with TEST_DB_* env vars if needed.
+   Schema comes from db/migrations (same SQL as production); tables
+   are truncated between tests. No production database is touched.
    ============================================================ */
 
+/* env BEFORE any model/db require — the Sequelize singleton reads them */
 process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret-do-not-use-in-prod-0123456789abcdef";
+process.env.DB_NAME = process.env.TEST_DB_NAME || "nikecode_test";
+process.env.DB_HOST = process.env.TEST_DB_HOST || "127.0.0.1";
+process.env.DB_PORT = process.env.TEST_DB_PORT || "3307";
+process.env.DB_USER = process.env.TEST_DB_USER || "app";
+process.env.DB_PASSWORD = process.env.TEST_DB_PASSWORD || "apppass123";
+process.env.DB_POOL_MAX = "5";
 
-const { MongoMemoryServer } = require("mongodb-memory-server");
-const mongoose = require("mongoose");
+const mysql = require("mysql2/promise");
 const express = require("express");
 const http = require("http");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 
-let mongod = null;
+/* ---- domain models (db/index singleton created with the env above) ---- */
+const { sequelize, Sequelize } = require("../db");
+const User = require("../models/User");
+const Plan = require("../models/Plan");
+const Deposit = require("../models/Deposit");
+const Withdrawal = require("../models/Withdrawal");
+const Setting = require("../models/Setting");
+const Transaction = require("../models/Transaction");
+const Admin = require("../models/Admin");
+const LoginCode = require("../models/LoginCode");
+const Invest = require("../models/Invest");
+const AuditLog = require("../models/AuditLog");
+const { runMigrations } = require("../db/migrate");
 
-/* boot the memory mongo + mongoose connection (once per file) */
+const QWACK_KEY = "qwack-test-key";
+const OKPAY_KEY = "okpay-test-key";
+
+const ALL_TABLES = [
+  "login_codes",
+  "audit_logs",
+  "transactions",
+  "invests",
+  "withdrawals",
+  "deposits",
+  "banners",
+  "plans",
+  "users",
+  "admins",
+  "settings",
+];
+
+/* boot: recreate the test database + apply migrations */
 async function startDb() {
-  mongod = await MongoMemoryServer.create({ instance: { dbName: "zapto_test" } });
-  await mongoose.connect(mongod.getUri("zapto_test"), {
-    serverSelectionTimeoutMS: 20000,
+  const boot = await mysql.createConnection({
+    host: process.env.DB_HOST,
+    port: Number(process.env.DB_PORT),
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
   });
-  return mongod;
+  await boot.query("DROP DATABASE IF EXISTS `" + process.env.DB_NAME + "`");
+  await boot.query("CREATE DATABASE `" + process.env.DB_NAME + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+  await boot.end();
+  await runMigrations({ log: () => {} });
+  await sequelize.authenticate();
+}
+
+/* wipe every table between tests (test DB only) */
+async function cleanDb() {
+  await sequelize.query("SET FOREIGN_KEY_CHECKS = 0");
+  for (const t of ALL_TABLES) {
+    await sequelize.query("TRUNCATE TABLE `" + t + "`");
+  }
+  await sequelize.query("SET FOREIGN_KEY_CHECKS = 1");
+  /* TRUNCATE resets AUTO_INCREMENT → new users reuse id 1 → the in-memory
+     rate-limit buckets must be cleared or tests inherit each other's counts */
+  require("../middleware/rateLimit")._resetForTests();
 }
 
 async function stopDb() {
   try {
-    await mongoose.disconnect();
+    await sequelize.close();
   } catch (e) {}
-  try {
-    if (mongod) await mongod.stop();
-  } catch (e) {}
-}
-
-/* wipe every collection between tests (test DB only) */
-async function cleanDb() {
-  const { models } = mongoose;
-  for (const name of Object.keys(models)) {
-    await models[name].deleteMany({}).exec();
-  }
 }
 
 /* Express app assembled exactly like server.js does (same parsers,
@@ -118,36 +159,27 @@ function okpaySign(params, apiKey) {
 }
 
 /* ---- domain fixtures ---- */
-const User = require("../models/User");
-const Plan = require("../models/Plan");
-const Deposit = require("../models/Deposit");
-const Withdrawal = require("../models/Withdrawal");
-const Setting = require("../models/Setting");
-const Transaction = require("../models/Transaction");
-const Admin = require("../models/Admin");
-const LoginCode = require("../models/LoginCode");
-
-const QWACK_KEY = "qwack-test-key";
-const OKPAY_KEY = "okpay-test-key";
 
 /* seed the global settings doc + gateway credentials used by the tests */
 async function seedSettings(overrides = {}) {
-  await Setting.create({
-    key: "global",
+  await Setting.saveGlobal({
+    ...Setting.DEFAULTS,
     qwackpay: {
+      ...Setting.DEFAULTS.qwackpay,
       enabled: true,
       merchantId: "M123",
       apiKey: QWACK_KEY,
       baseUrl: overrides.qwackBaseUrl || "https://qwackpay.invalid/api/v1",
     },
     okpay: {
+      ...Setting.DEFAULTS.okpay,
       enabled: true,
       mchId: "M456",
       apiKey: OKPAY_KEY,
       baseUrl: "https://okpay.invalid",
     },
-    recharge: { minAmount: 0, maxAmount: 0 },
-    withdraw: { minAmount: 130, maxAmount: 0, chargePercent: 10, enabled: true },
+    recharge: { ...Setting.DEFAULTS.recharge, minAmount: 0, maxAmount: 0 },
+    withdraw: { ...Setting.DEFAULTS.withdraw, minAmount: 130, maxAmount: 0, chargePercent: 10, enabled: true },
     ...(overrides.settingFields || {}),
   });
 }
@@ -194,4 +226,5 @@ module.exports = {
   apiRegister,
   QWACK_KEY,
   OKPAY_KEY,
+  Sequelize,
 };

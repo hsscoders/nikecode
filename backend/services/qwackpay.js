@@ -14,9 +14,10 @@ const Setting = require("../models/Setting");
 const DEFAULT_BASE = "https://qwackpay.com/api/v1";
 
 /* Read the gateway config saved by the admin (fallbacks keep it usable
-   even if the Setting doc predates the qwackpay section) */
+   even if the settings row predates the qwackpay section — getGlobal()
+   deep-merges the schema defaults, mirroring the old Mongoose behaviour) */
 async function getConfig() {
-  const s = await Setting.findOne({ key: "global" }).lean();
+  const s = await Setting.getGlobal();
   const q = (s && s.qwackpay) || {};
   /* per-gateway override → global auto-detected publicUrls (saved once in
      Admin → Payment Gateway → Server & Webhooks) → empty */

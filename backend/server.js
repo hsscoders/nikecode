@@ -3,12 +3,12 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express = require("express");
 const cors = require("cors");
-const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const http = require("http");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const { live } = require("./live");
+const { sequelize, Sequelize, inc } = require("./db");
 const { authRateLimit, moneyRateLimit } = require("./middleware/rateLimit");
 const authRoutes = require("./routes/auth");
 const adminAuthRoutes = require("./routes/adminAuth");
@@ -23,6 +23,7 @@ const Banner = require("./models/Banner");
 const Invest = require("./models/Invest");
 const User = require("./models/User");
 const Transaction = require("./models/Transaction");
+const AuditLog = require("./models/AuditLog");
 const { emitToUser } = require("./live");
 
 const app = express();
@@ -107,7 +108,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
 // Health check
-app.get("/api/health", (req, res) => res.json({ ok: true, service: "zapto-api" }));
+app.get("/api/health", (req, res) => res.json({ ok: true, service: "zapto-api", db: "mysql" }));
 
 // Auth routes — rate-limited (per-IP burst + per-phone brute-force lock)
 app.use("/api/auth", authRateLimit, authRoutes);
@@ -147,10 +148,9 @@ app.use((err, req, res, _next) => {
 });
 
 const PORT = process.env.PORT || 3030;
-const MONGO_URI = process.env.MONGODB_URI;
 
-if (!MONGO_URI) {
-  console.error("❌ MONGODB_URI missing in backend/.env");
+if (!process.env.DB_NAME || !process.env.DB_USER) {
+  console.error("❌ DB_NAME / DB_USER missing in backend/.env");
   process.exit(1);
 }
 if (!process.env.JWT_SECRET) {
@@ -161,7 +161,7 @@ if (!process.env.JWT_SECRET) {
 /* ============ SEED (default data on first run) ============ */
 async function seed() {
   try {
-    if ((await Admin.countDocuments({})) === 0) {
+    if ((await Admin.count()) === 0) {
       await Admin.create({
         username: "admin",
         password: await bcrypt.hash("admin123", 10),
@@ -169,12 +169,13 @@ async function seed() {
       });
       console.log("✅ Seed: admin created (admin / admin123)");
     }
-    if ((await Setting.countDocuments({ key: "global" })) === 0) {
-      await Setting.create({ key: "global" });
+    if ((await Setting.count()) === 0) {
+      /* full schema defaults — getGlobal() deep-merges over them anyway */
+      await Setting.saveGlobal(Setting.DEFAULTS);
       console.log("✅ Seed: global settings created");
     }
-    if ((await Plan.countDocuments({})) === 0) {
-      await Plan.insertMany([
+    if ((await Plan.count()) === 0) {
+      await Plan.bulkCreate([
         { name: "Starter Plan", vip: false, price: 530, daily: 63.6, cycle: 10, total: 636, limit: 1, sort: 1 },
         { name: "Silver Plan", vip: false, price: 1100, daily: 137.5, cycle: 12, total: 1650, limit: 2, sort: 2 },
         { name: "Gold Plan", vip: false, price: 2500, daily: 266.67, cycle: 15, total: 4000, limit: 3, sort: 3 },
@@ -183,35 +184,17 @@ async function seed() {
       ]);
       console.log("✅ Seed: default plans created");
     }
-    if ((await Banner.countDocuments({})) === 0) {
-      await Banner.insertMany([
+    if ((await Banner.count()) === 0) {
+      await Banner.bulkCreate([
         { title: "Saudi Aramco Banner 1", image: "/banners/aramco-banner.png", active: true, sort: 1 },
         { title: "Saudi Aramco Banner 2", image: "/banners/zapto-banner-2.png", active: true, sort: 2 },
       ]);
       console.log("✅ Seed: default banners created");
     }
 
-    /* Migrations — make sure older documents get the new fields */
-    await Setting.updateOne(
-      { key: "global", income: { $exists: false } },
-      { $set: { income: { creditTime: "00:00", lastCreditDate: "" } } }
-    );
-    await Setting.updateOne(
-      { key: "global", appearance: { $exists: false } },
-      { $set: { appearance: { preset: "maroon", primary: "#7c1d33", accent: "#d4a94f", fontHead: "playfair", fontBody: "inter" } } }
-    );
-    await Setting.updateOne(
-      { key: "global", qwackpay: { $exists: false } },
-      { $set: { qwackpay: { enabled: false, merchantId: "", apiKey: "", baseUrl: "https://qwackpay.com/api/v1", backendUrl: "", clientUrl: "" } } }
-    );
-    await Setting.updateOne(
-      { key: "global", okpay: { $exists: false } },
-      { $set: { okpay: { enabled: false, autoPayout: false, displayName: "OKPay", mchId: "", apiKey: "", baseUrl: "https://api.wpay.one", backendUrl: "", clientUrl: "" } } }
-    );
-    await Invest.updateMany(
-      { paidDays: { $exists: false } },
-      { $set: { paidDays: 0 } }
-    );
+    /* self-heal — legacy rows (pre-migration Mongo data) may predate newer
+       fields; the JSON settings merge covers settings, this covers invests */
+    await Invest.update({ paidDays: 0 }, { where: { paidDays: null } });
   } catch (e) {
     console.error("seed error:", e.message);
   }
@@ -232,41 +215,38 @@ const istToday = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()); // "YYYY-MM-DD"
 
 async function runIncomeCredit() {
-  const invests = await Invest.find({
-    status: "Active",
-    $expr: { $lt: [{ $ifNull: ["$paidDays", 0] }, "$cycle"] },
-  }).lean();
-
   /* self-heal — plans whose paidDays already reached the cycle but whose
-     status never flipped (a legacy edge of the old claim logic) are closed
-     here so they stop counting towards the daily liability stats */
-  await Invest.updateMany(
-    { status: "Active", $expr: { $gte: [{ $ifNull: ["$paidDays", 0] }, "$cycle"] } },
-    { $set: { status: "Completed" } }
+     status never flipped are closed here so they stop counting towards the
+     daily liability stats */
+  await Invest.update(
+    { status: "Completed" },
+    { where: { status: "Active", paidDays: { [Sequelize.Op.gte]: sequelize.col("cycle") } } }
   );
+
+  const invests = await Invest.findAll({
+    where: {
+      status: "Active",
+      paidDays: { [Sequelize.Op.lt]: sequelize.col("cycle") },
+    },
+  });
 
   let paid = 0;
   for (const inv of invests) {
     const prevPaid = Number(inv.paidDays) || 0;
     /* atomic claim on the EXACT previous paidDays value — the filter only
        matches while paidDays is still prevPaid, so two overlapping runs can
-       never both win. The winner's returned doc carries the new value, which
-       makes dayNo unique: the ledger can never repeat "Day N" for a plan. */
-    const upd = await Invest.findOneAndUpdate(
-      {
-        _id: inv._id,
-        status: "Active",
-        $expr: { $eq: [{ $ifNull: ["$paidDays", 0] }, prevPaid] },
-      },
-      { $inc: { paidDays: 1 } },
-      { new: true }
+       never both win. The winner makes dayNo unique: the ledger can never
+       repeat "Day N" for a plan. */
+    const [claim] = await Invest.update(
+      { paidDays: inc("paid_days", 1) },
+      { where: { id: inv.id, status: "Active", paidDays: prevPaid } }
     );
-    if (!upd) continue;
+    if (claim === 0) continue;
 
     const dayNo = prevPaid + 1;
-    await User.updateOne(
-      { _id: inv.user },
-      { $inc: { balance: inv.daily, totalIncome: inv.daily } }
+    await User.update(
+      { balance: inc("balance", inv.daily), totalIncome: inc("total_income", inv.daily) },
+      { where: { id: inv.user } }
     );
     await Transaction.create({
       user: inv.user,
@@ -281,52 +261,80 @@ async function runIncomeCredit() {
     /* realtime — push the new balance to the user's open tabs */
     emitToUser(inv.phone, "wallet:refresh", { reason: "income" });
     if (dayNo >= Number(inv.cycle))
-      await Invest.updateOne({ _id: inv._id }, { status: "Completed" });
+      await Invest.update({ status: "Completed" }, { where: { id: inv.id } });
     paid++;
   }
   console.log("✅ Income credit: " + paid + " plan(s) paid at " + istTime() + " IST");
 }
 
+/* one daily audit-trail prune (the old MongoDB TTL index did this) */
+let lastPruneDay = "";
+async function pruneAudit() {
+  const today = istToday();
+  if (lastPruneDay === today) return;
+  lastPruneDay = today;
+  try {
+    const n = await AuditLog.destroy({
+      where: {
+        createdAt: { [Sequelize.Op.lt]: new Date(Date.now() - 90 * 864e5) },
+      },
+    });
+    if (n) console.log("🗑️ audit prune: removed " + n + " row(s) older than 90 days");
+  } catch (e) {
+    console.error("audit prune error:", e.message);
+  }
+}
+
 async function incomeCronTick() {
   try {
-    /* atomic claim — only the first tick inside the matching minute wins */
-    const claim = await Setting.updateOne(
+    /* atomic claim — only the first tick inside the matching minute wins.
+       The guarded JSON_SET performs the date flip + claim in ONE statement,
+       exactly like the old Mongoose updateOne claim did. */
+    const [result] = await sequelize.query(
+      "UPDATE settings " +
+        "SET data = JSON_SET(data, '$.income.lastCreditDate', :today) " +
+        "WHERE `key` = 'global' " +
+        "AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.income.creditTime')) = :nowIst " +
+        "AND (JSON_EXTRACT(data, '$.income.lastCreditDate') IS NULL " +
+        "     OR JSON_UNQUOTE(JSON_EXTRACT(data, '$.income.lastCreditDate')) <> :today)",
       {
-        key: "global",
-        "income.creditTime": istTime(),
-        "income.lastCreditDate": { $ne: istToday() },
-      },
-      { $set: { "income.lastCreditDate": istToday() } }
+        replacements: { today: istToday(), nowIst: istTime() },
+        type: sequelize.QueryTypes.UPDATE,
+      }
     );
-    if (claim.modifiedCount === 1) await runIncomeCredit();
+    if (result && result.affectedRows === 1) await runIncomeCredit();
+    await pruneAudit();
   } catch (e) {
     console.error("income cron error:", e.message);
   }
 }
 
-mongoose
-  .connect(MONGO_URI, { dbName: "zapto", serverSelectionTimeoutMS: 15000 })
-  .then(() => {
-    console.log("✅ MongoDB connected (db: zapto)");
-    seed();
-    /* daily income scheduler — checks every 15s against the admin-set time */
-    setInterval(incomeCronTick, 15 * 1000);
-  })
-  .catch((err) => {
-    console.error("❌ MongoDB connection failed:", err.message);
-    process.exit(1);
-  });
+/* ============ BOOT ============ */
+async function start() {
+  await sequelize.authenticate();
+  console.log("✅ MySQL connected (" + sequelize.config.database + ")");
+  await seed();
+  /* daily income scheduler — checks every 15s against the admin-set time */
+  setInterval(incomeCronTick, 15 * 1000);
 
-server.listen(PORT, () => console.log(`🚀 ZAPTO API ready on :${PORT} (socket.io on /api/socket.io)`));
+  server.listen(PORT, () =>
+    console.log("🚀 ZAPTO API ready on :" + PORT + " (socket.io on /api/socket.io, db: mysql)")
+  );
+}
+
+start().catch((err) => {
+  console.error("❌ MySQL connection failed:", err.message);
+  process.exit(1);
+});
 
 /* ============ GRACEFUL SHUTDOWN (cPanel / Passenger restarts) ============
    Passenger sends SIGTERM on redeploy — finish in-flight requests, close
-   MongoDB cleanly, then exit so the replacement process starts fresh. */
+   MySQL cleanly, then exit so the replacement process starts fresh. */
 function shutdown(signal) {
-  console.log(`\n${signal} received — shutting down gracefully…`);
+  console.log("\n" + signal + " received — shutting down gracefully…");
   server.close(() => {
-    mongoose
-      .disconnect()
+    sequelize
+      .close()
       .catch(() => {})
       .finally(() => process.exit(0));
   });

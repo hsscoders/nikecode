@@ -1,7 +1,9 @@
 const jwt = require("jsonwebtoken");
 const Admin = require("../models/Admin");
 
-/* Admin JWT guard — Authorization: Bearer <token> */
+/* Admin JWT guard — Authorization: Bearer <token>
+   Numeric-id coercion matches the user guard (legacy ObjectId tokens
+   fail cleanly instead of casting inside SQL). */
 module.exports = async function adminAuth(req, res, next) {
   try {
     const header = req.headers.authorization || "";
@@ -13,7 +15,11 @@ module.exports = async function adminAuth(req, res, next) {
     if (decoded.role !== "admin")
       return res.status(401).json({ success: false, message: "Unauthorized" });
 
-    const admin = await Admin.findById(decoded.id);
+    const aid = Number(decoded.id);
+    if (!Number.isInteger(aid) || aid <= 0)
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    const admin = await Admin.findByPk(aid);
     if (!admin)
       return res.status(401).json({ success: false, message: "Unauthorized" });
 

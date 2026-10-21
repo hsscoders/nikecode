@@ -1,34 +1,43 @@
-const mongoose = require("mongoose");
+const { sequelize, Sequelize } = require("../db");
 
-const UserSchema = new mongoose.Schema(
+/* users — was models/User.js (Mongoose). `bank` is a VIRTUAL that reads/
+   writes the four flat columns so existing code (`user.bank.realName`)
+   keeps working unchanged. */
+const User = sequelize.define(
+  "User",
   {
-    phone: {
-      type: String,
-      required: true,
-      unique: true,
-      index: true,
-      match: /^[6-9]\d{9}$/,
-    },
-    password: { type: String, required: true }, // bcrypt hash (login)
-    withdrawPassword: { type: String, required: true }, // bcrypt hash (withdrawal)
-    refBy: { type: String, default: "", trim: true, index: true }, // the referrer's refId
-    userid: { type: String, unique: true, sparse: true, index: true }, // ZP + 6 digits
-    refId: { type: String, unique: true, sparse: true, index: true }, // ZP + 8 alnum
-    name: { type: String, default: "", trim: true },
-    balance: { type: Number, default: 0 }, // withdrawal balance
-    rechargeBalance: { type: Number, default: 0 }, // recharge wallet (plan buy)
-    totalRecharge: { type: Number, default: 0 }, // cumulative successful recharges (never decreases on plan buy)
-    totalIncome: { type: Number, default: 0 }, // total plan income
-    status: { type: String, enum: ["Active", "Banned"], default: "Active" },
-    /* Bank card saved on the first withdrawal (admin can view it in Manage Users) */
+    id: { type: Sequelize.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
+    legacyId: { type: Sequelize.CHAR(24), field: "legacy_id" },
+    phone: { type: Sequelize.STRING(10), unique: true, validate: { is: /^[6-9]\d{9}$/ } },
+    password: { type: Sequelize.STRING(100) }, // bcrypt hash (login)
+    withdrawPassword: { type: Sequelize.STRING(100), field: "withdraw_password" }, // bcrypt hash
+    refBy: { type: Sequelize.STRING(20), defaultValue: "", field: "ref_by" },
+    userid: { type: Sequelize.STRING(20), unique: true },
+    refId: { type: Sequelize.STRING(20), unique: true, field: "ref_id" },
+    name: { type: Sequelize.STRING(40), defaultValue: "" },
+    balance: { type: Sequelize.DECIMAL(12, 2), defaultValue: 0 },
+    rechargeBalance: { type: Sequelize.DECIMAL(12, 2), defaultValue: 0, field: "recharge_balance" },
+    totalRecharge: { type: Sequelize.DECIMAL(12, 2), defaultValue: 0, field: "total_recharge" },
+    totalIncome: { type: Sequelize.DECIMAL(12, 2), defaultValue: 0, field: "total_income" },
+    status: { type: Sequelize.ENUM("Active", "Banned"), defaultValue: "Active" },
+    bankRealName: { type: Sequelize.STRING(30), defaultValue: "", field: "bank_real_name" },
+    bankBankName: { type: Sequelize.STRING(30), defaultValue: "", field: "bank_bank_name" },
+    bankAccount: { type: Sequelize.STRING(24), defaultValue: "", field: "bank_account" },
+    bankIfsc: { type: Sequelize.STRING(11), defaultValue: "", field: "bank_ifsc" },
+    /* composed bank card — same shape the Mongoose subdoc had */
     bank: {
-      realName: { type: String, default: "" },
-      bankName: { type: String, default: "" },
-      account: { type: String, default: "" },
-      ifsc: { type: String, default: "" },
+      type: Sequelize.VIRTUAL,
+      get() {
+        return {
+          realName: this.getDataValue("bankRealName") || "",
+          bankName: this.getDataValue("bankBankName") || "",
+          account: this.getDataValue("bankAccount") || "",
+          ifsc: this.getDataValue("bankIfsc") || "",
+        };
+      },
     },
   },
-  { timestamps: true }
+  { tableName: "users", underscored: true }
 );
 
-module.exports = mongoose.model("User", UserSchema);
+module.exports = User;

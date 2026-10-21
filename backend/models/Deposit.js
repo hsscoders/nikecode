@@ -1,27 +1,43 @@
-const mongoose = require("mongoose");
+const { sequelize, Sequelize } = require("../db");
 
-const DepositSchema = new mongoose.Schema(
+const Deposit = sequelize.define(
+  "Deposit",
   {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
-    userid: { type: String, default: "" },
-    phone: { type: String, default: "", index: true },
-    amount: { type: Number, required: true, min: 0 },
-    method: { type: String, default: "Pay-T" },
+    id: { type: Sequelize.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
+    legacyId: { type: Sequelize.CHAR(24), field: "legacy_id" },
+    user: { type: Sequelize.INTEGER.UNSIGNED, field: "user_id" },
+    userid: { type: Sequelize.STRING(20), defaultValue: "" },
+    phone: { type: Sequelize.STRING(10), defaultValue: "" },
+    amount: { type: Sequelize.DECIMAL(12, 2), defaultValue: 0 },
+    method: { type: Sequelize.STRING(40), defaultValue: "Pay-T" },
     status: {
-      type: String,
-      enum: ["Pending", "Success", "Rejected"],
-      default: "Pending",
-      index: true,
+      type: Sequelize.ENUM("Pending", "Success", "Rejected"),
+      defaultValue: "Pending",
     },
-    note: { type: String, default: "" },
-    processedAt: { type: Date },
-    /* QwackPay auto-gateway tracking (method "QwackPay" orders only) */
-    gateway: { type: String, default: "" }, // "qwackpay"
-    gatewayOrderId: { type: String, default: "" }, // QwackPay's qwack_order_id
-    paymentUrl: { type: String, default: "" }, // hosted checkout link returned by the gateway
-    utr: { type: String, default: "" }, // bank UTR from the success callback
+    note: { type: Sequelize.STRING(255), defaultValue: "" },
+    processedAt: { type: Sequelize.DATE, field: "processed_at" },
+    gateway: { type: Sequelize.STRING(40), defaultValue: "" },
+    gatewayOrderId: { type: Sequelize.STRING(64), defaultValue: "", field: "gateway_order_id" },
+    paymentUrl: { type: Sequelize.STRING(500), defaultValue: "", field: "payment_url" },
+    utr: { type: Sequelize.STRING(64), defaultValue: "" },
   },
-  { timestamps: true }
+  { tableName: "deposits", underscored: true }
 );
 
-module.exports = mongoose.model("Deposit", DepositSchema);
+/* Resolve a gateway merchant order id → Deposit.
+   New orders carry the numeric MySQL id; every order that existed before
+   the MongoDB→MySQL migration carries the old 24-char ObjectId as its
+   merchant_order_id, so webhooks/queries for pre-migration Pending
+   orders keep resolving (via legacy_id) instead of getting lost. */
+Deposit.findByAnyOrderId = async function (orderId) {
+  const s = String(orderId || "").trim();
+  if (!s) return null;
+  if (/^[0-9a-fA-F]{24}$/.test(s)) {
+    const legacy = await Deposit.findOne({ where: { legacyId: s } });
+    if (legacy) return legacy;
+  }
+  if (!/^\d+$/.test(s)) return null;
+  return Deposit.findByPk(Number(s));
+};
+
+module.exports = Deposit;

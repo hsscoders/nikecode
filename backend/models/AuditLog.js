@@ -1,34 +1,23 @@
-const mongoose = require("mongoose");
+const { sequelize, Sequelize } = require("../db");
 
-/* ============================================================
-   AUDIT LOG — immutable activity trail.
-
-   One document per significant event: admin money actions
-   (deposit/withdraw status changes, user edits), gateway webhook
-   settlements, user auth events and money requests. Written by
-   services/audit.js — fire-and-forget, a logging failure can never
-   break the main flow. No updates, no deletes from the app: the
-   trail stays trustworthy. TLL index auto-prunes after 90 days.
-   ============================================================ */
-
-const AuditLogSchema = new mongoose.Schema(
+/* AUDIT LOG — immutable activity trail (was Mongoose with a 90-day TTL).
+   MySQL has no TTL index: the daily income cron prunes rows older than
+   90 days (same retention as before). No updates, no deletes from the
+   app besides that prune. */
+const AuditLog = sequelize.define(
+  "AuditLog",
   {
-    /* who did it — "admin" (panel action), "user" (client app), or
-       "system" (webhooks, cron income credit) */
+    id: { type: Sequelize.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
+    legacyId: { type: Sequelize.CHAR(24), field: "legacy_id" },
     actorType: {
-      type: String,
-      enum: ["admin", "user", "system"],
-      required: true,
-      index: true,
+      type: Sequelize.ENUM("admin", "user", "system"),
+      field: "actor_type",
     },
-    actorId: { type: String, default: "" }, /* raw _id as string */
-    actorLabel: { type: String, default: "" }, /* admin username / user phone */
-    /* what happened — dotted snake_case verb, e.g. deposit.approve */
-    action: { type: String, required: true, index: true },
-    /* coarse grouping for the admin filter chips */
+    actorId: { type: Sequelize.STRING(40), defaultValue: "", field: "actor_id" },
+    actorLabel: { type: Sequelize.STRING(60), defaultValue: "", field: "actor_label" },
+    action: { type: Sequelize.STRING(60) },
     category: {
-      type: String,
-      enum: [
+      type: Sequelize.ENUM(
         "auth",
         "deposit",
         "withdraw",
@@ -38,23 +27,26 @@ const AuditLogSchema = new mongoose.Schema(
         "banner",
         "settings",
         "gateway",
-        "system",
-      ],
-      required: true,
-      index: true,
+        "system"
+      ),
     },
-    target: { type: String, default: "" }, /* whom/what it hit (phone, plan id…) */
-    /* human summary + structured extras (amounts, statuses, ids) */
-    message: { type: String, default: "" },
-    detail: { type: mongoose.Schema.Types.Mixed, default: {} },
-    ip: { type: String, default: "" },
+    target: { type: Sequelize.STRING(120), defaultValue: "" },
+    message: { type: Sequelize.STRING(400), defaultValue: "" },
+    detail: {
+      type: Sequelize.JSON,
+      get() {
+        const v = this.getDataValue("detail");
+        if (v == null) return {};
+        return typeof v === "string" ? JSON.parse(v) : v;
+      },
+    },
+    ip: { type: Sequelize.STRING(64), defaultValue: "" },
   },
-  { timestamps: { createdAt: true, updatedAt: false } }
+  {
+    tableName: "audit_logs",
+    underscored: true,
+    updatedAt: false, /* createdAt only — immutable trail */
+  }
 );
 
-/* trail auto-prunes — 90 days of history is plenty for operations */
-AuditLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 });
-/* newest-first browsing */
-AuditLogSchema.index({ createdAt: -1 });
-
-module.exports = mongoose.model("AuditLog", AuditLogSchema);
+module.exports = AuditLog;

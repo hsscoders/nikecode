@@ -2,11 +2,12 @@
    PAYMENT INTEGRITY & IDEMPOTENCY TESTS (Phase D regression)
    - duplicate webhooks credit exactly once
    - invalid signatures never move money
-   - valid signature + MISMATCHED amount never credits (FIX 1)
-   - reconciliation works without gatewayOrderId (FIX 1b)
+   - valid signature + MISMATCHED amount never credits
+   - reconciliation works without gatewayOrderId
    - concurrent webhooks → single credit
    - payout settle/refund exactly-once
    Gateway = local mock http server (no real network).
+   DB = disposable MySQL (nikecode_test).
    ============================================================ */
 const { test, before, beforeEach, after } = require("node:test");
 const assert = require("node:assert");
@@ -17,13 +18,13 @@ const Deposit = require("../models/Deposit");
 const Withdrawal = require("../models/Withdrawal");
 const User = require("../models/User");
 const Transaction = require("../models/Transaction");
+const Setting = require("../models/Setting");
 
 let base, httpServer;
-let mockGw = null; // local "gateway" the backend will query for reconciliation
 
 before(async () => {
   await H.startDb();
-  app = H.buildApp();
+  const app = H.buildApp();
   const l = await H.listen(app);
   base = l.base;
   httpServer = l.server;
@@ -58,7 +59,7 @@ async function startGatewayMock(response) {
 async function mkDeposit({ amount = 500, status = "Pending", gateway = "qwackpay", gatewayOrderId = "" } = {}) {
   const user = await H.mkUser({ phone: "9600000001", balance: 0, rechargeBalance: 0 });
   const d = await Deposit.create({
-    user: user._id,
+    user: user.id,
     userid: user.userid,
     phone: user.phone,
     amount,
@@ -69,7 +70,7 @@ async function mkDeposit({ amount = 500, status = "Pending", gateway = "qwackpay
     note: "test order",
   });
   await Transaction.create({
-    user: user._id,
+    user: user.id,
     userid: user.userid,
     phone: user.phone,
     type: "recharge",
@@ -77,7 +78,7 @@ async function mkDeposit({ amount = 500, status = "Pending", gateway = "qwackpay
     method: "QwackPay",
     amount,
     status: "Pending",
-    refId: String(d._id),
+    refId: String(d.id),
   });
   return { user, deposit: d };
 }
@@ -93,12 +94,12 @@ function qwackNotifyBody(depositId, { amount = 500, status = "success", utr = "U
   return { ...p, sign: H.qwackSign(p, H.QWACK_KEY) };
 }
 
-const balanceOf = async (id) => (await User.findById(id)).rechargeBalance;
+const balanceOf = async (id) => Number((await User.findByPk(id)).rechargeBalance);
 
 /* ============ 1. duplicate success webhook → credited ONCE ============ */
 test("qwackpay webhook delivered twice credits the wallet exactly once", async () => {
   const { user, deposit } = await mkDeposit({});
-  const body = qwackNotifyBody(deposit._id);
+  const body = qwackNotifyBody(deposit.id);
 
   const r1 = await H.call(base, "POST", "/api/payments/qwackpay/notify", { body });
   const r2 = await H.call(base, "POST", "/api/payments/qwackpay/notify", { body });
@@ -107,52 +108,52 @@ test("qwackpay webhook delivered twice credits the wallet exactly once", async (
   assert.equal(r1.text, "success");
   assert.equal(r2.text, "success"); // ack the replay
 
-  assert.equal(await balanceOf(user._id), 500, "credited exactly once");
-  const d = await Deposit.findById(deposit._id);
+  assert.equal(await balanceOf(user.id), 500, "credited exactly once");
+  const d = await Deposit.findByPk(deposit.id);
   assert.equal(d.status, "Success");
-  const txns = await Transaction.find({ refId: String(deposit._id), status: "Success" });
+  const txns = await Transaction.findAll({ where: { refId: String(deposit.id), status: "Success" } });
   assert.equal(txns.length, 1, "ledger flips once");
 });
 
 /* ============ 2. invalid signature → 401, no state change ============ */
 test("qwackpay webhook with forged sign is rejected without touching money", async () => {
   const { user, deposit } = await mkDeposit({});
-  const body = qwackNotifyBody(deposit._id);
+  const body = qwackNotifyBody(deposit.id);
   body.sign = body.sign.slice(0, -2) + "FF"; // tamper
 
   const r = await H.call(base, "POST", "/api/payments/qwackpay/notify", { body });
   assert.equal(r.status, 401);
-  assert.equal(await balanceOf(user._id), 0);
-  assert.equal((await Deposit.findById(deposit._id)).status, "Pending");
+  assert.equal(await balanceOf(user.id), 0);
+  assert.equal((await Deposit.findByPk(deposit.id)).status, "Pending");
 });
 
-/* ============ 3. FIX 1 regression: valid sign + wrong amount → NOT credited ============ */
+/* ============ 3. valid sign + wrong amount → NOT credited ============ */
 test("qwackpay webhook with valid sign but mismatched amount stays Pending", async () => {
   const { user, deposit } = await mkDeposit({ amount: 500 });
-  const body = qwackNotifyBody(deposit._id, { amount: 400 }); // signed, but wrong
+  const body = qwackNotifyBody(deposit.id, { amount: 400 }); // signed, but wrong
 
   const r = await H.call(base, "POST", "/api/payments/qwackpay/notify", { body });
   assert.equal(r.status, 200); // acked so the gateway stops retrying
   assert.equal(r.text, "success");
-  assert.equal(await balanceOf(user._id), 0, "no credit on amount mismatch");
-  assert.equal((await Deposit.findById(deposit._id)).status, "Pending", "left for reconciliation");
+  assert.equal(await balanceOf(user.id), 0, "no credit on amount mismatch");
+  assert.equal((await Deposit.findByPk(deposit.id)).status, "Pending", "left for reconciliation");
 });
 
 /* ============ 4. matching amount credits normally ============ */
 test("qwackpay webhook with matching amount credits", async () => {
   const { user, deposit } = await mkDeposit({ amount: 500 });
   const r = await H.call(base, "POST", "/api/payments/qwackpay/notify", {
-    body: qwackNotifyBody(deposit._id, { amount: 500 }),
+    body: qwackNotifyBody(deposit.id, { amount: 500 }),
   });
   assert.equal(r.status, 200);
-  assert.equal(await balanceOf(user._id), 500);
-  assert.equal((await Deposit.findById(deposit._id)).status, "Success");
+  assert.equal(await balanceOf(user.id), 500);
+  assert.equal((await Deposit.findByPk(deposit.id)).status, "Success");
 });
 
 /* ============ 5. concurrent duplicate webhooks → single credit ============ */
 test("two CONCURRENT valid qwackpay webhooks credit exactly once", async () => {
   const { user, deposit } = await mkDeposit({});
-  const body = qwackNotifyBody(deposit._id);
+  const body = qwackNotifyBody(deposit.id);
 
   const [r1, r2, r3] = await Promise.all([
     H.call(base, "POST", "/api/payments/qwackpay/notify", { body }),
@@ -161,31 +162,31 @@ test("two CONCURRENT valid qwackpay webhooks credit exactly once", async () => {
   ]);
 
   assert.ok(r1.status === 200 && r2.status === 200 && r3.status === 200);
-  assert.equal(await balanceOf(user._id), 500, "atomic claim allows only one credit");
+  assert.equal(await balanceOf(user.id), 500, "atomic claim allows only one credit");
 });
 
 /* ============ 6. replay after terminal state → no side effect ============ */
 test("late success webhook after Rejected does not resurrect or credit", async () => {
   const { user, deposit } = await mkDeposit({});
-  await Deposit.updateOne(
-    { _id: deposit._id },
-    { $set: { status: "Rejected", note: "gateway reported: failed" } }
+  await Deposit.update(
+    { status: "Rejected", note: "gateway reported: failed" },
+    { where: { id: deposit.id } }
   );
-  await Transaction.updateOne({ refId: String(deposit._id) }, { $set: { status: "Rejected" } });
+  await Transaction.update({ status: "Rejected" }, { where: { refId: String(deposit.id) } });
 
   const r = await H.call(base, "POST", "/api/payments/qwackpay/notify", {
-    body: qwackNotifyBody(deposit._id, { status: "success" }),
+    body: qwackNotifyBody(deposit.id, { status: "success" }),
   });
   assert.equal(r.text, "success");
-  assert.equal(await balanceOf(user._id), 0);
-  assert.equal((await Deposit.findById(deposit._id)).status, "Rejected");
+  assert.equal(await balanceOf(user.id), 0);
+  assert.equal((await Deposit.findByPk(deposit.id)).status, "Rejected");
 });
 
 /* ============ 7. OKPay pay_money rule + sign case ============ */
 test("okpay webhook credits pay_money (actual paid) and rejects forged sign", async () => {
   const user = await H.mkUser({ phone: "9600000002" });
   const d = await Deposit.create({
-    user: user._id,
+    user: user.id,
     userid: user.userid,
     phone: user.phone,
     amount: 500,
@@ -195,23 +196,23 @@ test("okpay webhook credits pay_money (actual paid) and rejects forged sign", as
     note: "t",
   });
   await Transaction.create({
-    user: user._id,
+    user: user.id,
     phone: user.phone,
     type: "recharge",
     amount: 500,
     status: "Pending",
-    refId: String(d._id),
+    refId: String(d.id),
   });
 
   // forged first
   const bad = await H.call(base, "POST", "/api/payments/okpay/notify", {
-    form: { mchId: "M456", out_trade_no: String(d._id), money: "500", pay_money: "480", status: "1", sign: "deadbeef" },
+    form: { mchId: "M456", out_trade_no: String(d.id), money: "500", pay_money: "480", status: "1", sign: "deadbeef" },
   });
   assert.equal(bad.status, 401);
 
   const p = {
     mchId: "M456",
-    out_trade_no: String(d._id),
+    out_trade_no: String(d.id),
     currency: "INR",
     money: "500",
     pay_money: "480",
@@ -222,16 +223,15 @@ test("okpay webhook credits pay_money (actual paid) and rejects forged sign", as
   });
   assert.equal(ok.status, 200);
   assert.equal(ok.text, "success");
-  assert.equal(await balanceOf(user._id), 480, "credited by pay_money per OKPay docs");
-  assert.equal((await Deposit.findById(d._id)).status, "Success");
+  assert.equal(await balanceOf(user.id), 480, "credited by pay_money per OKPay docs");
+  assert.equal((await Deposit.findByPk(d.id)).status, "Success");
 });
 
 /* ============ 8. payout webhook: settle once, refund once ============ */
 test("qwackpay payout webhook settles success exactly once", async () => {
   const user = await H.mkUser({ phone: "9600000003", balance: 1000 });
-  // withdraw request (already deducted the hold) — simulate post-deduction state
   const wd = await Withdrawal.create({
-    user: user._id,
+    user: user.id,
     userid: user.userid,
     phone: user.phone,
     amount: 200,
@@ -247,12 +247,12 @@ test("qwackpay payout webhook settles success exactly once", async () => {
     gateway: "qwackpay",
     payoutOrderId: "PENDING",
   });
-  await Withdrawal.updateOne({ _id: wd._id }, { payoutOrderId: "WD" + wd._id });
+  await Withdrawal.update({ payoutOrderId: "WD" + wd.id }, { where: { id: wd.id } });
   /* mirror the real flow — the request already deducted the hold */
-  await User.updateOne({ _id: user._id }, { $inc: { balance: -200 } });
+  await User.update({ balance: H.Sequelize.literal("`balance` - 200") }, { where: { id: user.id } });
 
   const p = {
-    merchant_order_id: "WD" + wd._id,
+    merchant_order_id: "WD" + wd.id,
     qwack_order_id: "GWP-1",
     amount: "180",
     status: "success",
@@ -265,16 +265,16 @@ test("qwackpay payout webhook settles success exactly once", async () => {
   assert.equal(r1.text, "success");
   assert.equal(r2.text, "success");
 
-  const w = await Withdrawal.findById(wd._id);
+  const w = await Withdrawal.findByPk(wd.id);
   assert.equal(w.status, "Success");
   assert.equal(w.utr, "UTR-9");
-  assert.equal((await User.findById(user._id)).balance, 800, "hold stays deducted (paid out)");
+  assert.equal(Number((await User.findByPk(user.id)).balance), 800, "hold stays deducted (paid out)");
 });
 
 test("payout FAILED webhook refunds the hold exactly once (double delivery)", async () => {
   const user = await H.mkUser({ phone: "9600000004", balance: 1000 });
   const wd = await Withdrawal.create({
-    user: user._id,
+    user: user.id,
     userid: user.userid,
     phone: user.phone,
     amount: 200,
@@ -288,11 +288,10 @@ test("payout FAILED webhook refunds the hold exactly once (double delivery)", as
     gateway: "qwackpay",
     payoutOrderId: "PENDING",
   });
-  await Withdrawal.updateOne({ _id: wd._id }, { payoutOrderId: "WD" + wd._id });
-  /* mirror the real flow — the request already deducted the hold */
-  await User.updateOne({ _id: user._id }, { $inc: { balance: -200 } });
+  await Withdrawal.update({ payoutOrderId: "WD" + wd.id }, { where: { id: wd.id } });
+  await User.update({ balance: H.Sequelize.literal("`balance` - 200") }, { where: { id: user.id } });
 
-  const p = { merchant_order_id: "WD" + wd._id, qwack_order_id: "GWP-2", amount: "180", status: "failed" };
+  const p = { merchant_order_id: "WD" + wd.id, qwack_order_id: "GWP-2", amount: "180", status: "failed" };
   const body = { ...p, sign: H.qwackSign(p, H.QWACK_KEY) };
 
   await Promise.all([
@@ -301,31 +300,31 @@ test("payout FAILED webhook refunds the hold exactly once (double delivery)", as
     H.call(base, "POST", "/api/payments/qwackpay/payout-notify", { body }),
   ]);
 
-  assert.equal((await User.findById(user._id)).balance, 1000, "refunded exactly once");
-  assert.equal((await Withdrawal.findById(wd._id)).status, "Rejected");
+  assert.equal(Number((await User.findByPk(user.id)).balance), 1000, "refunded exactly once");
+  assert.equal((await Withdrawal.findByPk(wd.id)).status, "Rejected");
 });
 
-/* ============ 9. FIX 1b regression: reconciliation without gatewayOrderId ============ */
+/* ============ 9. reconciliation without gatewayOrderId ============ */
 test("status poll reconciles a Pending order even when gatewayOrderId is empty", async () => {
   const mock = await startGatewayMock({
     code: 200,
     message: "ok",
     data: { status: "success", amount: 500, qwack_order_id: "GW-LATE-1" },
   });
-  mockGw = mock;
   try {
-    // rewrite the saved gateway baseUrl to the local mock
-    const Setting = require("../models/Setting");
-    await Setting.updateOne({ key: "global" }, { $set: { "qwackpay.baseUrl": mock.url } });
+    await Setting.patchGlobal((d) => {
+      d.qwackpay.baseUrl = mock.url;
+      return d;
+    });
 
-    const { user, deposit } = await mkDeposit({ gatewayOrderId: "" }); // ← the old guard skipped these
+    const { user, deposit } = await mkDeposit({ gatewayOrderId: "" });
 
     const token = (await userAuthToken(base, user.phone)).token;
-    const r = await H.call(base, "GET", "/api/payments/qwackpay/status/" + deposit._id, { token });
+    const r = await H.call(base, "GET", "/api/payments/qwackpay/status/" + deposit.id, { token });
 
     assert.equal(r.status, 200);
     assert.equal(r.json.order.status, "Success", "reconciled via merchant order id");
-    assert.equal(await balanceOf(user._id), 500);
+    assert.equal(await balanceOf(user.id), 500);
   } finally {
     mock.server.close();
   }
@@ -338,15 +337,17 @@ test("status poll does NOT credit when the gateway reports a mismatched amount",
     data: { status: "success", amount: 999, qwack_order_id: "GW-LATE-2" },
   });
   try {
-    const Setting = require("../models/Setting");
-    await Setting.updateOne({ key: "global" }, { $set: { "qwackpay.baseUrl": mock.url } });
+    await Setting.patchGlobal((d) => {
+      d.qwackpay.baseUrl = mock.url;
+      return d;
+    });
 
     const { user, deposit } = await mkDeposit({ amount: 500, gatewayOrderId: "" });
     const token = (await userAuthToken(base, user.phone)).token;
-    const r = await H.call(base, "GET", "/api/payments/qwackpay/status/" + deposit._id, { token });
+    const r = await H.call(base, "GET", "/api/payments/qwackpay/status/" + deposit.id, { token });
 
     assert.equal(r.json.order.status, "Pending", "mismatch stays Pending");
-    assert.equal(await balanceOf(user._id), 0);
+    assert.equal(await balanceOf(user.id), 0);
   } finally {
     mock.server.close();
   }

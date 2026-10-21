@@ -94,9 +94,17 @@ module.exports.authRateLimit = function authRateLimit(req, res, next) {
 const MONEY_WINDOW = 10 * 1000;
 
 module.exports.moneyRateLimit = function moneyRateLimit(req, res, next) {
-  const who =
-    (req.user && req.user._id && "u:" + req.user._id) || "ip:" + ipOf(req);
+  const uid = req.user && (req.user.id ?? req.user._id);
+  const who = (uid && "u:" + uid) || "ip:" + ipOf(req);
   const r = hit("money:" + who, 8, MONEY_WINDOW);
   if (!r.ok) return tooMany(res, r.retryAfter);
   next();
+};
+
+/* test-only — clears every bucket (used by the test harness between tests,
+   where TRUNCATE resets AUTO_INCREMENT and ids would otherwise share the
+   process-lifetime buckets). Never call from application code. */
+module.exports._resetForTests = function () {
+  buckets.clear();
+  lastSweep = Date.now();
 };
