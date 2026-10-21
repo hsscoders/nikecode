@@ -33,6 +33,29 @@ async function runMigrations({ fresh = false, log = console.log } = {}) {
         DB_NAME.replace(/`/g, "") +
         "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
     );
+  } catch (e) {
+    /* Shared-hosting accounts (cPanel / aaPanel) are scoped to their own
+       database and lack the GLOBAL CREATE privilege, so the statement above
+       can be rejected even when the database already exists (panel-created).
+       In that case verify the DB is actually usable and continue. */
+    const noGlobalCreate =
+      ["ER_DBACCESS_DENIED_ERROR", "ER_ACCESS_DENIED_ERROR"].includes(e.code) ||
+      [1044, 1045].includes(e.errno);
+    if (!noGlobalCreate) throw e;
+    const chk = await mysql.createConnection({
+      host: DB_HOST,
+      port: DB_PORT,
+      user: DB_USER,
+      password: DB_PASSWORD,
+      database: DB_NAME,
+    });
+    await chk.query("SELECT 1");
+    await chk.end();
+    log(
+      "note: CREATE DATABASE skipped (no global CREATE privilege — normal on shared hosting); using existing database '" +
+        DB_NAME +
+        "'"
+    );
   } finally {
     await boot.end();
   }
