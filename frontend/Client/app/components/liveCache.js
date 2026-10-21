@@ -1,7 +1,7 @@
 "use client";
 
 /* ============ instant-cache (stale-while-revalidate) — DB-first ============
-   The SERVER (MongoDB) is the single source of truth for all user data.
+   The SERVER (MySQL via API) is the single source of truth for all user data.
    This module only holds short-lived display caches so a refresh paints
    instantly instead of flashing an empty state, and the fresh values
    always arrive from the API right after.

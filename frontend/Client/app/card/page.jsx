@@ -223,7 +223,7 @@ export default function CardPage() {
     }
 
     /* session-cache mirror for the instant prefill in THIS tab — the saved
-       copy lives on the user account in MongoDB (GET /api/wallet → bank) */
+       copy lives on the user account in the database (GET /api/wallet → bank) */
     writeCache("bank", {
       realName: name,
       ifsc,
