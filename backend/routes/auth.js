@@ -254,15 +254,24 @@ router.post("/auto-login", async (req, res) => {
         .json({ success: false, message: "Invalid login link" });
 
     const lc = await LoginCode.findOne({ code });
-    if (!lc || lc.used || lc.expiresAt < new Date())
+    if (!lc || lc.expiresAt < new Date())
       return res.status(400).json({
         success: false,
         message: "This login link is invalid or has expired",
       });
 
-    lc.used = true;
-    lc.usedAt = new Date();
-    await lc.save();
+    /* ATOMIC single-use claim — the used flag is flipped with a guarded
+       updateOne, so two tabs opening the same link at the same moment can
+       never both redeem it (the old read-check-save race let both through). */
+    const claim = await LoginCode.updateOne(
+      { _id: lc._id, used: false },
+      { $set: { used: true, usedAt: new Date() } }
+    );
+    if (claim.modifiedCount === 0)
+      return res.status(400).json({
+        success: false,
+        message: "This login link has already been used",
+      });
 
     const user = await User.findById(lc.user);
     if (!user)

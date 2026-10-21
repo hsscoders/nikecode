@@ -29,10 +29,55 @@ const GATEWAY_MIN = 100; // per-order gateway limits (₹)
 const GATEWAY_MAX = 100000;
 
 /* Shared idempotent credit — used by BOTH the webhooks and the status-poll
-   reconciliation so a missed webhook can never trap money in Pending. */
-async function creditPayinDeposit(deposit, { qwackOrderId = "", utr = "", amount = null }) {
+   reconciliation so a missed webhook can never trap money in Pending.
+
+   expectedAmount (optional) — STRICT AMOUNT MATCH for gateways whose
+   callback amount must equal the local order (QwackPay). When the
+   gateway-reported amount differs from the local order by ≥ ₹1 the credit
+   is REFUSED: the deposit stays Pending for manual reconciliation and the
+   admin gets a loud alert. A signature proves WHERE an event came from,
+   not that its amount is safe to trust — order/amount binding is checked
+   here. OKPay callers intentionally omit expectedAmount: its docs mandate
+   crediting pay_money (what the user actually paid), which may legitimately
+   differ from the order amount on partial payments. */
+async function creditPayinDeposit(deposit, { qwackOrderId = "", utr = "", amount = null, expectedAmount = null }) {
   const amt = Number(amount) > 0 ? Number(amount) : deposit.amount;
   const gwLabel = deposit.gatewayLabel || "Gateway";
+
+  /* amount/order binding — never let a validly-signed event with a
+     mismatched amount move money. Acknowledged ("success" is still
+     replied) but left Pending so the admin order-query console settles it. */
+  if (expectedAmount != null && Number(amount) > 0) {
+    const diff = Math.abs(Number(amount) - Number(expectedAmount));
+    if (diff >= 1) {
+      audit.log(null, {
+        actorType: "system",
+        action: "gateway.payin_amount_mismatch",
+        category: "gateway",
+        target: deposit.phone,
+        message:
+          gwLabel + " AMOUNT MISMATCH — reported \u20B9" + amount +
+          " vs order \u20B9" + expectedAmount + " for " + deposit.phone +
+          " — NOT credited, manual reconciliation required",
+        detail: {
+          depositId: String(deposit._id),
+          reportedAmount: Number(amount),
+          orderAmount: Number(expectedAmount),
+          gateway: gwLabel,
+        },
+      });
+      emitAdmin("txns:new", {
+        type: "recharge",
+        phone: deposit.phone,
+        amount: Number(amount),
+        message:
+          "⚠ " + gwLabel + " AMOUNT MISMATCH for " + deposit.phone +
+          " — reported \u20B9" + amount + ", order \u20B9" + expectedAmount +
+          " — deposit left Pending, settle via order query",
+      });
+      return false;
+    }
+  }
 
   const upd = await Deposit.updateOne(
     { _id: deposit._id, status: "Pending" },
@@ -323,6 +368,7 @@ router.post("/qwackpay/notify", async (req, res) => {
         qwackOrderId: String(p.qwack_order_id || ""),
         utr: String(p.utr || ""),
         amount: Number(p.amount) > 0 ? Number(p.amount) : null,
+        expectedAmount: deposit.amount, /* strict — QwackPay reports the order amount */
       });
     } else {
       /* failed / cancelled — close the order without crediting */
@@ -618,13 +664,17 @@ router.get("/okpay/status/:orderId", userAuth, async (req, res) => {
   }
 });
 
-/* shared reconciliation logic — okpay credits by pay_money (the docs rule) */
+/* shared reconciliation logic — okpay credits by pay_money (the docs rule);
+   qwackpay passes expectedAmount so the gateway amount is strictly matched */
 async function pollDeposit(orderId, userId, service, label) {
   let d = await Deposit.findOne({ _id: orderId, user: userId }).lean();
   if (!d) return null;
 
-  /* missed-webhook reconciliation — only for gateway orders still Pending */
-  if (d.status === "Pending" && d.gateway && d.gatewayOrderId) {
+  /* missed-webhook reconciliation — any gateway order still Pending.
+     (gatewayOrderId is NOT required: both gateways accept the merchant
+     order id — the local deposit _id — so orders created before the
+     gateway echoed its own id still reconcile instead of trapping money.) */
+  if (d.status === "Pending" && d.gateway) {
     const cfg = await service.getConfig();
     if (cfg.enabled && cfg.merchantId && cfg.apiKey) {
       const r = await service.queryOrder(cfg, String(d._id), "payin");
@@ -644,6 +694,7 @@ async function pollDeposit(orderId, userId, service, label) {
             qwackOrderId: String((r.data && r.data.qwack_order_id) || d.gatewayOrderId),
             utr: String((r.data && r.data.utr) || ""),
             amount: paid,
+            expectedAmount: label === "QwackPay" ? d.amount : null,
           });
           d = await Deposit.findById(d._id).lean();
         } else if (g === "failed" || g === "cancelled" || g === "rejected") {

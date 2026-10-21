@@ -11,7 +11,7 @@ const UserSchema = new mongoose.Schema(
     },
     password: { type: String, required: true }, // bcrypt hash (login)
     withdrawPassword: { type: String, required: true }, // bcrypt hash (withdrawal)
-    refBy: { type: String, default: "", trim: true }, // the referrer's refId
+    refBy: { type: String, default: "", trim: true, index: true }, // the referrer's refId
     userid: { type: String, unique: true, sparse: true, index: true }, // ZP + 6 digits
     refId: { type: String, unique: true, sparse: true, index: true }, // ZP + 8 alnum
     name: { type: String, default: "", trim: true },

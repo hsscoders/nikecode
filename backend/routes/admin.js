@@ -551,6 +551,8 @@ router.put("/commission", async (req, res) => {
         return res.status(400).json({ success: false, message: "Commission must be 0-100%" });
     }
     const s = await Setting.findOne({ key: "global" });
+    if (!s)
+      return res.status(404).json({ success: false, message: "Settings not found" });
     s.commission = { level1: Number(b.level1), level2: Number(b.level2), level3: Number(b.level3) };
     await s.save();
     audit.log(req, {
@@ -1480,6 +1482,9 @@ router.post("/qwackpay/query-order", adminAuth, async (req, res) => {
         qwackOrderId: String((r.data && r.data.qwack_order_id) || deposit.gatewayOrderId || ""),
         utr: String((r.data && r.data.utr) || ""),
         amount: paidAmount,
+        /* strict order/amount binding for QwackPay deposits — OKPay keeps
+           its documented pay_money (partial-payment) rule */
+        expectedAmount: entry.id === "qwackpay" ? deposit.amount : null,
       });
       settled = credited ? "deposit-credited" : "already-settled";
       if (credited)
@@ -1663,6 +1668,24 @@ router.put("/settings", async (req, res) => {
     const b = req.body || {};
     const s = await Setting.findOne({ key: "global" });
     if (!s) return res.status(404).json({ success: false, message: "Settings not found" });
+    /* legacy-doc guards — a Setting created before a schema extension may be
+       missing whole subdocuments; merge code below assigns into their fields
+       directly, which would throw on undefined. Initialize any missing ones
+       (mongoose fills enum/default fields from the schema on next save). */
+    [
+      "site",
+      "commission",
+      "popup",
+      "homeTexts",
+      "recharge",
+      "withdraw",
+      "registerBonus",
+      "publicUrls",
+      "gatewayPrefs",
+    ].forEach((k) => {
+      if (!s[k]) s[k] = {};
+    });
+    if (!s.recharge.manual) s.recharge.manual = {};
     const siteFields = [
       "loginTitle",
       "loginSubtitle",
@@ -1684,6 +1707,7 @@ router.put("/settings", async (req, res) => {
     /* Welcome popup (home page) — texts, bullets, enable/disable */
     if (b.popup) {
       const p = b.popup;
+      if (!s.popup.bullets) s.popup.bullets = [];
       if (p.enabled !== undefined) s.popup.enabled = !!p.enabled;
       if (p.title !== undefined) s.popup.title = String(p.title).trim().slice(0, 80);
       if (p.subtitle !== undefined) s.popup.subtitle = String(p.subtitle).trim().slice(0, 120);
