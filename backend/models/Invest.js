@@ -1,22 +1,25 @@
-const mongoose = require("mongoose");
+const { sequelize, Sequelize } = require("../db");
 
-const InvestSchema = new mongoose.Schema(
+const Invest = sequelize.define(
+  "Invest",
   {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
-    userid: { type: String, default: "", index: true },
-    phone: { type: String, default: "", index: true },
-    planId: { type: mongoose.Schema.Types.ObjectId, ref: "Plan" },
-    planName: { type: String, required: true },
-    vip: { type: Boolean, default: false },
-    price: { type: Number, required: true },
-    daily: { type: Number, required: true },
-    cycle: { type: Number, required: true },
-    total: { type: Number, required: true },
-    status: { type: String, enum: ["Active", "Completed"], default: "Active" },
-    /* How many daily-income payouts have already been credited to the wallet */
-    paidDays: { type: Number, default: 0 },
+    id: { type: Sequelize.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
+    legacyId: { type: Sequelize.CHAR(24), field: "legacy_id" },
+    user: { type: Sequelize.INTEGER.UNSIGNED, field: "user_id" },
+    userid: { type: Sequelize.STRING(20), defaultValue: "" },
+    phone: { type: Sequelize.STRING(10), defaultValue: "" },
+    planId: { type: Sequelize.INTEGER.UNSIGNED, field: "plan_id" },
+    planName: { type: Sequelize.STRING(60), field: "plan_name" },
+    vip: { type: Sequelize.BOOLEAN, defaultValue: false },
+    price: { type: Sequelize.DECIMAL(12, 2), defaultValue: 0 },
+    daily: { type: Sequelize.DECIMAL(12, 2), defaultValue: 0 },
+    cycle: { type: Sequelize.INTEGER.UNSIGNED, defaultValue: 1 },
+    total: { type: Sequelize.DECIMAL(12, 2), defaultValue: 0 },
+    status: { type: Sequelize.ENUM("Active", "Completed"), defaultValue: "Active" },
+    /* how many daily-income payouts have already been credited */
+    paidDays: { type: Sequelize.INTEGER.UNSIGNED, defaultValue: 0, field: "paid_days" },
   },
-  { timestamps: true }
+  { tableName: "invests", underscored: true }
 );
 
-module.exports = mongoose.model("Invest", InvestSchema);
+module.exports = Invest;

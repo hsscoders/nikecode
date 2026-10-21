@@ -75,7 +75,7 @@ test("register rejects invalid invite code; valid code links refBy", async () =>
   const refId = referrer.json.user.refId;
   const child = await H.apiRegister(base, "9812345672", { ref_by: refId });
   assert.equal(child.status, 200);
-  const u = await User.findOne({ phone: "9812345672" });
+  const u = await User.findOne({ where: { phone: "9812345672" } });
   assert.equal(u.refBy, refId);
 });
 
@@ -108,7 +108,7 @@ test("login success + wrong password + unknown phone", async () => {
 
 test("banned user cannot login", async () => {
   await H.apiRegister(base, "9812345675");
-  await User.updateOne({ phone: "9812345675" }, { status: "Banned" });
+  await User.update({ status: "Banned" }, { where: { phone: "9812345675" } });
   const r = await H.call(base, "POST", "/api/auth/login", {
     body: { phone: "9812345675", password: "loginpass" },
   });
@@ -119,7 +119,7 @@ test("banned user cannot login", async () => {
 test("auto-login code is single-use; second redemption fails", async () => {
   const u = await H.mkUser({ phone: "9812345676" });
   const code = crypto.randomBytes(24).toString("hex");
-  await LoginCode.create({ code, user: u._id, expiresAt: new Date(Date.now() + 3600e3) });
+  await LoginCode.create({ code, user: u.id, expiresAt: new Date(Date.now() + 3600e3) });
 
   const first = await H.call(base, "POST", "/api/auth/auto-login", { body: { code } });
   assert.equal(first.json.success, true);
@@ -132,7 +132,7 @@ test("auto-login code is single-use; second redemption fails", async () => {
 test("FIX 2 regression: two CONCURRENT redemptions of one code — exactly one wins", async () => {
   const u = await H.mkUser({ phone: "9812345677" });
   const code = crypto.randomBytes(24).toString("hex");
-  await LoginCode.create({ code, user: u._id, expiresAt: new Date(Date.now() + 3600e3) });
+  await LoginCode.create({ code, user: u.id, expiresAt: new Date(Date.now() + 3600e3) });
 
   const [a, b] = await Promise.all([
     H.call(base, "POST", "/api/auth/auto-login", { body: { code } }),
@@ -146,7 +146,7 @@ test("FIX 2 regression: two CONCURRENT redemptions of one code — exactly one w
 test("expired auto-login code is refused", async () => {
   const u = await H.mkUser({ phone: "9812345678" });
   const code = crypto.randomBytes(24).toString("hex");
-  await LoginCode.create({ code, user: u._id, expiresAt: new Date(Date.now() - 1000) });
+  await LoginCode.create({ code, user: u.id, expiresAt: new Date(Date.now() - 1000) });
   const r = await H.call(base, "POST", "/api/auth/auto-login", { body: { code } });
   assert.equal(r.status, 400);
 });

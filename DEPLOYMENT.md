@@ -1,7 +1,69 @@
 # Luveedu cPanel Production Deployment Guide
 
 Target: **Luveedu Cloud-3 shared cPanel hosting** · Repo: `hsscoders/nikecode`
-Stack detected: **Next.js 15.5 (Client + Admin, SSR — needs Node, NOT static export)** · **Express + Socket.IO backend** · **MongoDB Atlas (Mongoose)**
+Stack detected: **Next.js 15.5 (Client + Admin, SSR — needs Node, NOT static export)** · **Express + Socket.IO backend** · **MySQL database (Sequelize ORM)**
+
+---
+
+## 0. Database: MySQL (MongoDB removed)
+
+The backend now runs on **MySQL via Sequelize** (`backend/db/`). MongoDB runtime
+dependencies are removed — the ONLY component that still reads MongoDB is the
+one-time data migration utility (`backend/scripts/migrate-mongo-to-mysql.js`).
+
+### One-time MySQL setup
+
+1. cPanel → **MySQL® Databases** → create database `nikecode`, user `nikecode`,
+   set a strong password (the initial shared placeholder must be changed).
+2. Grant the user **ALL PRIVILEGES** on `nikecode.*` only (never global).
+3. The app and MySQL share the server → use `DB_HOST=127.0.0.1` (or `localhost`)
+   in `backend/.env`. Remote/public connections are NOT needed — do not open
+   port 3306 to the world.
+4. Apply the schema once: `cd ~/apps/backend && node db/migrate.js`
+   (idempotent — the `_migrations` table tracks applied files; the deploy
+   workflow runs it automatically on every push).
+
+### backend/.env (MySQL edition)
+
+```env
+DB_CLIENT=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=nikecode
+DB_USER=nikecode
+DB_PASSWORD=<real password — rotate the initial shared one>
+JWT_SECRET=<openssl rand -hex 32>
+CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+```
+
+Do **not** set `PORT` — Passenger injects it.
+
+### One-time data migration (MongoDB → MySQL)
+
+Run ONCE, from the server (or any host that can reach BOTH databases):
+
+```bash
+cd ~/apps/backend
+node scripts/migrate-mongo-to-mysql.js            # DRY RUN — no writes
+node scripts/migrate-mongo-to-mysql.js --write    # real migration + reconciliation
+node scripts/migrate-mongo-to-mysql.js --report   # re-verify any time
+```
+
+- Needs `MONGODB_URI` in `backend/.env` only for this step (remove it after).
+- Resumable: re-running `--write` skips rows whose `legacy_id` already exists.
+- Preserves bcrypt password hashes verbatim, payment references, and the old
+  ObjectId of every row in `legacy_id` — pre-migration Pending gateway orders
+  still reconcile through their original merchant order id.
+- The reconciliation report compares per-collection counts AND financial
+  totals (successful deposits/withdrawals, wallet sums) — do NOT switch the
+  app to MySQL until it prints `RECONCILIATION PASSED`.
+
+### Rollback plan
+
+The MongoDB source is never modified by the migration. To roll back: restore
+the previous backend build (Actions → run workflow on an older commit) with
+`MONGODB_URI` back in `backend/.env` and restart. MySQL rows created after the
+cutover will NOT flow back automatically — reconcile manually before deciding.
 
 ---
 
@@ -69,8 +131,12 @@ cPanel → **Setup Node.js App** → *Create Application*, three times:
 Create `~/apps/backend/.env` (File Manager or terminal) — copy from `backend/.env.example`:
 
 ```env
-PORT=
-MONGODB_URI=mongodb+srv://USER:PASS@cluster0.xxxxx.mongodb.net/zapto?retryWrites=true&w=majority
+DB_CLIENT=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=nikecode
+DB_USER=nikecode
+DB_PASSWORD=<real MySQL password>
 JWT_SECRET=<openssl rand -hex 32 — ROTATE: the old one leaked in git history>
 CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 ```
@@ -78,6 +144,8 @@ CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 - `CORS_ORIGINS` empty = allow all — **do not leave it empty in production**.
 - Do **not** set `PORT` — Passenger injects it.
 - User uploads persist in `~/apps/backend/public/uploads/` — the deploy never touches this folder.
+- MySQL schema: applied automatically by the deploy workflow (`node db/migrate.js`,
+  idempotent) or once manually — see §0.
 
 Client/Admin env vars are set in cPanel → Setup Node.js App → **Environment Variables** of the **client** app:
 

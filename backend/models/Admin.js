@@ -1,18 +1,15 @@
-const mongoose = require("mongoose");
+const { sequelize, Sequelize } = require("../db");
 
-const AdminSchema = new mongoose.Schema(
+const Admin = sequelize.define(
+  "Admin",
   {
-    username: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-      lowercase: true,
-    },
-    password: { type: String, required: true }, // bcrypt hash
-    name: { type: String, default: "Administrator", trim: true },
+    id: { type: Sequelize.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
+    legacyId: { type: Sequelize.CHAR(24), field: "legacy_id" },
+    username: { type: Sequelize.STRING(40), unique: true },
+    password: { type: Sequelize.STRING(100) }, // bcrypt hash
+    name: { type: Sequelize.STRING(60), defaultValue: "Administrator" },
   },
-  { timestamps: true }
+  { tableName: "admins", underscored: true }
 );
 
-module.exports = mongoose.model("Admin", AdminSchema);
+module.exports = Admin;

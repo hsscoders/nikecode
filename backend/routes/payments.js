@@ -2,6 +2,7 @@ const router = require("express").Router();
 const userAuth = require("../middleware/userAuth");
 const { moneyRateLimit } = require("../middleware/rateLimit");
 const audit = require("../services/audit");
+const { inc } = require("../db");
 const Deposit = require("../models/Deposit");
 const Withdrawal = require("../models/Withdrawal");
 const Transaction = require("../models/Transaction");
@@ -23,10 +24,18 @@ const { detectUrls } = require("../services/urls");
 
    ⚠ OKPAY RULE (docs repeat it 3×): when crediting a payin, the amount
    basis is `pay_money` — what the user ACTUALLY paid — never `money`.
-   Enforced in every okpay credit path below (webhook + status poll).    */
+   Enforced in every okpay credit path below (webhook + status poll).
+
+   MySQL migration note: the idempotency pattern is unchanged — a guarded
+   UPDATE ... WHERE status='Pending' claim (affectedRows decides the race
+   winner) does exactly what the Mongoose updateOne claim did.           */
 
 const GATEWAY_MIN = 100; // per-order gateway limits (₹)
 const GATEWAY_MAX = 100000;
+
+/* Ledger ref key — the string historical rows were written with
+   (pre-migration ObjectId or the new numeric id) */
+const refKeyOf = (row) => String(row.legacyId || row.id);
 
 /* Shared idempotent credit — used by BOTH the webhooks and the status-poll
    reconciliation so a missed webhook can never trap money in Pending.
@@ -41,7 +50,7 @@ const GATEWAY_MAX = 100000;
    crediting pay_money (what the user actually paid), which may legitimately
    differ from the order amount on partial payments. */
 async function creditPayinDeposit(deposit, { qwackOrderId = "", utr = "", amount = null, expectedAmount = null }) {
-  const amt = Number(amount) > 0 ? Number(amount) : deposit.amount;
+  const amt = Number(amount) > 0 ? Number(amount) : Number(deposit.amount);
   const gwLabel = deposit.gatewayLabel || "Gateway";
 
   /* amount/order binding — never let a validly-signed event with a
@@ -60,7 +69,7 @@ async function creditPayinDeposit(deposit, { qwackOrderId = "", utr = "", amount
           " vs order \u20B9" + expectedAmount + " for " + deposit.phone +
           " — NOT credited, manual reconciliation required",
         detail: {
-          depositId: String(deposit._id),
+          depositId: refKeyOf(deposit),
           reportedAmount: Number(amount),
           orderAmount: Number(expectedAmount),
           gateway: gwLabel,
@@ -79,27 +88,29 @@ async function creditPayinDeposit(deposit, { qwackOrderId = "", utr = "", amount
     }
   }
 
-  const upd = await Deposit.updateOne(
-    { _id: deposit._id, status: "Pending" },
+  /* atomic claim — only the first processor wins the Pending → Success flip */
+  const [claimed] = await Deposit.update(
     {
-      $set: {
-        status: "Success",
-        processedAt: new Date(),
-        gatewayOrderId: String(qwackOrderId || deposit.gatewayOrderId || ""),
-        utr: String(utr || ""),
-      },
-    }
+      status: "Success",
+      processedAt: new Date(),
+      gatewayOrderId: String(qwackOrderId || deposit.gatewayOrderId || ""),
+      utr: String(utr || ""),
+    },
+    { where: { id: deposit.id, status: "Pending" } }
   );
   /* lost the idempotency race — another path already credited it */
-  if (upd.modifiedCount === 0) return false;
+  if (claimed === 0) return false;
 
-  await User.updateOne(
-    { _id: deposit.user },
-    { $inc: { rechargeBalance: amt, totalRecharge: amt } }
+  await User.update(
+    {
+      rechargeBalance: inc("recharge_balance", amt),
+      totalRecharge: inc("total_recharge", amt),
+    },
+    { where: { id: deposit.user } }
   );
-  await Transaction.updateOne(
-    { refId: String(deposit._id), status: "Pending" },
-    { $set: { status: "Success", amount: amt } }
+  await Transaction.update(
+    { status: "Success", amount: amt },
+    { where: { refId: refKeyOf(deposit), status: "Pending" } }
   );
 
   emitAdmin("txns:new", {
@@ -125,20 +136,22 @@ async function creditPayinDeposit(deposit, { qwackOrderId = "", utr = "", amount
     message:
       gwLabel + " credited \u20B9" + amt + " for " + deposit.phone +
       (utr ? " (UTR " + utr + ")" : ""),
-    detail: { depositId: String(deposit._id), amount: amt, gateway: gwLabel, utr },
+    detail: { depositId: refKeyOf(deposit), amount: amt, gateway: gwLabel, utr },
   });
   return true;
 }
 
-/* Close a Pending deposit without crediting (gateway reported failure) */
-async function rejectPendingDeposit(depositId, phone, note) {
-  await Deposit.updateOne(
-    { _id: depositId, status: "Pending" },
-    { $set: { status: "Rejected", processedAt: new Date(), note } }
+/* Close a Pending deposit without crediting (gateway reported failure).
+   Takes the deposit ROW so the ledger ref matches the string the row was
+   written with (pre-migration ObjectId or the new numeric id). */
+async function rejectPendingDeposit(deposit, phone, note) {
+  await Deposit.update(
+    { status: "Rejected", processedAt: new Date(), note },
+    { where: { id: deposit.id, status: "Pending" } }
   );
-  await Transaction.updateOne(
-    { refId: String(depositId), status: "Pending" },
-    { $set: { status: "Rejected" } }
+  await Transaction.update(
+    { status: "Rejected" },
+    { where: { refId: refKeyOf(deposit), status: "Pending" } }
   );
   emitToUser(phone, "activity:update", { type: "recharge", status: "Rejected" });
 }
@@ -166,7 +179,7 @@ async function createPayinForGateway(req, res, gw) {
 
     /* site limits (admin recharge setting) */
     const Setting = require("../models/Setting");
-    const s = await Setting.findOne({ key: "global" }).lean();
+    const s = await Setting.getGlobal();
     const rc = (s && s.recharge) || {};
     const minR = Number(rc.minAmount) || 0;
     const maxR = Number(rc.maxAmount) || 0;
@@ -204,7 +217,7 @@ async function createPayinForGateway(req, res, gw) {
 
     /* local order first — the deposit id doubles as the merchant order id */
     const deposit = await Deposit.create({
-      user: req.user._id,
+      user: req.user.id,
       userid: req.user.userid || "",
       phone: req.user.phone,
       amount,
@@ -220,11 +233,11 @@ async function createPayinForGateway(req, res, gw) {
     const returnUrl =
       (cfg.clientUrl || detectUrls(req).clientUrl || backendUrl).replace(/\/+$/, "") +
       "/recharge?paid=" +
-      String(deposit._id);
+      refKeyOf(deposit);
 
     /* ledger entry — flips to Success when the webhook lands */
     await Transaction.create({
-      user: req.user._id,
+      user: req.user.id,
       userid: req.user.userid || "",
       phone: req.user.phone,
       type: "recharge",
@@ -232,13 +245,13 @@ async function createPayinForGateway(req, res, gw) {
       method: gw.label,
       amount,
       status: "Pending",
-      refId: String(deposit._id),
+      refId: refKeyOf(deposit),
     });
 
     /* each service picks the fields it needs — extras are ignored */
     const r = await gw.service.createPayinOrder(cfg, {
       amount,
-      orderId: String(deposit._id),
+      orderId: refKeyOf(deposit),
       name: req.user.name || "Customer",
       phone: req.user.phone,
       /* QwackPay mandates an email — a per-user placeholder keeps the
@@ -251,7 +264,7 @@ async function createPayinForGateway(req, res, gw) {
     if (!r.ok) {
       /* do not leave a dangling Pending order — mark it Rejected */
       await rejectPendingDeposit(
-        deposit._id,
+        deposit,
         req.user.phone,
         "Gateway: " + r.message
       );
@@ -264,14 +277,12 @@ async function createPayinForGateway(req, res, gw) {
       return res.status(502).json({ success: false, message: r.message });
     }
 
-    await Deposit.updateOne(
-      { _id: deposit._id },
+    await Deposit.update(
       {
-        $set: {
-          gatewayOrderId: r.data.qwack_order_id || "",
-          paymentUrl: r.data.payment_url || "",
-        },
-      }
+        gatewayOrderId: r.data.qwack_order_id || "",
+        paymentUrl: r.data.payment_url || "",
+      },
+      { where: { id: deposit.id } }
     );
 
     emitAdmin("txns:new", {
@@ -284,18 +295,18 @@ async function createPayinForGateway(req, res, gw) {
 
     audit.log(req, {
       actorType: "user",
-      actor: { id: req.user._id, label: req.user.phone },
+      actor: { id: req.user.id, label: req.user.phone },
       action: "gateway.order_created",
       category: "gateway",
       target: req.user.phone,
       message: gw.label + " payment order \u20B9" + amount + " started",
-      detail: { depositId: String(deposit._id), gateway: gw.id, amount },
+      detail: { depositId: refKeyOf(deposit), gateway: gw.id, amount },
     });
 
     res.json({
       success: true,
       message: "Payment order created",
-      orderId: String(deposit._id),
+      orderId: refKeyOf(deposit),
       paymentUrl: r.data.payment_url,
       amount,
     });
@@ -354,7 +365,7 @@ router.post("/qwackpay/notify", async (req, res) => {
     if (!orderId)
       return res.status(400).type("text/plain").send("missing order");
 
-    const deposit = await Deposit.findById(orderId);
+    const deposit = await Deposit.findByAnyOrderId(orderId);
     if (!deposit)
       return res.status(404).type("text/plain").send("order not found");
 
@@ -373,7 +384,7 @@ router.post("/qwackpay/notify", async (req, res) => {
     } else {
       /* failed / cancelled — close the order without crediting */
       await rejectPendingDeposit(
-        deposit._id,
+        deposit,
         deposit.phone,
         "Gateway reported: " + (status || "failed")
       );
@@ -410,7 +421,7 @@ router.post("/okpay/notify", async (req, res) => {
     if (!orderId)
       return res.status(400).type("text/plain").send("missing order");
 
-    const deposit = await Deposit.findById(orderId);
+    const deposit = await Deposit.findByAnyOrderId(orderId);
     if (!deposit)
       return res.status(404).type("text/plain").send("order not found");
 
@@ -428,7 +439,7 @@ router.post("/okpay/notify", async (req, res) => {
       });
     } else if (status === 2) {
       await rejectPendingDeposit(
-        deposit._id,
+        deposit,
         deposit.phone,
         "Gateway reported: failed" +
           (Number(p.real_money) > 0 ? " (merchant revenue \u20B9" + p.real_money + ")" : "")
@@ -449,22 +460,20 @@ async function settlePayoutSuccess(wd, { gatewayOrderId = "", utr = "", label = 
   /* atomic claim — only ONE settlement path (webhook / admin query / manual)
      can flip a Pending/Processing withdrawal to Success; the loser of the
      race must not touch the ledger or push duplicate alerts */
-  const upd = await Withdrawal.updateOne(
-    { _id: wd._id, status: { $in: ["Pending", "Processing"] } },
+  const [claimed] = await Withdrawal.update(
     {
-      $set: {
-        status: "Success",
-        processedAt: new Date(),
-        gatewayOrderId: String(gatewayOrderId || wd.gatewayOrderId || ""),
-        utr: String(utr || ""),
-        autoPayout: true,
-      },
-    }
+      status: "Success",
+      processedAt: new Date(),
+      gatewayOrderId: String(gatewayOrderId || wd.gatewayOrderId || ""),
+      utr: String(utr || ""),
+      autoPayout: true,
+    },
+    { where: { id: wd.id, status: { [require("sequelize").Op.in]: ["Pending", "Processing"] } } }
   );
-  if (upd.modifiedCount === 0) return false; /* already settled elsewhere */
-  await Transaction.updateMany(
-    { refId: String(wd._id), status: { $ne: "Success" } },
-    { $set: { status: "Success" } }
+  if (claimed === 0) return false; /* already settled elsewhere */
+  await Transaction.update(
+    { status: "Success" },
+    { where: { refId: refKeyOf(wd), status: { [require("sequelize").Op.ne]: "Success" } } }
   );
   emitAdmin("txns:new", {
     type: "withdraw",
@@ -487,24 +496,22 @@ async function settlePayoutFailed(wd, { gatewayOrderId = "", note = "", label = 
      Without this guard a late "failed" webhook refunds the user a second
      time after the admin already rejected the request manually (free money
      out of the merchant balance). */
-  const upd = await Withdrawal.updateOne(
-    { _id: wd._id, status: { $in: ["Pending", "Processing"] } },
+  const [claimed] = await Withdrawal.update(
     {
-      $set: {
-        status: "Rejected",
-        processedAt: new Date(),
-        gatewayOrderId: String(gatewayOrderId || wd.gatewayOrderId || ""),
-        autoPayout: true,
-        note,
-      },
-    }
+      status: "Rejected",
+      processedAt: new Date(),
+      gatewayOrderId: String(gatewayOrderId || wd.gatewayOrderId || ""),
+      autoPayout: true,
+      note,
+    },
+    { where: { id: wd.id, status: { [require("sequelize").Op.in]: ["Pending", "Processing"] } } }
   );
-  if (upd.modifiedCount === 0) return false; /* settled elsewhere — NEVER refund again */
+  if (claimed === 0) return false; /* settled elsewhere — NEVER refund again */
   /* refund the user's hold — same as the manual reject path in admin.js */
-  await User.updateOne({ _id: wd.user }, { $inc: { balance: wd.amount } });
-  await Transaction.updateMany(
-    { refId: String(wd._id), status: { $ne: "Rejected" } },
-    { $set: { status: "Rejected" } }
+  await User.update({ balance: inc("balance", wd.amount) }, { where: { id: wd.user } });
+  await Transaction.update(
+    { status: "Rejected" },
+    { where: { refId: refKeyOf(wd), status: { [require("sequelize").Op.ne]: "Rejected" } } }
   );
   emitAdmin("txns:new", {
     type: "withdraw",
@@ -538,12 +545,10 @@ router.post("/qwackpay/payout-notify", async (req, res) => {
       return res.status(401).type("text/plain").send("invalid sign");
     }
 
-    /* the exact merchant order_id we sent on /payout/create; the raw id is
-       also accepted so callbacks never get lost between retries */
+    /* the exact merchant order_id we sent on /payout/create; legacy ids and
+       the raw numeric id are also accepted so callbacks never get lost */
     const orderId = String(p.merchant_order_id || "");
-    const wd = (orderId && (await Withdrawal.findOne({ payoutOrderId: orderId }))) ||
-      (orderId && /^[0-9a-fA-F]{24}$/.test(orderId) && (await Withdrawal.findById(orderId))) ||
-      null;
+    const wd = await Withdrawal.findByAnyPayoutOrderId(orderId);
     if (!wd)
       return res.status(404).type("text/plain").send("order not found");
 
@@ -592,12 +597,8 @@ router.post("/okpay/payout-notify", async (req, res) => {
       return res.status(401).type("text/plain").send("invalid sign");
     }
 
-    /* out_trade_no = the WD… merchant order id we sent on /v1/Payout;
-       the raw local id is also accepted so retries never get lost */
     const orderId = String(p.out_trade_no || "");
-    const wd = (orderId && (await Withdrawal.findOne({ payoutOrderId: orderId }))) ||
-      (orderId && /^[0-9a-fA-F]{24}$/.test(orderId) && (await Withdrawal.findById(orderId))) ||
-      null;
+    const wd = await Withdrawal.findByAnyPayoutOrderId(orderId);
     if (!wd)
       return res.status(404).type("text/plain").send("order not found");
 
@@ -630,12 +631,12 @@ router.post("/okpay/payout-notify", async (req, res) => {
    URL, network hiccup) can never trap money. */
 router.get("/qwackpay/status/:orderId", userAuth, async (req, res) => {
   try {
-    let d = await pollDeposit(req.params.orderId, req.user._id, qwack, "QwackPay");
+    let d = await pollDeposit(req.params.orderId, req.user.id, qwack, "QwackPay");
     if (!d) return res.status(404).json({ success: false, message: "Order not found" });
     res.json({
       success: true,
       order: {
-        id: d._id.toString(),
+        id: refKeyOf(d),
         amount: d.amount,
         status: d.status,
         utr: d.utr || "",
@@ -648,12 +649,12 @@ router.get("/qwackpay/status/:orderId", userAuth, async (req, res) => {
 
 router.get("/okpay/status/:orderId", userAuth, async (req, res) => {
   try {
-    let d = await pollDeposit(req.params.orderId, req.user._id, okpay, "OKPay");
+    let d = await pollDeposit(req.params.orderId, req.user.id, okpay, "OKPay");
     if (!d) return res.status(404).json({ success: false, message: "Order not found" });
     res.json({
       success: true,
       order: {
-        id: d._id.toString(),
+        id: refKeyOf(d),
         amount: d.amount,
         status: d.status,
         utr: d.utr || "",
@@ -667,17 +668,17 @@ router.get("/okpay/status/:orderId", userAuth, async (req, res) => {
 /* shared reconciliation logic — okpay credits by pay_money (the docs rule);
    qwackpay passes expectedAmount so the gateway amount is strictly matched */
 async function pollDeposit(orderId, userId, service, label) {
-  let d = await Deposit.findOne({ _id: orderId, user: userId }).lean();
-  if (!d) return null;
+  let d = await Deposit.findByAnyOrderId(orderId);
+  if (!d || Number(d.user) !== Number(userId)) return null;
 
   /* missed-webhook reconciliation — any gateway order still Pending.
      (gatewayOrderId is NOT required: both gateways accept the merchant
-     order id — the local deposit _id — so orders created before the
+     order id — the local deposit id — so orders created before the
      gateway echoed its own id still reconcile instead of trapping money.) */
   if (d.status === "Pending" && d.gateway) {
     const cfg = await service.getConfig();
     if (cfg.enabled && cfg.merchantId && cfg.apiKey) {
-      const r = await service.queryOrder(cfg, String(d._id), "payin");
+      const r = await service.queryOrder(cfg, refKeyOf(d), "payin");
       if (r.ok) {
         const g = String((r.data && r.data.status) || "").toLowerCase();
         if (g === "success" || g === "completed" || g === "paid") {
@@ -688,7 +689,7 @@ async function pollDeposit(orderId, userId, service, label) {
               : Number(r.data && r.data.amount) > 0
               ? Number(r.data.amount)
               : null;
-          const fresh = await Deposit.findById(d._id);
+          const fresh = await Deposit.findByPk(d.id);
           fresh.gatewayLabel = label;
           await creditPayinDeposit(fresh, {
             qwackOrderId: String((r.data && r.data.qwack_order_id) || d.gatewayOrderId),
@@ -696,10 +697,10 @@ async function pollDeposit(orderId, userId, service, label) {
             amount: paid,
             expectedAmount: label === "QwackPay" ? d.amount : null,
           });
-          d = await Deposit.findById(d._id).lean();
+          d = await Deposit.findByPk(d.id);
         } else if (g === "failed" || g === "cancelled" || g === "rejected") {
-          await rejectPendingDeposit(d._id, d.phone, "Gateway reported: " + g);
-          d = await Deposit.findById(d._id).lean();
+          await rejectPendingDeposit(d, d.phone, "Gateway reported: " + g);
+          d = await Deposit.findByPk(d.id);
         }
       }
     }

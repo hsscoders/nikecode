@@ -18,7 +18,7 @@ router.post("/login", authRateLimit, async (req, res) => {
         .json({ success: false, message: "Enter username and password" });
 
     const admin = await Admin.findOne({
-      username: String(username).trim().toLowerCase(),
+      where: { username: String(username).trim().toLowerCase() },
     });
     if (!admin) {
       audit.log(req, {
@@ -44,14 +44,14 @@ router.post("/login", authRateLimit, async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: admin._id, role: "admin" },
+      { id: admin.id, role: "admin" },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
     audit.log(req, {
       actorType: "admin",
-      actor: { id: admin._id, label: admin.username },
+      actor: { id: admin.id, label: admin.username },
       action: "admin.login",
       category: "auth",
       target: admin.username,

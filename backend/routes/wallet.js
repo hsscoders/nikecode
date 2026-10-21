@@ -1,5 +1,6 @@
 const router = require("express").Router();
 const bcrypt = require("bcryptjs");
+const { Op, sequelize, inc, dec } = require("../db");
 const userAuth = require("../middleware/userAuth");
 const { moneyRateLimit } = require("../middleware/rateLimit");
 const User = require("../models/User");
@@ -15,6 +16,10 @@ const audit = require("../services/audit");
 /* Absolute amount ceiling — a defensive cap in case the admin left
    maxAmount empty. Recharges beyond ₹1 crore are never legitimate. */
 const ABS_MAX_AMOUNT = 10000000;
+
+/* Ledger ref key — matches the string the historical rows were written
+   with: pre-migration rows carry the old ObjectId, new rows the numeric id */
+const refKeyOf = (row) => String(row.legacyId || row.id);
 
 /* ============ WALLET SUMMARY (profile/home) ============ */
 router.get("/wallet", userAuth, async (req, res) => {
@@ -55,7 +60,7 @@ router.post("/deposit", userAuth, moneyRateLimit, async (req, res) => {
         .json({ success: false, message: "Amount too large" });
 
     /* Recharge limits — from the admin recharge setting (server-side validation) */
-    const s = await Setting.findOne({ key: "global" }).lean();
+    const s = await Setting.getGlobal();
     const rc = (s && s.recharge) || {};
     const minR = Number(rc.minAmount) || 0;
     const maxR = Number(rc.maxAmount) || 0;
@@ -69,7 +74,7 @@ router.post("/deposit", userAuth, moneyRateLimit, async (req, res) => {
         .json({ success: false, message: "Maximum recharge is \u20B9" + maxR });
 
     const deposit = await Deposit.create({
-      user: req.user._id,
+      user: req.user.id,
       userid: req.user.userid || "",
       phone: req.user.phone,
       amount,
@@ -79,7 +84,7 @@ router.post("/deposit", userAuth, moneyRateLimit, async (req, res) => {
 
     /* ledger entry — the transaction history page reads these records */
     await Transaction.create({
-      user: req.user._id,
+      user: req.user.id,
       userid: req.user.userid || "",
       phone: req.user.phone,
       type: "recharge",
@@ -87,7 +92,7 @@ router.post("/deposit", userAuth, moneyRateLimit, async (req, res) => {
       method,
       amount,
       status: "Pending",
-      refId: String(deposit._id),
+      refId: refKeyOf(deposit),
     });
 
     /* realtime — alert the admin panel instantly */
@@ -102,10 +107,10 @@ router.post("/deposit", userAuth, moneyRateLimit, async (req, res) => {
 
     audit.log(req, {
       actorType: "user",
-      actor: { id: req.user._id, label: req.user.phone },
+      actor: { id: req.user.id, label: req.user.phone },
       action: "deposit.request",
       category: "deposit",
-      target: String(deposit._id),
+      target: refKeyOf(deposit),
       message: "Recharge request \u20B9" + amount + " via " + method,
       detail: { amount, method, status: "Pending" },
     });
@@ -114,7 +119,7 @@ router.post("/deposit", userAuth, moneyRateLimit, async (req, res) => {
       success: true,
       message: "Recharge request submitted!",
       deposit: {
-        id: deposit._id,
+        id: deposit.id,
         amount: deposit.amount,
         method: deposit.method,
         status: deposit.status,
@@ -129,8 +134,8 @@ router.post("/deposit", userAuth, moneyRateLimit, async (req, res) => {
 /* ============ INVEST (buy plan) ============ */
 router.post("/invest", userAuth, moneyRateLimit, async (req, res) => {
   try {
-    const planId = req.body && req.body.planId;
-    const plan = await Plan.findById(planId);
+    const planId = Number(req.body && req.body.planId);
+    const plan = Number.isInteger(planId) && planId > 0 ? await Plan.findByPk(planId) : null;
     if (!plan || !plan.active)
       return res.status(400).json({ success: false, message: "Plan not available" });
     if (plan.presale)
@@ -140,10 +145,8 @@ router.post("/invest", userAuth, moneyRateLimit, async (req, res) => {
     /* per-user purchase limit — count the user's ACTIVE holdings of this plan
        (re-buying is allowed again once a cycle completes) */
     if (plan.limit > 0) {
-      const activeCount = await Invest.countDocuments({
-        user: req.user._id,
-        planId: plan._id,
-        status: "Active",
+      const activeCount = await Invest.count({
+        where: { user: req.user.id, planId: plan.id, status: "Active" },
       });
       if (activeCount >= plan.limit)
         return res.status(400).json({
@@ -152,18 +155,18 @@ router.post("/invest", userAuth, moneyRateLimit, async (req, res) => {
             "Plan limit reached — you already hold the maximum active purchases of this plan",
         });
     }
-    if (req.user.rechargeBalance < plan.price)
+    if (Number(req.user.rechargeBalance) < plan.price)
       return res.status(400).json({
         success: false,
         message: "Insufficient recharge balance. Please recharge first.",
       });
 
-    /* atomic deduct — race safe */
-    const upd = await User.updateOne(
-      { _id: req.user._id, rechargeBalance: { $gte: plan.price } },
-      { $inc: { rechargeBalance: -plan.price } }
+    /* atomic deduct — race safe (single guarded UPDATE, row-level atomic) */
+    const [deducted] = await User.update(
+      { rechargeBalance: dec("recharge_balance", plan.price) },
+      { where: { id: req.user.id, rechargeBalance: { [Op.gte]: plan.price } } }
     );
-    if (upd.modifiedCount === 0)
+    if (deducted === 0)
       return res.status(400).json({
         success: false,
         message: "Insufficient recharge balance. Please recharge first.",
@@ -174,10 +177,10 @@ router.post("/invest", userAuth, moneyRateLimit, async (req, res) => {
     let invest;
     try {
       invest = await Invest.create({
-        user: req.user._id,
+        user: req.user.id,
         userid: req.user.userid || "",
         phone: req.user.phone,
-        planId: plan._id,
+        planId: plan.id,
         planName: plan.name,
         vip: plan.vip,
         price: plan.price,
@@ -187,29 +190,32 @@ router.post("/invest", userAuth, moneyRateLimit, async (req, res) => {
         status: "Active",
       });
     } catch (createErr) {
-      await User.updateOne(
-        { _id: req.user._id },
-        { $inc: { rechargeBalance: plan.price } }
+      await User.update(
+        { rechargeBalance: inc("recharge_balance", plan.price) },
+        { where: { id: req.user.id } }
       );
       throw createErr;
     }
 
     /* invite commission — L1/L2/L3 on the plan price (refBy = the referrer's refId) */
     try {
-      const s = await Setting.findOne({ key: "global" });
-      const rates = s ? s.commission : { level1: 25, level2: 3, level3: 2 };
+      const s = await Setting.getGlobal();
+      const rates = (s && s.commission) || { level1: 25, level2: 3, level3: 2 };
       let refCode = req.user.refBy;
       let level = 1;
       while (refCode && level <= 3) {
-        const ref = await User.findOne({ refId: refCode });
+        const ref = await User.findOne({ where: { refId: refCode } });
         if (!ref) break;
         const rate = rates["level" + level] || 0;
         const amt = +(((plan.price * rate) / 100).toFixed(2));
         if (amt > 0) {
-          await User.updateOne({ _id: ref._id }, { $inc: { balance: amt } });
+          await User.update(
+            { balance: inc("balance", amt) },
+            { where: { id: ref.id } }
+          );
           /* ledger entry — the referrer sees this in the transaction history */
           await Transaction.create({
-            user: ref._id,
+            user: ref.id,
             userid: ref.userid || "",
             phone: ref.phone,
             type: "commission",
@@ -228,7 +234,7 @@ router.post("/invest", userAuth, moneyRateLimit, async (req, res) => {
 
     /* ledger entry — "Buy Plan" shows in the transaction history */
     await Transaction.create({
-      user: req.user._id,
+      user: req.user.id,
       userid: req.user.userid || "",
       phone: req.user.phone,
       type: "invest",
@@ -236,7 +242,7 @@ router.post("/invest", userAuth, moneyRateLimit, async (req, res) => {
       method: plan.name,
       amount: plan.price,
       status: "Success",
-      refId: String(invest._id),
+      refId: refKeyOf(invest),
     });
 
     /* realtime — push the new recharge balance to the buyer's other tabs */
@@ -246,12 +252,12 @@ router.post("/invest", userAuth, moneyRateLimit, async (req, res) => {
 
     audit.log(req, {
       actorType: "user",
-      actor: { id: req.user._id, label: req.user.phone },
+      actor: { id: req.user.id, label: req.user.phone },
       action: "invest.purchase",
       category: "invest",
-      target: String(invest._id),
+      target: refKeyOf(invest),
       message: "Bought " + plan.name + " for \u20B9" + plan.price,
-      detail: { planId: String(plan._id), planName: plan.name, price: plan.price, daily: plan.daily, cycle: plan.cycle },
+      detail: { planId: plan.id, planName: plan.name, price: plan.price, daily: plan.daily, cycle: plan.cycle },
     });
 
     res.json({
@@ -259,9 +265,9 @@ router.post("/invest", userAuth, moneyRateLimit, async (req, res) => {
       message: "Plan purchased successfully!",
       order: {
         id: "ZP" + String(Date.now()).slice(-8),
-        planId: plan._id,
+        planId: plan.id,
         name: invest.planName,
-        vip: invest.vip,
+        vip: !!invest.vip,
         price: invest.price,
         daily: invest.daily,
         cycle: invest.cycle,
@@ -271,7 +277,7 @@ router.post("/invest", userAuth, moneyRateLimit, async (req, res) => {
       },
       wallet: {
         balance: req.user.balance,
-        rechargeBalance: +(req.user.rechargeBalance - plan.price).toFixed(2),
+        rechargeBalance: +(Number(req.user.rechargeBalance) - plan.price).toFixed(2),
         totalIncome: req.user.totalIncome,
       },
     });
@@ -291,7 +297,7 @@ router.post("/withdraw", userAuth, moneyRateLimit, async (req, res) => {
         .status(400)
         .json({ success: false, message: "Amount too large" });
 
-    const s = await Setting.findOne({ key: "global" }).lean();
+    const s = await Setting.getGlobal();
     const wdCfg = (s && s.withdraw) || {};
     const minW = Number(wdCfg.minAmount) || (s && s.site && s.site.minWithdraw) || 130;
     const maxW = Number(wdCfg.maxAmount) || 0;
@@ -336,9 +342,8 @@ router.post("/withdraw", userAuth, moneyRateLimit, async (req, res) => {
         timeZone: "Asia/Kolkata",
       }).format(new Date()); // "YYYY-MM-DD"
       const dayStartUtc = new Date(todayIst + "T00:00:00+05:30");
-      const doneToday = await Withdrawal.countDocuments({
-        user: req.user._id,
-        createdAt: { $gte: dayStartUtc },
+      const doneToday = await Withdrawal.count({
+        where: { user: req.user.id, createdAt: { [Op.gte]: dayStartUtc } },
       });
       if (doneToday >= dailyLimit)
         return res.status(403).json({
@@ -376,16 +381,17 @@ router.post("/withdraw", userAuth, moneyRateLimit, async (req, res) => {
         .status(400)
         .json({ success: false, message: "Incorrect withdrawal password" });
 
-    if (req.user.balance < amount)
+    if (Number(req.user.balance) < amount)
       return res
         .status(400)
         .json({ success: false, message: "Insufficient balance" });
 
-    const upd = await User.updateOne(
-      { _id: req.user._id, balance: { $gte: amount } },
-      { $inc: { balance: -amount } }
+    /* atomic hold — single guarded UPDATE (row-level atomic) */
+    const [held] = await User.update(
+      { balance: dec("balance", amount) },
+      { where: { id: req.user.id, balance: { [Op.gte]: amount } } }
     );
-    if (upd.modifiedCount === 0)
+    if (held === 0)
       return res
         .status(400)
         .json({ success: false, message: "Insufficient balance" });
@@ -396,7 +402,7 @@ router.post("/withdraw", userAuth, moneyRateLimit, async (req, res) => {
     let wd;
     try {
       wd = await Withdrawal.create({
-        user: req.user._id,
+        user: req.user.id,
         userid: req.user.userid || "",
         phone: req.user.phone,
         amount,
@@ -413,22 +419,20 @@ router.post("/withdraw", userAuth, moneyRateLimit, async (req, res) => {
       });
 
       /* save the bank card on the user (admin can view it in Manage Users) */
-      await User.updateOne(
-        { _id: req.user._id },
+      await User.update(
         {
-          bank: {
-            realName: String(bank.realName || "").trim().slice(0, 30),
-            bankName: String(bank.bankName || "").trim().slice(0, 30),
-            account: String(bank.account || "").trim().slice(0, 24),
-            ifsc: String(bank.ifsc || "").trim().toUpperCase().slice(0, 11),
-          },
-        }
+          bankRealName: String(bank.realName || "").trim().slice(0, 30),
+          bankBankName: String(bank.bankName || "").trim().slice(0, 30),
+          bankAccount: String(bank.account || "").trim().slice(0, 24),
+          bankIfsc: String(bank.ifsc || "").trim().toUpperCase().slice(0, 11),
+        },
+        { where: { id: req.user.id } }
       );
 
       /* ledger entry — amount is the NET the user receives (after the charge),
          so /transaction shows ₹180 for a ₹200 request with a 10% fee */
       await Transaction.create({
-        user: req.user._id,
+        user: req.user.id,
         userid: req.user.userid || "",
         phone: req.user.phone,
         type: "withdraw",
@@ -438,10 +442,13 @@ router.post("/withdraw", userAuth, moneyRateLimit, async (req, res) => {
         charge,
         netAmount,
         status: "Pending",
-        refId: String(wd._id),
+        refId: refKeyOf(wd),
       });
     } catch (createErr) {
-      await User.updateOne({ _id: req.user._id }, { $inc: { balance: amount } });
+      await User.update(
+        { balance: inc("balance", amount) },
+        { where: { id: req.user.id } }
+      );
       throw createErr;
     }
 
@@ -461,10 +468,10 @@ router.post("/withdraw", userAuth, moneyRateLimit, async (req, res) => {
 
     audit.log(req, {
       actorType: "user",
-      actor: { id: req.user._id, label: req.user.phone },
+      actor: { id: req.user.id, label: req.user.phone },
       action: "withdraw.request",
       category: "withdraw",
-      target: String(wd._id),
+      target: refKeyOf(wd),
       message: "Withdrawal request \u20B9" + amount + " (net \u20B9" + netAmount + ") to " + bank.bankName,
       detail: { amount, charge, netAmount, chargePct, account: String(bank.account).slice(-4), ifsc: bank.ifsc },
     });
@@ -473,7 +480,7 @@ router.post("/withdraw", userAuth, moneyRateLimit, async (req, res) => {
       success: true,
       message: "Withdrawal request submitted!",
       withdrawal: {
-        id: wd._id,
+        id: wd.id,
         amount: wd.amount,
         chargePercent: chargePct,
         charge,
@@ -481,7 +488,7 @@ router.post("/withdraw", userAuth, moneyRateLimit, async (req, res) => {
         status: wd.status,
       },
       wallet: {
-        balance: +(req.user.balance - amount).toFixed(2),
+        balance: +(Number(req.user.balance) - amount).toFixed(2),
         rechargeBalance: req.user.rechargeBalance,
         totalIncome: req.user.totalIncome,
       },
@@ -495,13 +502,13 @@ router.post("/withdraw", userAuth, moneyRateLimit, async (req, res) => {
 /* ============ BANK CARD — save the payout account from the /card page ============
    The card used to live only in the browser's localStorage, so it disappeared
    whenever that storage got cleared (or the user switched device). It is now
-   saved on the user document server-side and restored from there. */
+   saved on the user record server-side and restored from there. */
 router.put("/bank", userAuth, moneyRateLimit, async (req, res) => {
   try {
     const { realName, ifsc, account, bankName } = req.body || {};
     const name = String(realName || "").trim().slice(0, 30);
     const code = String(ifsc || "").trim().toUpperCase();
-    const acc = String(account || "").trim();
+    const acc = String(account || "").trim().slice(0, 24);
     const bank = String(bankName || "").trim().slice(0, 30);
     if (name.length < 3)
       return res
@@ -520,13 +527,18 @@ router.put("/bank", userAuth, moneyRateLimit, async (req, res) => {
         .status(400)
         .json({ success: false, message: "Enter bank name" });
 
-    await User.updateOne(
-      { _id: req.user._id },
-      { bank: { realName: name, bankName: bank, account: acc, ifsc: code } }
+    await User.update(
+      {
+        bankRealName: name,
+        bankBankName: bank,
+        bankAccount: acc,
+        bankIfsc: code,
+      },
+      { where: { id: req.user.id } }
     );
     audit.log(req, {
       actorType: "user",
-      actor: { id: req.user._id, label: req.user.phone },
+      actor: { id: req.user.id, label: req.user.phone },
       action: "bank.save",
       category: "user",
       target: req.user.phone,
@@ -549,49 +561,66 @@ router.put("/bank", userAuth, moneyRateLimit, async (req, res) => {
    per-member stats straight from the DB (recharge = the member's cumulative
    successful recharges, withdrawal = their successful payout total,
    refs = their own direct referral count). My commission comes from the
-   ledger (type "commission") — the single source of truth. Replaces the
-   old hardcoded demo table that showed the same fake members to everyone. */
+   ledger (type "commission") — the single source of truth. */
 router.get("/team", userAuth, async (req, res) => {
   try {
-    const TEAM_PROJ = "phone refId totalRecharge status createdAt";
+    const TEAM_PROJ = ["id", "phone", "refId", "totalRecharge", "status", "createdAt"];
     const l1 = req.user.refId
-      ? await User.find({ refBy: req.user.refId }).select(TEAM_PROJ).sort({ createdAt: -1 }).limit(100).lean()
+      ? await User.findAll({
+          where: { refBy: req.user.refId },
+          attributes: TEAM_PROJ,
+          order: [["createdAt", "DESC"]],
+          limit: 100,
+          raw: true,
+        })
       : [];
-    const l1Ids = l1.map((u) => u.refId).filter(Boolean);
-    const l2 = l1Ids.length
-      ? await User.find({ refBy: { $in: l1Ids } }).select(TEAM_PROJ).sort({ createdAt: -1 }).limit(100).lean()
+    const l1Keys = l1.map((u) => u.refId).filter(Boolean);
+    const l2 = l1Keys.length
+      ? await User.findAll({
+          where: { refBy: { [Op.in]: l1Keys } },
+          attributes: TEAM_PROJ,
+          order: [["createdAt", "DESC"]],
+          limit: 100,
+          raw: true,
+        })
       : [];
-    const l2Ids = l2.map((u) => u.refId).filter(Boolean);
-    const l3 = l2Ids.length
-      ? await User.find({ refBy: { $in: l2Ids } }).select(TEAM_PROJ).sort({ createdAt: -1 }).limit(100).lean()
+    const l2Keys = l2.map((u) => u.refId).filter(Boolean);
+    const l3 = l2Keys.length
+      ? await User.findAll({
+          where: { refBy: { [Op.in]: l2Keys } },
+          attributes: TEAM_PROJ,
+          order: [["createdAt", "DESC"]],
+          limit: 100,
+          raw: true,
+        })
       : [];
 
     const all = [...l1, ...l2, ...l3];
+    const allIds = all.map((m) => m.id);
 
     /* per-member successful withdrawal totals — one aggregate for everyone */
-    const wdAgg = all.length
-      ? await Withdrawal.aggregate([
-          { $match: { user: { $in: all.map((m) => m._id) }, status: "Success" } },
-          { $group: { _id: "$user", s: { $sum: "$amount" } } },
-        ])
+    const wdRows = allIds.length
+      ? await sequelize.query(
+          "SELECT user_id, SUM(amount) AS s FROM withdrawals WHERE status = 'Success' AND user_id IN (?) GROUP BY user_id",
+          { replacements: [allIds], type: sequelize.QueryTypes.SELECT }
+        )
       : [];
-    const wdByUser = Object.fromEntries(wdAgg.map((r) => [String(r._id), r.s]));
+    const wdByUser = Object.fromEntries(wdRows.map((r) => [Number(r.user_id), Number(r.s)]));
 
     /* per-member referral counts (each member's own direct referrals) */
     const memberRefIds = all.map((m) => m.refId).filter(Boolean);
-    const refAgg = memberRefIds.length
-      ? await User.aggregate([
-          { $match: { refBy: { $in: memberRefIds } } },
-          { $group: { _id: "$refBy", c: { $sum: 1 } } },
-        ])
+    const refRows = memberRefIds.length
+      ? await sequelize.query(
+          "SELECT ref_by, COUNT(*) AS c FROM users WHERE ref_by IN (?) GROUP BY ref_by",
+          { replacements: [memberRefIds], type: sequelize.QueryTypes.SELECT }
+        )
       : [];
-    const refsByRefId = Object.fromEntries(refAgg.map((r) => [r._id, r.c]));
+    const refsByRefId = Object.fromEntries(refRows.map((r) => [r.ref_by, Number(r.c)]));
 
     /* my real team commission — the ledger is the truth */
-    const commAgg = await Transaction.aggregate([
-      { $match: { user: req.user._id, type: "commission" } },
-      { $group: { _id: null, s: { $sum: "$amount" } } },
-    ]);
+    const commission = await Transaction.sum("amount", {
+      where: { user: req.user.id, type: "commission" },
+    });
 
     /* phones are masked server-side — the raw number never leaves the API */
     const shape = (list) =>
@@ -599,20 +628,20 @@ router.get("/team", userAuth, async (req, res) => {
         phone: String(m.phone || "").replace(/^(\d{3})\d{3}(\d{4})$/, "$1***$2"),
         date: m.createdAt,
         recharge: m.totalRecharge || 0,
-        withdrawal: wdByUser[String(m._id)] || 0,
+        withdrawal: wdByUser[Number(m.id)] || 0,
         refs: refsByRefId[m.refId] || 0,
       }));
 
     const levels = { 1: shape(l1), 2: shape(l2), 3: shape(l3) };
     const teamRecharge = [1, 2, 3].reduce(
-      (s, lv) => s + levels[lv].reduce((a, m) => a + m.recharge, 0),
+      (s, lv) => s + levels[lv].reduce((a, m) => a + Number(m.recharge || 0), 0),
       0
     );
 
     res.json({
       success: true,
       stats: {
-        commission: commAgg[0] ? commAgg[0].s : 0,
+        commission: Number(commission) || 0,
         recharge: teamRecharge,
         members: all.length,
       },
@@ -627,14 +656,16 @@ router.get("/team", userAuth, async (req, res) => {
 /* ============ TRANSACTION HISTORY (ledger) ============ */
 router.get("/invests", userAuth, async (req, res) => {
   try {
-    const invests = await Invest.find({ user: req.user._id })
-      .sort({ createdAt: -1 })
-      .limit(200)
-      .lean();
+    const invests = await Invest.findAll({
+      where: { user: req.user.id },
+      order: [["createdAt", "DESC"]],
+      limit: 200,
+      raw: true,
+    });
     res.json({
       success: true,
       invests: invests.map((iv) => ({
-        id: "ZP" + String(iv._id).slice(-8),
+        id: "ZP" + String(iv.legacyId || iv.id).slice(-8),
         planId: iv.planId,
         name: iv.planName,
         vip: !!iv.vip,
@@ -654,10 +685,12 @@ router.get("/invests", userAuth, async (req, res) => {
 
 router.get("/transactions", userAuth, async (req, res) => {
   try {
-    const txns = await Transaction.find({ user: req.user._id })
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .lean();
+    const txns = await Transaction.findAll({
+      where: { user: req.user.id },
+      order: [["createdAt", "DESC"]],
+      limit: 100,
+      raw: true,
+    });
     res.json({ success: true, txns });
   } catch (e) {
     console.error("transactions error:", e.message);

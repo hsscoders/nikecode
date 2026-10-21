@@ -10,7 +10,14 @@ const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:3030";
 /* ============ PUBLIC PLANS (client home) ============ */
 router.get("/plans", async (req, res) => {
   try {
-    const plans = await Plan.find({ active: true }).sort({ sort: 1, price: 1 }).lean();
+    const plans = await Plan.findAll({
+      where: { active: true },
+      order: [
+        ["sort", "ASC"],
+        ["price", "ASC"],
+      ],
+      raw: true,
+    });
     res.json({ success: true, plans });
   } catch (e) {
     console.error("public plans error:", e.message);
@@ -21,14 +28,18 @@ router.get("/plans", async (req, res) => {
 /* ============ PUBLIC BANNERS (client home slider) ============ */
 router.get("/banners", async (req, res) => {
   try {
-    const banners = await Banner.find({ active: true }).sort({ sort: 1 }).lean();
+    const banners = await Banner.findAll({
+      where: { active: true },
+      order: [["sort", "ASC"]],
+      raw: true,
+    });
     /* self-heal — localize any banner still pointing at a remote host
        (permanent fix: slow hosts made the optimizer 504 → blank slides) */
     backfillBanners(banners);
     res.json({
       success: true,
       banners: banners.map((b) => ({
-        _id: b._id,
+        _id: b.legacyId || b.id, /* keep the historical response shape */
         title: b.title,
         link: b.link,
         /* Local images keep a relative path (/banners/...) — they are served
@@ -46,7 +57,7 @@ router.get("/banners", async (req, res) => {
 /* ============ PUBLIC SETTINGS (client pages) ============ */
 router.get("/settings", async (req, res) => {
   try {
-    const s = await Setting.findOne({ key: "global" }).lean();
+    const s = await Setting.getGlobal();
     res.json({
       success: true,
       settings: s

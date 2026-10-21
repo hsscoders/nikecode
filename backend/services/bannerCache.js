@@ -42,6 +42,11 @@ const EXT_BY_TYPE = {
 
 const isRemote = (url) => /^https?:\/\//i.test(String(url || ""));
 
+/* Stable banner key for cache files — the pre-migration ObjectId (legacyId)
+   keeps existing bnr-<legacyId>.* files on disk valid; new banners use the
+   numeric id. */
+const bannerKey = (b) => String(b.legacyId || b.id || b);
+
 /* basic SSRF guard — banners are admin input, but stay safe anyway */
 const isSafeHost = (hostname) =>
   !/^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.0\.0\.0|\[?::1\]?$)/i.test(hostname) &&
@@ -88,8 +93,8 @@ async function cacheBannerImage(banner) {
   if (buf.length > MAX_BYTES) throw new Error("file too large");
 
   fs.mkdirSync(BANNER_DIR, { recursive: true });
-  clearLocalFiles(banner._id); /* ext may change between updates */
-  const file = "bnr-" + banner._id + "." + ext;
+  clearLocalFiles(bannerKey(banner)); /* ext may change between updates */
+  const file = "bnr-" + bannerKey(banner) + "." + ext;
   fs.writeFileSync(path.join(BANNER_DIR, file), buf);
 
   banner.originUrl = remote;
@@ -102,13 +107,13 @@ async function cacheBannerImage(banner) {
 
 /* fire-and-forget queue with retries — list endpoints stay instant */
 function queueBannerCache(banner, attempt = 1) {
-  const id = String(banner._id);
+  const id = bannerKey(banner);
   if (!isRemote(banner.image) || inflight.has(id)) return;
   inflight.add(id);
   (async () => {
     for (let i = attempt; i <= RETRIES; i++) {
       try {
-        const fresh = await Banner.findById(id);
+        const fresh = await Banner.findByPk(banner.id);
         if (!fresh || !isRemote(fresh.image)) break; /* deleted/localized meanwhile */
         await cacheBannerImage(fresh);
         break;
@@ -128,4 +133,4 @@ function backfillBanners(docs) {
   });
 }
 
-module.exports = { isRemote, cacheBannerImage, queueBannerCache, backfillBanners, BANNER_DIR };
+module.exports = { isRemote, bannerKey, cacheBannerImage, queueBannerCache, backfillBanners, BANNER_DIR };

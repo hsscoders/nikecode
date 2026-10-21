@@ -35,9 +35,10 @@ const DEFAULT_BASE = "https://api.wpay.one";
 
 /* Read the gateway config saved by the admin. Backend/Website URLs fall back
    to the global auto-detected publicUrls (saved once in Admin → Payment
-   Gateway → Server & Webhooks) so no per-gateway URL typing is needed. */
+   Gateway → Server & Webhooks) so no per-gateway URL typing is needed.
+   getGlobal() deep-merges schema defaults (old Mongoose behaviour). */
 async function getConfig() {
-  const s = await Setting.findOne({ key: "global" }).lean();
+  const s = await Setting.getGlobal();
   const o = (s && s.okpay) || {};
   const qw = (s && s.qwackpay) || {};
   /* per-gateway override → global auto-detected publicUrls → legacy

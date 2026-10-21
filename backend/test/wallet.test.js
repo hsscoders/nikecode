@@ -72,38 +72,40 @@ test("invest buys a plan atomically and pays L1 commission to the referrer", asy
   });
 
   const token = await login("9700000002");
-  const r = await H.call(base, "POST", "/api/invest", { token, body: { planId: String(plan._id) } });
+  const r = await H.call(base, "POST", "/api/invest", { token, body: { planId: String(plan.id) } });
   assert.equal(r.json.success, true, JSON.stringify(r.json));
 
-  const b = await User.findById(buyer._id);
-  assert.equal(b.rechargeBalance, 70, "530 deducted atomically");
+  const b = await User.findByPk(buyer.id);
+  assert.equal(Number(b.rechargeBalance), 70, "530 deducted atomically");
 
-  const ref = await User.findById(referrer._id);
-  assert.equal(ref.balance, 132.5, "L1 commission 25% of 530");
+  const ref = await User.findByPk(referrer.id);
+  assert.equal(Number(ref.balance), 132.5, "L1 commission 25% of 530");
 
-  const inv = await Invest.findOne({ user: buyer._id });
+  const inv = await Invest.findOne({ where: { user: buyer.id } });
   assert.equal(inv.status, "Active");
-  const txn = await Transaction.findOne({ user: buyer._id, type: "invest" });
-  assert.equal(txn.amount, 530);
+  const txn = await Transaction.findOne({ where: { user: buyer.id, type: "invest" } });
+  assert.equal(Number(txn.amount), 530);
 });
 
 test("invest refuses when balance is short (no deduction)", async () => {
   const buyer = await H.mkUser({ phone: "9700000003", rechargeBalance: 100 });
   const plan = await Plan.create({ name: "Gold", price: 2500, daily: 266, cycle: 15, total: 4000, active: true });
   const token = await login("9700000003");
-  const r = await H.call(base, "POST", "/api/invest", { token, body: { planId: String(plan._id) } });
+  const r = await H.call(base, "POST", "/api/invest", { token, body: { planId: String(plan.id) } });
   assert.equal(r.status, 400);
-  assert.equal((await User.findById(buyer._id)).rechargeBalance, 100, "balance untouched");
+  assert.equal(Number((await User.findByPk(buyer.id)).rechargeBalance), 100, "balance untouched");
 });
 
 test("plan purchase limit is enforced per user", async () => {
   const buyer = await H.mkUser({ phone: "9700000004", rechargeBalance: 3000 });
   const plan = await Plan.create({ name: "L1", price: 530, daily: 63, cycle: 10, total: 636, limit: 1, active: true });
   const token = await login("9700000004");
-  const r1 = await H.call(base, "POST", "/api/invest", { token, body: { planId: String(plan._id) } });
+  const r1 = await H.call(base, "POST", "/api/invest", { token, body: { planId: String(plan.id) } });
   assert.equal(r1.json.success, true);
-  await User.updateOne({ _id: buyer._id }, { $inc: { rechargeBalance: 1000 } });
-  const r2 = await H.call(base, "POST", "/api/invest", { token, body: { planId: String(plan._id) } });
+  const b2 = await User.findByPk(buyer.id);
+  b2.rechargeBalance = Number(b2.rechargeBalance) + 1000;
+  await b2.save();
+  const r2 = await H.call(base, "POST", "/api/invest", { token, body: { planId: String(plan.id) } });
   assert.equal(r2.status, 400);
   assert.match(r2.json.message, /limit/i);
 });
@@ -112,7 +114,7 @@ test("presale plans cannot be bought", async () => {
   await H.mkUser({ phone: "9700000005", rechargeBalance: 20000 });
   const plan = await Plan.create({ name: "Diamond", price: 11000, daily: 1550, cycle: 15, total: 23250, presale: true, active: true });
   const token = await login("9700000005");
-  const r = await H.call(base, "POST", "/api/invest", { token, body: { planId: String(plan._id) } });
+  const r = await H.call(base, "POST", "/api/invest", { token, body: { planId: String(plan.id) } });
   assert.equal(r.status, 400);
 });
 
@@ -134,7 +136,7 @@ async function mkWd({ amount = 200 } = {}) {
 test("withdraw request deducts the hold and applies the charge", async () => {
   const { user, r } = await mkWd({ amount: 200 });
   assert.equal(r.json.success, true, JSON.stringify(r.json));
-  assert.equal((await User.findById(user._id)).balance, 800, "200 held");
+  assert.equal(Number((await User.findByPk(user.id)).balance), 800, "200 held");
   assert.equal(r.json.withdrawal.charge, 20, "10% charge");
   assert.equal(r.json.withdrawal.netAmount, 180);
 });
@@ -160,20 +162,20 @@ test("withdraw rejects wrong password / short amount / bad IFSC", async () => {
   });
   assert.equal(badIfsc.status, 400);
 
-  assert.equal((await User.findById(user._id)).balance, 1000, "no deduction on failures");
+  assert.equal(Number((await User.findByPk(user.id)).balance), 1000, "no deduction on failures");
 });
 
 test("admin reject refunds exactly once; Success is terminal", async () => {
   const { user, r } = await mkWd({ amount: 200 });
   const wdId = r.json.withdrawal.id;
-  assert.equal((await User.findById(user._id)).balance, 800);
+  assert.equal(Number((await User.findByPk(user.id)).balance), 800);
 
   const rej = await H.call(base, "PUT", "/api/admin/withdrawals/" + wdId, {
     token: adminToken,
     body: { status: "Rejected" },
   });
   assert.equal(rej.json.success, true);
-  assert.equal((await User.findById(user._id)).balance, 1000, "refunded");
+  assert.equal(Number((await User.findByPk(user.id)).balance), 1000, "refunded");
 
   // duplicate reject (already Rejected → "No change") must NOT refund again
   const rej2 = await H.call(base, "PUT", "/api/admin/withdrawals/" + wdId, {
@@ -181,38 +183,38 @@ test("admin reject refunds exactly once; Success is terminal", async () => {
     body: { status: "Rejected" },
   });
   assert.equal(rej2.json.success, true);
-  assert.equal((await User.findById(user._id)).balance, 1000, "no double refund");
+  assert.equal(Number((await User.findByPk(user.id)).balance), 1000, "no double refund");
 
   // re-open then approve → Success is terminal → third change must fail
   await H.call(base, "PUT", "/api/admin/withdrawals/" + wdId, { token: adminToken, body: { status: "Pending" } });
-  assert.equal((await User.findById(user._id)).balance, 800, "refund revoked on re-open");
+  assert.equal(Number((await User.findByPk(user.id)).balance), 800, "refund revoked on re-open");
   const ok = await H.call(base, "PUT", "/api/admin/withdrawals/" + wdId, { token: adminToken, body: { status: "Success" } });
   assert.equal(ok.json.success, true);
   const illegal = await H.call(base, "PUT", "/api/admin/withdrawals/" + wdId, { token: adminToken, body: { status: "Rejected" } });
   assert.equal(illegal.status, 400, "Success → Rejected is illegal (would double-pay)");
-  assert.equal((await User.findById(user._id)).balance, 800);
+  assert.equal(Number((await User.findByPk(user.id)).balance), 800);
 });
 
 /* ============ DEPOSIT status (admin approve/revoke) ============ */
 test("admin approving a deposit credits exactly once and revoking debits once", async () => {
   const user = await H.mkUser({ phone: "9700000008" });
   const dep = await Deposit.create({
-    user: user._id, userid: user.userid, phone: user.phone,
+    user: user.id, userid: user.userid, phone: user.phone,
     amount: 500, method: "Pay-T", status: "Pending", note: "manual",
   });
-  await Transaction.create({ user: user._id, phone: user.phone, type: "recharge", amount: 500, status: "Pending", refId: String(dep._id) });
+  await Transaction.create({ user: user.id, phone: user.phone, type: "recharge", amount: 500, status: "Pending", refId: String(dep.id) });
 
-  const ok = await H.call(base, "PUT", "/api/admin/deposits/" + dep._id, { token: adminToken, body: { status: "Success" } });
+  const ok = await H.call(base, "PUT", "/api/admin/deposits/" + dep.id, { token: adminToken, body: { status: "Success" } });
   assert.equal(ok.json.success, true);
-  assert.equal((await User.findById(user._id)).rechargeBalance, 500);
+  assert.equal(Number((await User.findByPk(user.id)).rechargeBalance), 500);
 
   // duplicate approve → "No change", must not double credit
-  await H.call(base, "PUT", "/api/admin/deposits/" + dep._id, { token: adminToken, body: { status: "Success" } });
-  assert.equal((await User.findById(user._id)).rechargeBalance, 500);
+  await H.call(base, "PUT", "/api/admin/deposits/" + dep.id, { token: adminToken, body: { status: "Success" } });
+  assert.equal(Number((await User.findByPk(user.id)).rechargeBalance), 500);
 
-  const rev = await H.call(base, "PUT", "/api/admin/deposits/" + dep._id, { token: adminToken, body: { status: "Rejected" } });
+  const rev = await H.call(base, "PUT", "/api/admin/deposits/" + dep.id, { token: adminToken, body: { status: "Rejected" } });
   assert.equal(rev.json.success, true);
-  assert.equal((await User.findById(user._id)).rechargeBalance, 0);
+  assert.equal(Number((await User.findByPk(user.id)).rechargeBalance), 0);
 });
 
 /* ============ IDOR checks ============ */
@@ -222,30 +224,34 @@ test("user cannot read another user's wallet/transactions (IDOR)", async () => {
   const token = await login("9700000010");
 
   const w = await H.call(base, "GET", "/api/wallet", { token });
-  assert.equal(w.json.wallet.balance, 1, "wallet is scoped to the token's user");
+  assert.equal(Number(w.json.wallet.balance), 1, "wallet is scoped to the token's user");
 
   const t = await H.call(base, "GET", "/api/transactions", { token });
   assert.equal(t.json.txns.length, 0, "no one else's ledger rows");
 });
 
-/* ============ FIX 4 regression: legacy settings doc ============ */
-test("PUT /settings survives a legacy doc missing subdocuments", async () => {
-  // strip every subdocument → simulate a pre-extension Setting document
+/* ============ legacy settings row ============ */
+test("PUT /settings works even when the settings row is missing entirely", async () => {
+  // a fresh/legacy install may have no settings row — getGlobal() must
+  // fall back to schema defaults and saveGlobal() must upsert cleanly
   const Setting = require("../models/Setting");
-  await Setting.collection.updateOne(
-    { key: "global" },
-    { $unset: { withdraw: "", recharge: "", popup: "", homeTexts: "", registerBonus: "", publicUrls: "", gatewayPrefs: "", site: "", commission: "" } }
-  );
+  await Setting.destroy({ where: { key: "global" } });
 
   const r1 = await H.call(base, "PUT", "/api/admin/settings", {
     token: adminToken,
     body: { withdraw: { minAmount: 150, chargePercent: 5 } },
   });
-  assert.equal(r1.status, 200, "no 500 on legacy doc: " + JSON.stringify(r1.json));
+  assert.equal(r1.status, 200, "no 500 on missing settings row: " + JSON.stringify(r1.json));
 
   const r2 = await H.call(base, "PUT", "/api/admin/commission", {
     token: adminToken,
     body: { level1: 20, level2: 3, level3: 2 },
   });
-  assert.equal(r2.status, 200, "commission PUT survives legacy doc");
+  assert.equal(r2.status, 200, "commission PUT works from defaults");
+
+  const s = await Setting.getGlobal();
+  assert.equal(s.withdraw.minAmount, 150);
+  assert.equal(s.withdraw.chargePercent, 5);
+  assert.equal(s.commission.level1, 20);
+  assert.equal(s.qwackpay.baseUrl, "https://qwackpay.com/api/v1", "untouched section keeps defaults");
 });

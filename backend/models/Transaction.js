@@ -1,34 +1,36 @@
-const mongoose = require("mongoose");
+const { sequelize, Sequelize } = require("../db");
 
-/* Unified wallet ledger — recharge, withdraw, invite commission and daily plan income */
-const TransactionSchema = new mongoose.Schema(
+/* Unified wallet ledger — recharge, withdraw, invite commission and daily
+   plan income. (`ref_id` links the row to its Deposit/Withdrawal id —
+   either the numeric id or the pre-migration ObjectId string.) */
+const Transaction = sequelize.define(
+  "Transaction",
   {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
-    userid: { type: String, default: "", index: true },
-    phone: { type: String, default: "", index: true },
+    id: { type: Sequelize.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
+    legacyId: { type: Sequelize.CHAR(24), field: "legacy_id" },
+    user: { type: Sequelize.INTEGER.UNSIGNED, field: "user_id" },
+    userid: { type: Sequelize.STRING(20), defaultValue: "" },
+    phone: { type: Sequelize.STRING(10), defaultValue: "" },
     type: {
-      type: String,
-      enum: ["recharge", "withdraw", "commission", "income", "bonus", "invest"],
-      default: "recharge",
-      index: true,
+      type: Sequelize.ENUM("recharge", "withdraw", "commission", "income", "bonus", "invest"),
+      defaultValue: "recharge",
     },
-    title: { type: String, default: "" },
-    method: { type: String, default: "" },
-    amount: { type: Number, default: 0 },
-    /* withdraw snapshot — amount is the NET the user receives, charge is the fee */
-    chargePercent: { type: Number, default: 0 },
-    charge: { type: Number, default: 0 },
-    netAmount: { type: Number, default: 0 },
+    title: { type: Sequelize.STRING(60), defaultValue: "" },
+    method: { type: Sequelize.STRING(120), defaultValue: "" },
+    amount: { type: Sequelize.DECIMAL(12, 2), defaultValue: 0 },
+    chargePercent: { type: Sequelize.DECIMAL(5, 2), defaultValue: 0, field: "charge_percent" },
+    charge: { type: Sequelize.DECIMAL(12, 2), defaultValue: 0 },
+    netAmount: { type: Sequelize.DECIMAL(12, 2), defaultValue: 0, field: "net_amount" },
     status: {
-      type: String,
-      enum: ["Pending", "Success", "Rejected"],
-      default: "Pending",
-      index: true,
+      /* 'Processing' exists because the auto-payout flow flips the ledger
+         entry while the gateway order is in flight (Mongoose never enforced
+         enums on updateMany — the data really contains it) */
+      type: Sequelize.ENUM("Pending", "Processing", "Success", "Rejected"),
+      defaultValue: "Pending",
     },
-    /* Linked record id (deposit / withdrawal) so status changes stay in sync */
-    refId: { type: String, default: "", index: true },
+    refId: { type: Sequelize.STRING(64), defaultValue: "", field: "ref_id" },
   },
-  { timestamps: true }
+  { tableName: "transactions", underscored: true }
 );
 
-module.exports = mongoose.model("Transaction", TransactionSchema);
+module.exports = Transaction;
